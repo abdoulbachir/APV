@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '../config';
+import { directoryFixtures, fixtureDetail } from './directory-fixtures';
 import { mockContent, type Locale } from '../i18n/translations';
 import type { Case, CaseDetail, Stats } from '../types';
 
@@ -31,21 +32,33 @@ const realClient: ApiClient = {
 
 async function mockResult<T>(value: T): Promise<T> {
   await new Promise((resolve) => window.setTimeout(resolve, APP_CONFIG.mockDelayMs));
-  if (Math.random() < APP_CONFIG.mockFailureRate) throw new ApiError('mock_network_error', 'Simulated connection error', 503);
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('mockError') === '1') {
+    throw new ApiError('mock_network_error', 'Simulated connection error', 503);
+  }
   return structuredClone(value);
 }
 
 const mockClient: ApiClient = {
-  getStats: (locale) => mockResult(mockContent(locale).stats),
+  getStats: (locale) => {
+    const stats = mockContent(locale).stats;
+    const extra = directoryFixtures(locale);
+    return mockResult({
+      received: stats.received + extra.reduce((sum, item) => sum + item.received, 0),
+      delivered: stats.delivered + extra.reduce((sum, item) => sum + item.delivered, 0),
+      peopleHelped: stats.peopleHelped + extra.filter(item => item.delivered > 0).length,
+    });
+  },
   getCases: (status, locale) => {
     const { cases } = mockContent(locale);
-    const result = status === 'active' ? cases : [];
+    const result = status === 'active' ? [...cases, ...directoryFixtures(locale)] : [];
     return mockResult(result);
   },
   getCase: async (code, locale) => {
     const content = mockContent(locale);
     const found = content.cases.find((item) => item.code.toLowerCase() === code.toLowerCase() && item.kind === 'case');
     if (!found) {
+      const fixture = directoryFixtures(locale).find(item => item.code.toLowerCase() === code.toLowerCase());
+      if (fixture) return mockResult(fixtureDetail(fixture, locale));
       await mockResult(null);
       throw new ApiError('case_not_found', 'Case not found', 404);
     }

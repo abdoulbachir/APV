@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 880" role="img" aria-label="Symbolic editorial artwork of a person looking toward a sunrise">
+<defs>
+<linearGradient id="bg" x2="1" y2="1"><stop stop-color="#07151a"/><stop offset=".65" stop-color="#1b3935"/><stop offset="1" stop-color="#3c493a"/></linearGradient>
+<linearGradient id="sky" x2="0" y2="1"><stop stop-color="#243c43"/><stop offset=".42" stop-color="#ba956d"/><stop offset=".72" stop-color="#f3c485"/><stop offset="1" stop-color="#8b735d"/></linearGradient>
+<radialGradient id="sun"><stop stop-color="#fff8c9"/><stop offset=".16" stop-color="#ffe4a4"/><stop offset=".42" stop-color="#ffcb84" stop-opacity=".65"/><stop offset="1" stop-color="#e4a15a" stop-opacity="0"/></radialGradient>
+<linearGradient id="curtain" x2="1" y2=".2"><stop stop-color="#b98d62" stop-opacity=".12"/><stop offset=".5" stop-color="#f0cf98" stop-opacity=".55"/><stop offset="1" stop-color="#8e6b49" stop-opacity=".23"/></linearGradient>
+<linearGradient id="coat" x2="1" y2="1"><stop stop-color="#789080"/><stop offset=".4" stop-color="#38534a"/><stop offset="1" stop-color="#0b2426"/></linearGradient>
+<linearGradient id="hair" x2="1" y2=".3"><stop stop-color="#102123"/><stop offset=".75" stop-color="#3b3029"/><stop offset="1" stop-color="#b78755"/></linearGradient>
+<linearGradient id="ribbon" x2="1" y2="0"><stop stop-color="#112e2b" stop-opacity="0"/><stop offset=".5" stop-color="#4cab88" stop-opacity=".45"/><stop offset="1" stop-color="#b8e6ab" stop-opacity=".7"/></linearGradient>
+
+</defs>
+<g>
+<path fill="url(#bg)" d="M0 0h1500v880H0z"/>
+<path fill="#142522" d="M720 0h780v880H720z"/>
+<path fill="url(#sky)" d="M810 22h690v705H810z"/>
+<circle fill="url(#sun)" cx="1308" cy="302" r="235"/>
+<circle fill="#fff0b9" cx="1308" cy="302" r="22"/>
+<path fill="#b6a28b" opacity=".45" d="M810 490l130-48 94 28 82-78 145 53 100-67 139 65v285H810z"/>
+<path fill="#6d7469" opacity=".65" d="M810 542l92-55 145 48 128-40 110 48 215-49v233H810z"/>
+<g fill="#424e49" opacity=".6"><path d="M862 550h65v177h-65zM944 585h55v142h-55zM1130 561h80v166h-80zM1275 526h85v201h-85zM1390 580h110v147h-110z"/></g>
+<path fill="#172b29" d="M782 0h24v746h-24zM1136 0h16v746h-16zM810 450h690v15H810zM780 722h720v35H780z"/>
+<g fill="url(#curtain)"><path d="M1398 0h102v880h-135q55-238 33-450t0-430z"/><path d="M779 0h87q-31 243 1 450t-15 430h-90q29-296 17-478t0-402z"/></g>
+<g opacity=".34" stroke="#ffe0ac" stroke-width="2" fill="none"><path d="M1422 0q-28 260 0 480t-20 400M1468 0q-26 220 4 470t-20 410M800 0q-15 205 9 411t-9 469"/></g>
+<path d="M821 880q-20-176 35-289 36-62 134-95l46-28 91 8 29 49q107 44 142 144l50 211z" fill="url(#coat)"/>
+<path d="M1040 442q8 47-27 83l75 45 61-47q-43-35-36-100z" fill="#aa7b59"/>
+<path d="M997 267q5-77 70-98 82-24 121 47 31 55-3 141-15 36-62 79-54 32-101-14-47-52-25-155z" fill="url(#hair)"/>
+<path d="M1017 361q-72-15-70 49 6 59 78 61 38-3 47-28-43-27-55-82z" fill="#252a26"/>
+<g fill="none" stroke="#d0a77d" stroke-width="2" opacity=".35"><path d="M1008 282q65-92 143-40M1012 302q51-82 144-52M1014 329q62-94 154-59M1019 351q65-84 149-64M1026 378q57-68 126-61M1054 414q58-53 89-75"/></g>
+<path d="M1004 501q56 34 89 74 35-41 58-54l42 23q-69 96-101 178-48-122-139-187z" fill="#bfc1a0" opacity=".64"/>
+<g fill="none" stroke="#a5b8a4" stroke-width="2" opacity=".24"><path d="M870 596q96 5 138 284M914 570q103 96 141 310M1225 585q-85 104-92 295M1267 649q-68 57-70 231"/></g>
+<path d="M0 739C359 670 541 891 871 751c230-98 399-221 629-261v79c-232 67-416 198-641 266C541 932 252 752 0 850z" fill="url(#ribbon)"/>
+<path d="M0 790c359-51 541 123 871-2 230-89 399-223 629-261" stroke="#9dd9ac" stroke-opacity=".35" stroke-width="2" fill="none"/>
+</g></svg>
