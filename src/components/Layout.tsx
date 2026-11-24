@@ -15,10 +15,10 @@ export function Layout() {
           <span>{SITE_NAME}</span>
         </Link>
         <nav className="desktop-nav" aria-label={t.nav.home}>
-          <Link to="/#cases">{t.nav.explore}</Link>
+          <Link to="/cases">{t.nav.explore}</Link>
           <Link to="/#how">{t.nav.how}</Link>
         </nav>
-        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-give" to="/#cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
+        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-give" to="/cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
       </header>
       <main id="main"><Outlet /></main>
       <footer className="site-footer">

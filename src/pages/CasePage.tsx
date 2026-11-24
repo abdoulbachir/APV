@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
+import { APP_CONFIG } from '../config';
 import { api } from '../api/client';
 import { SITE_NAME } from '../config';
 import { getCaseArtwork } from '../assets/case-artwork';
@@ -17,6 +18,10 @@ function ledgerLabel(kind: LedgerEntry['kind'], t: ReturnType<typeof useI18n>['t
 
 export function CasePage() {
   const { code = '' } = useParams();
+  const location = useLocation();
+  const source = location.state?.directoryFrom;
+  const returnTo = typeof source === 'string' && (source === '/cases' || source.startsWith('/cases?')) ? source : null;
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [code]);
   const { t, locale } = useI18n();
   const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
@@ -45,7 +50,8 @@ export function CasePage() {
   return (
     <article className="case-page" ref={motionRef}>
       <header className="case-hero section-wrap">
-        <Link className="back-link" to="/"><span aria-hidden="true">←</span>{t.casePage.back}</Link>
+        <Link className="back-link" to={returnTo ?? "/"}><span aria-hidden="true">←</span>{returnTo ? t.directory.back : t.casePage.back}</Link>
+        {APP_CONFIG.apiMode === 'mock' && <p className="preview-label">{t.redesign.preview}</p>}
         <div className="case-hero-grid">
           <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code)} /><span className="case-code">{item.code}</span></div>
           <div className="case-identity">
