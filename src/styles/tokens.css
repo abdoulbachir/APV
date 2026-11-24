@@ -24,9 +24,9 @@
   --font-size-body: 1rem;
   --font-size-md: clamp(1.05rem, 1.4vw, 1.28rem);
   --font-size-lg: clamp(1.35rem, 2vw, 2rem);
-  --font-size-xl: clamp(2.4rem, 5.5vw, 5.5rem);
-  --font-size-display: clamp(4rem, 9vw, 9.5rem);
-  --font-size-name: clamp(4.25rem, 12vw, 12rem);
+  --font-size-xl: clamp(2rem, 4vw, 3.8rem);
+  --font-size-display: clamp(3.1rem, 6vw, 6.25rem);
+  --font-size-name: clamp(3rem, 6.5vw, 6rem);
   --line-tight: 0.89;
   --line-snug: 1.08;
   --line-body: 1.65;
@@ -48,20 +48,17 @@
   --radius-xs: 0.45rem;
   --radius-sm: 0.85rem;
   --radius-md: 1.4rem;
-  --radius-lg: 2.2rem;
-  --radius-xl: 3.5rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
   --radius-round: 999px;
   --page-pad: clamp(1rem, 4vw, 4.5rem);
-  --content-max: 94rem;
+  --content-max: 88rem;
   --text-max: 44rem;
   --touch: 2.75rem;
   --header-height: 5rem;
   --blur: 1.25rem;
   --transition-fast: 180ms;
   --transition-slow: 700ms;
-}
-
-:root {
   --font-editorial: Georgia, 'Times New Roman', serif;
   --color-forest: #112a25;
   --color-panel: #142c28;
@@ -70,12 +67,10 @@
   --color-ink-green: #145542;
   --color-dark-fade: rgba(8, 13, 18, 0.88);
   --color-art-fade: rgba(8, 13, 18, 0.25);
-  --font-size-display: clamp(3.1rem, 6vw, 6.25rem);
-  --font-size-xl: clamp(2rem, 4vw, 3.8rem);
-  --font-size-name: clamp(3rem, 6.5vw, 6rem);
-  --radius-lg: 1.25rem;
-  --radius-xl: 1.5rem;
   --section-pad: clamp(3rem, 5vw, 5rem);
   --hero-min: 31rem;
-  --content-max: 88rem;
+  --color-funding-received: #21896f;
+  --color-funding-delivered: #d5fa88;
+  --color-funding-track: #080d12;
+  --color-hero-scrim: rgba(8, 13, 18, 0.94);
 }

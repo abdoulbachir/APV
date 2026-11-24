@@ -7,6 +7,5 @@ import '@fontsource/syne/600.css';
 import '@fontsource/syne/700.css';
 import './styles/tokens.css';
 import './styles/global.css';
-import './styles/redesign.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><I18nProvider><App /></I18nProvider></StrictMode>);

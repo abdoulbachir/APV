@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { SITE_NAME } from '../config';
+import { getCaseArtwork } from '../assets/case-artwork';
 import { Portrait } from '../components/Portrait';
 import { ErrorState, LoadingState } from '../components/States';
 import { useAsync } from '../hooks/useAsync';
@@ -18,7 +20,10 @@ export function CasePage() {
   const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
   const result = useAsync(() => api.getCase(code, locale), [code, locale]);
-  useEffect(() => { document.title = result.data ? result.data.case.title + ' — APV-GAKASINAY' : t.meta.homeTitle; }, [result.data, t]);
+  useEffect(() => {
+    const title = result.loading || (result.data && result.data.case.code.toLowerCase() !== code.toLowerCase()) ? t.redesign.caseLoadingTitle : result.error || !result.data ? t.redesign.caseUnavailableTitle : result.data.case.title;
+    document.title = title + ' — ' + SITE_NAME;
+  }, [code, result.data, result.loading, result.error, t]);
   useEffect(() => {
     const updateStickyAction = () => setShowStickyAction(window.scrollY > 520);
     updateStickyAction();
@@ -29,8 +34,9 @@ export function CasePage() {
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
 
   const { case: item, updates, donors, ledger } = result.data;
-  const receivedPercent = item.goal && item.goal > 0 ? Math.max(0, Math.round(item.received / item.goal * 100)) : 0;
-  const deliveredPercent = item.goal && item.goal > 0 ? Math.max(0, Math.round(item.delivered / item.goal * 100)) : 0;
+  const receivedPercent = item.goal && item.goal > 0 ? Math.max(0, item.received / item.goal * 100) : null;
+  const deliveredPercent = item.goal && item.goal > 0 ? Math.max(0, item.delivered / item.goal * 100) : null;
+  const formatPercent = (value: number) => new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 }).format(value / 100);
   const storyParagraphs = item.story.split('\n\n');
   const showSampleNote = () => { setSampleNote(true); window.setTimeout(() => setSampleNote(false), 3600); };
 
@@ -39,7 +45,7 @@ export function CasePage() {
       <header className="case-hero section-wrap">
         <Link className="back-link" to="/"><span aria-hidden="true">←</span>{t.casePage.back}</Link>
         <div className="case-hero-grid">
-          <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} code={item.code} /><span className="case-code">{item.code}</span>{!item.photoUrl && <span className="art-caption">{t.redesign.illustration}</span>}</div>
+          <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code, 'large')} /><span className="case-code">{item.code}</span></div>
           <div className="case-identity">
             <p className="eyebrow"><span />{t.casePage.supportLabel}</p>
             <h1>{item.publicName}</h1>
@@ -59,15 +65,15 @@ export function CasePage() {
         <div className="progress-panel">
           <h2>{t.casePage.progress}</h2>
           <div className="goal-label"><span>{t.casePage.goal}</span><strong>{item.goal === null ? '—' : formatMoney(item.goal, locale)}</strong></div>
-          <div className="progress-route" aria-hidden="true">
-            <div className="progress-base" />
-            <div className="progress-received" style={{ height: `${Math.min(100, receivedPercent)}%` }} />
-            <div className="progress-delivered" style={{ height: `${Math.min(100, deliveredPercent)}%` }} />
-            <i className="route-start" /><i className="route-end" />
-          </div>
           <div className="progress-values">
-            <div className="value-received"><span>{t.casePage.received}</span><strong>{formatMoney(item.received, locale)}</strong><small>{receivedPercent}%</small></div>
-            <div className="value-delivered"><span>{t.casePage.delivered}</span><strong>{formatMoney(item.delivered, locale)}</strong><small>{deliveredPercent}%</small></div>
+            <div className="value-received">
+              <div className="progress-label"><span>{t.casePage.received}</span><strong>{formatMoney(item.received, locale)}</strong></div>
+              {receivedPercent !== null && <><div className="funding-track" aria-hidden="true"><span className="funding-received" style={{ width: Math.min(100, receivedPercent) + '%' }} /></div><small>{formatPercent(receivedPercent)} {t.caseCard.ofGoal}</small></>}
+            </div>
+            <div className="value-delivered">
+              <div className="progress-label"><span>{t.casePage.delivered}</span><strong>{formatMoney(item.delivered, locale)}</strong></div>
+              {deliveredPercent !== null && <><div className="funding-track" aria-hidden="true"><span className="funding-delivered" style={{ width: Math.min(100, deliveredPercent) + '%' }} /></div><small>{formatPercent(deliveredPercent)} {t.caseCard.ofGoal}</small></>}
+            </div>
           </div>
           <p className="progress-note">{t.casePage.progressNote}</p>
         </div>

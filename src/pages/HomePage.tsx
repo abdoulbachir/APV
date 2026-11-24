@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { CaseCard } from '../components/CaseCard';
@@ -12,16 +12,21 @@ import heroArt from '../assets/hope-window.svg';
 
 export function HomePage() {
   const { t, locale } = useI18n();
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
+  const handledNavigation = useRef<string | null>(null);
   const result = useAsync(async () => {
     const [stats, cases] = await Promise.all([api.getStats(locale), api.getCases('active', locale)]);
     return { stats, cases };
-  }, [locale]);
+  }, [locale], true);
   useEffect(() => { document.title = t.meta.homeTitle; }, [t]);
   useEffect(() => {
-    if (!result.loading && hash) document.getElementById(hash.slice(1))?.scrollIntoView();
-  }, [result.loading, hash]);
-  if (result.loading) return <LoadingState />;
+    if (handledNavigation.current === key) return;
+    if (!hash) { handledNavigation.current = key; return; }
+    if (!result.data || result.error) return;
+    const target = document.getElementById(hash.slice(1));
+    if (target) { handledNavigation.current = key; target.scrollIntoView(); }
+  }, [key, hash, result.data, result.error]);
+  if (result.loading && !result.data) return <LoadingState />;
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
   const { stats, cases } = result.data;
   const activeCases = cases.filter(item => item.kind === 'case');
@@ -30,7 +35,7 @@ export function HomePage() {
   const barMax = Math.max(stats.received, stats.delivered, 1);
   const percent = new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 });
   return <>
-    <section className="home-hero">
+    <section className="home-hero" aria-busy={result.loading}>
       <div className="hero-art" aria-hidden="true"><img src={heroArt} alt="" /></div>
       <div className="hero-copy">
         {APP_CONFIG.apiMode === 'mock' && <p className="preview-label">{t.redesign.preview}</p>}
@@ -57,7 +62,7 @@ export function HomePage() {
           <div className="record-row delivered-row"><span>{t.stats.delivered}</span><strong>{formatMoney(stats.delivered, locale)}</strong><div className="record-track"><span style={{width: Math.max(0, stats.delivered / barMax * 100) + '%'}} /></div></div>
           {deliveredRatio !== null && <p className="record-ratio"><strong>{percent.format(deliveredRatio)}</strong> {t.redesign.deliveredRatio}</p>}
         </div>
-        <div className="fund-panel"><div><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p></div><div className="fund-orbit" aria-hidden="true"><i /><i /></div></div>
+        <div className="fund-panel"><div><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p>{APP_CONFIG.apiMode === 'mock' && <p className="fund-preview">{t.home.fundSoon}</p>}</div><div className="fund-orbit" aria-hidden="true"><i /><i /></div></div>
       </div>
     </section>
     <section className="how-section section-wrap" id="how">
