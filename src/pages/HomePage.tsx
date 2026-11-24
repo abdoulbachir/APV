@@ -38,7 +38,7 @@ export function HomePage() {
   const percent = new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 });
   return <>
     <section className="home-hero" aria-busy={result.loading}>
-      <div className="hero-art"><img src={heroArt.url} alt="" fetchPriority="high" /><span className="hero-art-caption">{heroArt.generated ? t.redesign.generatedIllustration : t.redesign.illustration}</span></div>
+      <div className="hero-art"><img src={heroArt.url} alt="" /><span className="hero-art-caption">{heroArt.generated ? t.redesign.generatedIllustration : t.redesign.illustration}</span></div>
       <div className="hero-copy">
         {APP_CONFIG.apiMode === 'mock' && <p className="preview-label">{t.redesign.preview}</p>}
         <p className="eyebrow"><span />{t.home.eyebrow}</p>
