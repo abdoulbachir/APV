@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apv-gakasinay.invalid/contract/fixtures/fixture.schema.json",
+  "title": "APV-GAKASINAY shared fixture dataset",
+  "description": "Inputs only. Totals and counts are never stored; each implementation computes them from the ledger.",
+  "type": "object",
+  "required": [
+    "version",
+    "clock",
+    "timezone",
+    "ledgerLabels",
+    "cases",
+    "ledger",
+    "updates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "clock": {
+      "description": "The instant both implementations treat as now.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "timezone": {
+      "description": "IANA organization timezone.",
+      "type": "string"
+    },
+    "ledgerLabels": {
+      "description": "The display label for each ledger kind, so the mock and the real API produce identical text.",
+      "type": "object",
+      "required": [
+        "donation",
+        "donation_reversal",
+        "refund",
+        "transfer_in",
+        "transfer_out",
+        "transfer_in_reversal",
+        "transfer_out_reversal",
+        "disbursement",
+        "disbursement_reversal"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "donation": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "donation_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "refund": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_in": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_out": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_in_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_out_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "disbursement": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "disbursement_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ledgerEntry"
+      }
+    },
+    "updates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/update"
+      }
+    }
+  },
+  "$defs": {
+    "cents": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "bothLanguages": {
+      "type": "object",
+      "required": [
+        "en",
+        "fr"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "anyLanguage": {
+      "description": "At least one language. A missing key tests fallback.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "picture": {
+      "type": "object",
+      "required": [
+        "file",
+        "alt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "description": "Path relative to the fixtures folder.",
+          "type": "string"
+        },
+        "alt": {
+          "$ref": "#/$defs/anyLanguage"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "code",
+        "kind",
+        "status",
+        "category",
+        "featuredRank",
+        "publicName",
+        "title",
+        "story",
+        "goal",
+        "deadline",
+        "createdAt",
+        "cover",
+        "photos",
+        "private"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z]{2,8}(-[0-9]{1,6})?$"
+        },
+        "kind": {
+          "enum": [
+            "case",
+            "fund"
+          ]
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "active",
+            "funded",
+            "delivered",
+            "closed"
+          ]
+        },
+        "category": {
+          "enum": [
+            "education",
+            "medical",
+            "housing",
+            "family",
+            "emergency",
+            "other",
+            null
+          ]
+        },
+        "featuredRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "publicName": {
+          "type": "string"
+        },
+        "title": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "story": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "goal": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/cents"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline": {
+          "description": "Date only, in the organization timezone.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cover": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/picture"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "photos": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "file",
+              "alt",
+              "position"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "alt": {
+                "$ref": "#/$defs/anyLanguage"
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "private": {
+          "description": "Fake values that must never appear in a public response. Used by leak tests.",
+          "type": "object",
+          "required": [
+            "realName",
+            "contact",
+            "notes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "realName": {
+              "type": "string"
+            },
+            "contact": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "ledgerEntry": {
+      "type": "object",
+      "required": [
+        "id",
+        "caseCode",
+        "kind",
+        "amount",
+        "date",
+        "reverses",
+        "pairId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "caseCode": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "donation",
+            "donation_reversal",
+            "refund",
+            "transfer_in",
+            "transfer_out",
+            "transfer_in_reversal",
+            "transfer_out_reversal",
+            "disbursement",
+            "disbursement_reversal"
+          ]
+        },
+        "amount": {
+          "$ref": "#/$defs/cents"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reverses": {
+          "description": "Id of the entry this one corrects.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pairId": {
+          "description": "Shared by the two entries of one transfer, and by the two entries of its reversal.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "donor": {
+          "description": "Only on entries of kind donation.",
+          "type": "object",
+          "required": [
+            "listingId",
+            "visibility",
+            "name",
+            "avatarConsent",
+            "avatarFile"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "listingId": {
+              "type": "string"
+            },
+            "visibility": {
+              "enum": [
+                "named",
+                "anonymous",
+                "hidden"
+              ]
+            },
+            "name": {
+              "description": "The donor's name as entered. Returned publicly only when visibility is named.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "avatarConsent": {
+              "type": "boolean"
+            },
+            "avatarFile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "update": {
+      "type": "object",
+      "required": [
+        "id",
+        "caseCode",
+        "text",
+        "date",
+        "author",
+        "authorAvatarConsent",
+        "authorAvatarFile",
+        "photoFile"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "caseCode": {
+          "type": "string"
+        },
+        "text": {
+          "$ref": "#/$defs/anyLanguage"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": {
+          "type": "string"
+        },
+        "authorAvatarConsent": {
+          "type": "boolean"
+        },
+        "authorAvatarFile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "photoFile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

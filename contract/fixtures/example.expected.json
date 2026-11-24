@@ -1,0 +1,33 @@
+{
+  "description": "Values every implementation must compute from example.json. Used to prove the financial definitions are understood the same way on both sides.",
+  "stats": { "received": 81000, "delivered": 30000, "available": 51000, "peopleHelped": 1 },
+  "cases": {
+    "FUND": {
+      "received": 35000,
+      "delivered": 0,
+      "financials": { "externalDonations": 50000, "transfersIn": 0, "transfersOut": 15000, "allocated": 35000, "delivered": 0, "available": 35000, "hasShortfall": false },
+      "counts": { "updates": 0, "donors": 1, "ledger": 2, "photos": 0 }
+    },
+    "HELP-901": {
+      "received": 46000,
+      "delivered": 30000,
+      "financials": { "externalDonations": 31000, "transfersIn": 15000, "transfersOut": 0, "allocated": 46000, "delivered": 30000, "available": 16000, "hasShortfall": false },
+      "counts": { "updates": 1, "donors": 2, "ledger": 6, "photos": 1 },
+      "donors": [
+        { "id": "D3", "name": null, "amount": 6000, "avatarUrl": null },
+        { "id": "D2", "name": "Sample Donor Two", "amount": 20000, "avatarUrl": null }
+      ]
+    },
+    "HELP-902": "404 case_not_found"
+  },
+  "directory": {
+    "status=active": ["HELP-901"],
+    "status=completed": []
+  },
+  "mustNeverAppearInAnyPublicResponse": [
+    "PRIVATE-REALNAME-901", "PRIVATE-CONTACT-901", "PRIVATE-NOTES-901",
+    "PRIVATE-REALNAME-902", "PRIVATE-CONTACT-902", "PRIVATE-NOTES-902",
+    "DRAFT-STORY-902", "BROUILLON-902",
+    "PRIVATE-ANONYMOUS-DONOR", "PRIVATE-HIDDEN-DONOR"
+  ]
+}
