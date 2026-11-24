@@ -11,6 +11,6 @@ export function Portrait({ name, variant = 'large', photoUrl, artwork = 'renewal
   const description = showPhoto ? fill(t.redesign.photoLabel, { name }) : artwork === 'home' ? t.redesign.homeArtworkAlt : t.redesign.renewalArtworkAlt;
   return <div className={'portrait portrait-' + variant}>
     <img src={showPhoto ? photoUrl! : artwork === 'home' ? home : renewal} alt={description} onError={showPhoto ? () => setFailedUrl(photoUrl!) : undefined} />
-    {!showPhoto && <span className="art-caption">{t.redesign.illustration}</span>}
+    {!showPhoto && <span className="art-caption" aria-hidden="true">{t.redesign.illustration}</span>}
   </div>;
 }

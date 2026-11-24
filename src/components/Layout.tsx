@@ -25,6 +25,7 @@ export function Layout() {
         <div>
           <strong>{SITE_NAME}</strong>
           <p>{t.footer.note}</p>
+          <Link className="footer-record-link" to="/#record">{t.redesign.publicRecord}</Link>
         </div>
         <p className="tax-line">{t.footer.line}</p>
         <LanguageSwitch />

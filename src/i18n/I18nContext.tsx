@@ -18,7 +18,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
   const setLocale = (next: Locale) => { window.localStorage.setItem(STORAGE_KEY, next); setLocaleState(next); };
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
-  const value = useMemo(() => ({ locale, setLocale, t: translations[locale] as Translation }), [locale]);
+  const value = useMemo(() => ({ locale, setLocale, t: translations[locale] }), [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

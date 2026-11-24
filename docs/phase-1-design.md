@@ -1,11 +1,18 @@
 # Humanity in Motion — Phase 1
 
-Visual sample only: home and case detail. Keep mock mode; no payment, auth, backend changes or new Phase 2 routes. Artwork is original symbolic SVG, not a real beneficiary photograph. Use real approved public photos only when provided. The existing public sample deployment is not updated by this branch.
+Individual acts of generosity flow together into a human outcome, expressed through symbolic artwork and a continuous visual thread. Financial milestones belong to the person's story, making transparency feel natural rather than administrative.
 
-## Verification for Traycer
+## Scope and architecture
 
-Run npm ci and npm run build. Start npm run dev, then inspect / and /cases/HELP-014 at widths 360, 390, 768, 1024 and 1440, both EN and FR. Check scroll links, keyboard focus, mock loading/error, giving sample notice, funding numbers, donor and ledger lists, reduced motion and no horizontal overflow. Do not merge until the owner approves. The artwork is a first-pass vector interpretation of the visual reference; photography-quality assets and browser verification remain open.
+The design sample includes the home and case detail pages only. Keep mock mode for the sample and preserve the existing API contract. The original SVG artwork is symbolic, not a real beneficiary photograph. Use real approved public photos only when provided.
 
-## PR review fixes
+Styles and design tokens live in `src/styles/global.css` and `src/styles/tokens.css`. The financial charts show received and delivered amounts separately, with labeled numerical values and contrasting track boundaries. The English catalog defines the translation shape enforced at build time.
 
-Consolidated the stylesheet and tokens, removed obsolete visual rules and SVG turbulence filters, bounded excerpts, restored the sample fund note, moved optional fixture artwork out of the reusable portrait component, separated and accurately scaled the received/delivered progress tracks, localized case loading/error titles, and keyed anchor scrolling to navigation rather than locale reloads. Re-run the complete visual checks; in particular check EN/FR at 768 and 1024, repeated #cases clicks, locale changes, deep links, 404 titles, long case stories, photo failures, 0/null/over-goal funding, and contrast. The previous build was reported passing by Traycer; this follow-up requires a fresh build and browser review.
+## Verification
+
+- Run `npm ci` and `npm run build`, then `npm run dev`.
+- Inspect / and /cases/HELP-014 at widths 360, 390, 768, 1024 and 1440, in EN and FR.
+- Check hero contrast, repeated anchor activation and destination focus, language switching, direct links, loading/error titles, and photo fallback.
+- Check numeric funding values and track/outline contrast, zero/null/over-goal funding, long stories, donor and ledger lists, sample disclosures, reduced motion and overflow.
+- Confirm both original artwork SVGs are emitted as separate assets by the production build.
+- Obtain design approval before extending the sample to Phase 2.

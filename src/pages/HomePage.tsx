@@ -24,7 +24,7 @@ export function HomePage() {
     if (!hash) { handledNavigation.current = key; return; }
     if (!result.data || result.error) return;
     const target = document.getElementById(hash.slice(1));
-    if (target) { handledNavigation.current = key; target.scrollIntoView(); }
+    if (target) { handledNavigation.current = key; target.focus({ preventScroll: true }); target.scrollIntoView(); }
   }, [key, hash, result.data, result.error]);
   if (result.loading && !result.data) return <LoadingState />;
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
@@ -49,12 +49,12 @@ export function HomePage() {
       </div>
       <StatsStrip stats={stats} />
     </section>
-    <section className="active-section section-wrap" id="cases">
-      <header className="v2-heading"><p className="eyebrow"><span />{t.home.activeCases}</p><div><h2>{t.redesign.activeLead} <em>{t.redesign.activeAccent}</em></h2><p>{t.home.activeIntro}</p></div></header>
+    <section className="active-section section-wrap" id="cases" tabIndex={-1} aria-labelledby="cases-heading">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.home.activeCases}</p><div><h2 id="cases-heading">{t.redesign.activeLead} <em>{t.redesign.activeAccent}</em></h2><p>{t.home.activeIntro}</p></div></header>
       <div className="case-list">{activeCases.length ? activeCases.map(item => <CaseCard key={item.code} item={item} />) : <p className="empty-note">{t.common.emptyCases}</p>}</div>
     </section>
-    <section className="transparency-section section-wrap" id="record">
-      <header className="v2-heading"><p className="eyebrow"><span />{t.redesign.publicRecord}</p><div><h2>{t.redesign.transparency}</h2><p>{t.redesign.transparencyIntro}</p></div></header>
+    <section className="transparency-section section-wrap" id="record" tabIndex={-1} aria-labelledby="record-heading">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.redesign.publicRecord}</p><div><h2 id="record-heading">{t.redesign.transparency}</h2><p>{t.redesign.transparencyIntro}</p></div></header>
       <div className="transparency-grid">
         <div className="record-panel">
           <h3>{t.redesign.fundsOverview}</h3>
@@ -65,8 +65,8 @@ export function HomePage() {
         <div className="fund-panel"><div><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p>{APP_CONFIG.apiMode === 'mock' && <p className="fund-preview">{t.home.fundSoon}</p>}</div><div className="fund-orbit" aria-hidden="true"><i /><i /></div></div>
       </div>
     </section>
-    <section className="how-section section-wrap" id="how">
-      <header className="v2-heading"><p className="eyebrow"><span />{t.home.howEyebrow}</p><div><h2>{t.redesign.howLead}</h2></div></header>
+    <section className="how-section section-wrap" id="how" tabIndex={-1} aria-labelledby="how-heading">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.home.howEyebrow}</p><div><h2 id="how-heading">{t.redesign.howLead}</h2></div></header>
       <ol className="how-steps">{t.home.steps.map(step => <li key={step.number}><span>{step.number}</span><div><h3>{step.title}</h3><p>{step.text}</p></div></li>)}</ol>
       <div className="completed-callout"><span aria-hidden="true">↘</span><p>{t.home.completed}</p><span className="future-link">{t.redesign.completedUnavailable}</span></div>
       {APP_CONFIG.apiMode === 'mock' && <p className="preview-notice">{t.redesign.givingPreview}</p>}
