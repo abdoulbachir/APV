@@ -125,7 +125,7 @@
   --surface-soft: var(--color-sage);
   --text-main: var(--color-forest);
   --text-muted: var(--color-light-muted);
-  --accent: var(--color-primary);
+  --accent: var(--color-primary-hover);
   --accent-secondary: var(--color-forest);
   --border-soft: var(--color-light-border);
   --focus-ring: var(--color-primary);
