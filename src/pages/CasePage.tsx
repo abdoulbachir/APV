@@ -45,7 +45,7 @@ export function CasePage() {
       <header className="case-hero section-wrap">
         <Link className="back-link" to="/"><span aria-hidden="true">←</span>{t.casePage.back}</Link>
         <div className="case-hero-grid">
-          <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code, 'large')} /><span className="case-code">{item.code}</span></div>
+          <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code)} /><span className="case-code">{item.code}</span></div>
           <div className="case-identity">
             <p className="eyebrow"><span />{t.casePage.supportLabel}</p>
             <h1>{item.publicName}</h1>

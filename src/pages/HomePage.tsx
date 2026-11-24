@@ -8,7 +8,9 @@ import { useAsync } from '../hooks/useAsync';
 import { useI18n } from '../i18n/I18nContext';
 import { formatMoney } from '../utils/format';
 import { APP_CONFIG } from '../config';
-import heroArt from '../assets/hope-window.svg';
+import { artworkSource } from '../assets/case-artwork';
+
+const heroArt = artworkSource('renewal');
 
 export function HomePage() {
   const { t, locale } = useI18n();
@@ -36,7 +38,7 @@ export function HomePage() {
   const percent = new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 });
   return <>
     <section className="home-hero" aria-busy={result.loading}>
-      <div className="hero-art" aria-hidden="true"><img src={heroArt} alt="" /></div>
+      <div className="hero-art"><img src={heroArt.url} alt="" fetchPriority="high" /><span className="hero-art-caption">{heroArt.generated ? t.redesign.generatedIllustration : t.redesign.illustration}</span></div>
       <div className="hero-copy">
         {APP_CONFIG.apiMode === 'mock' && <p className="preview-label">{t.redesign.preview}</p>}
         <p className="eyebrow"><span />{t.home.eyebrow}</p>
@@ -62,7 +64,7 @@ export function HomePage() {
           <div className="record-row delivered-row"><span>{t.stats.delivered}</span><strong>{formatMoney(stats.delivered, locale)}</strong><div className="record-track"><span style={{width: Math.max(0, stats.delivered / barMax * 100) + '%'}} /></div></div>
           {deliveredRatio !== null && <p className="record-ratio"><strong>{percent.format(deliveredRatio)}</strong> {t.redesign.deliveredRatio}</p>}
         </div>
-        <div className="fund-panel"><div><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p>{APP_CONFIG.apiMode === 'mock' && <p className="fund-preview">{t.home.fundSoon}</p>}</div><div className="fund-orbit" aria-hidden="true"><i /><i /></div></div>
+        <div className="fund-panel"><div className="fund-intro"><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p>{APP_CONFIG.apiMode === 'mock' && <p className="fund-preview">{t.home.fundSoon}</p>}</div>{fund && <dl className="fund-breakdown"><div><dt>{t.stats.received}</dt><dd>{formatMoney(fund.received, locale)}</dd></div><div><dt>{t.stats.delivered}</dt><dd>{formatMoney(fund.delivered, locale)}</dd></div></dl>}</div>
       </div>
     </section>
     <section className="how-section section-wrap" id="how" tabIndex={-1} aria-labelledby="how-heading">

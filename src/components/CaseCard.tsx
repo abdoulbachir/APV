@@ -13,7 +13,7 @@ export function CaseCard({ item }: { item: Case }) {
   const excerpt = paragraph.length > 230 ? paragraph.slice(0, 230).replace(/\s+\S*$/, '') + '…' : paragraph;
   const money = (cents: number) => formatMoney(cents, locale);
   return <article className="case-card">
-    <div className="case-card-portrait"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code, 'small')} variant="small" /><span className="case-code">{item.code}</span></div>
+    <div className="case-card-portrait"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code)} variant="small" /><span className="case-code">{item.code}</span></div>
     <div className="case-card-copy">
       <div className="case-card-top"><p className="case-person">{item.publicName}</p>{item.deadline && <p className="case-deadline">{t.home.deadlineLabel} <strong>{formatDate(item.deadline, locale, true)}</strong></p>}</div>
       <h3>{item.title}</h3>

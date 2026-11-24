@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     // Keep illustrations independently cacheable instead of embedding SVGs in JS.
-    assetsInlineLimit: (filePath) => filePath.endsWith('.svg') ? false : undefined,
+    assetsInlineLimit: (filePath) => /\.(svg|webp)$/i.test(filePath) ? false : undefined,
   },
 });

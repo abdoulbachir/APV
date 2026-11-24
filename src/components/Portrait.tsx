@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { fill, useI18n } from '../i18n/I18nContext';
-import type { CaseArtwork } from '../assets/case-artwork';
-import renewal from '../assets/hope-window.svg';
-import home from '../assets/new-home.svg';
+import { artworkSource, type CaseArtwork } from '../assets/case-artwork';
 
 export function Portrait({ name, variant = 'large', photoUrl, artwork = 'renewal' }: { name: string; variant?: 'large' | 'small'; photoUrl?: string | null; artwork?: CaseArtwork }) {
   const { t } = useI18n();
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showPhoto = !!photoUrl && failedUrl !== photoUrl;
-  const description = showPhoto ? fill(t.redesign.photoLabel, { name }) : artwork === 'home' ? t.redesign.homeArtworkAlt : t.redesign.renewalArtworkAlt;
+  const art = artworkSource(artwork);
+  const description = showPhoto ? fill(t.redesign.photoLabel, { name }) : (art.generated ? t.redesign.generatedIllustration + '. ' : '') + (artwork === 'home' ? t.redesign.homeArtworkAlt : t.redesign.renewalArtworkAlt);
   return <div className={'portrait portrait-' + variant}>
-    <img src={showPhoto ? photoUrl! : artwork === 'home' ? home : renewal} alt={description} onError={showPhoto ? () => setFailedUrl(photoUrl!) : undefined} />
-    {!showPhoto && <span className="art-caption" aria-hidden="true">{t.redesign.illustration}</span>}
+    <img src={showPhoto ? photoUrl! : art.url} alt={description} onError={showPhoto ? () => setFailedUrl(photoUrl!) : undefined} />
+    {!showPhoto && <span className="art-caption" aria-hidden="true">{art.generated ? t.redesign.generatedIllustration : t.redesign.illustration}</span>}
   </div>;
 }
