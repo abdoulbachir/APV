@@ -16,3 +16,5 @@ Styles and design tokens live in `src/styles/global.css` and `src/styles/tokens.
 - Check numeric funding values and track/outline contrast, zero/null/over-goal funding, long stories, donor and ledger lists, sample disclosures, reduced motion and overflow.
 - Confirm both original artwork SVGs are emitted as separate assets by the production build.
 - Obtain design approval before extending the sample to Phase 2.
+
+Vite uses `vite.config.ts` explicitly in all npm scripts. TypeScript checks the configuration without emitting JavaScript or declaration files; generated build metadata is ignored. After `npm run build`, confirm both `hope-window-*.svg` and `new-home-*.svg` exist in `dist/assets/` and are referenced by URL rather than embedded as data URIs.
