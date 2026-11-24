@@ -111,4 +111,18 @@
   --section-pad-compact: clamp(2.5rem,4.5vw,4rem);
   --size-hero-art-mobile: clamp(11rem,45vw,17rem);
   --size-case-art: 23rem;
+  --motion-enter: 620ms;
+  --motion-image: 1450ms;
+  --motion-draw: 1500ms;
+  --motion-funding: 850ms;
+  --motion-stagger: 95ms;
+  --motion-interact: 360ms;
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+  --motion-shift: .85rem;
+  --motion-image-scale: 1.055;
+  --motion-hover-scale: 1.035;
+  --motion-thread-opacity: .42;
+  --motion-thread-echo-opacity: .17;
+  --motion-thread-width: 1.6;
+  --motion-thread-echo-width: .8;
 }

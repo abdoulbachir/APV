@@ -338,9 +338,97 @@ p { margin-top: 0; }
  .brand { white-space: normal; max-width: var(--size-brand-narrow); overflow-wrap: anywhere; font-size: var(--font-size-xs); gap: var(--space-2); letter-spacing: var(--tracking-mobile-brand); }
   .header-give { max-width: var(--size-give-narrow); text-align: center; justify-content: center; }
 }
+/* Humanity in Motion — progressive enhancement, never a content gate. */
+.hero-thread { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.hero-thread path { fill: none; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.hero-thread-main { stroke: var(--color-emerald); stroke-width: var(--motion-thread-width); opacity: var(--motion-thread-opacity); }
+.hero-thread-echo { stroke: var(--color-lime); stroke-width: var(--motion-thread-echo-width); opacity: var(--motion-thread-echo-opacity); }
+
+@keyframes motion-rise {
+  from { transform: translateY(var(--motion-shift)); }
+  to { transform: translateY(0); }
+}
+@keyframes motion-image-in {
+  from { transform: scale(var(--motion-image-scale)); }
+  to { transform: scale(1); }
+}
+@keyframes motion-thread-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes motion-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes motion-dock-in {
+  from { transform: translate(-50%, var(--motion-shift)); opacity: .65; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrance choreography: typography stays legible at all times. */
+  .hero-copy > *, .case-identity > * {
+    animation: motion-rise var(--motion-enter) var(--motion-ease) both;
+  }
+  .hero-copy h1, .case-identity h1 { animation-delay: var(--motion-stagger); }
+  .hero-copy h1 em { animation: motion-rise var(--motion-enter) var(--motion-ease) both; animation-delay: calc(var(--motion-stagger) * 2); }
+  .hero-purpose, .case-title { animation-delay: calc(var(--motion-stagger) * 3); }
+  .hero-actions, .case-primary-action { animation-delay: calc(var(--motion-stagger) * 4); }
+  .hero-art img, .case-portrait-wrap .portrait img { animation: motion-image-in var(--motion-image) var(--motion-ease) both; }
+  .hero-thread path { stroke-dasharray: 1; animation: motion-thread-draw var(--motion-draw) var(--motion-ease) both; }
+  .hero-thread-echo { animation-delay: calc(var(--motion-stagger) * 2) !important; }
+  .stats-strip .stat { animation: motion-rise var(--motion-enter) var(--motion-ease) both; animation-delay: calc(var(--motion-stagger) * 3); }
+  .stats-strip .stat:nth-child(2) { animation-delay: calc(var(--motion-stagger) * 4); }
+  .stats-strip .stat:nth-child(3) { animation-delay: calc(var(--motion-stagger) * 5); }
+
+  /* Scroll choreography: no hidden initial state, even without observer support. */
+  [data-motion].motion-entered { animation: motion-rise var(--motion-enter) var(--motion-ease) both; }
+  [data-motion="steps"].motion-entered > *, [data-motion="timeline"].motion-entered > * {
+    animation: motion-rise var(--motion-enter) var(--motion-ease) both;
+  }
+  [data-motion="steps"].motion-entered > :nth-child(2),
+  [data-motion="timeline"].motion-entered > :nth-child(2) { animation-delay: var(--motion-stagger); }
+  [data-motion="steps"].motion-entered > :nth-child(3),
+  [data-motion="timeline"].motion-entered > :nth-child(3) { animation-delay: calc(var(--motion-stagger) * 2); }
+  [data-motion="steps"].motion-entered > :nth-child(4),
+  [data-motion="timeline"].motion-entered > :nth-child(4) { animation-delay: calc(var(--motion-stagger) * 3); }
+
+  /* Only the visual bars animate; all actual currency values remain exact. */
+  [data-motion="funding"].motion-entered .funding-track > span,
+  [data-motion="funding"].motion-entered .record-track > span {
+    transform-origin: left center;
+    animation: motion-fill var(--motion-funding) var(--motion-ease) both;
+  }
+  [data-motion="funding"].motion-entered .funding-delivered,
+  [data-motion="funding"].motion-entered .delivered-row .record-track > span {
+    animation-delay: var(--motion-stagger);
+  }
+  .give-dock { animation: motion-dock-in var(--motion-enter) var(--motion-ease) both; }
+
+  /* Never displace an element while the visitor is operating it by keyboard. */
+  [data-motion]:focus-within, [data-motion]:focus-within *,
+  .hero-copy:focus-within > *, .case-identity:focus-within > *,
+  .hero-copy:focus-within h1 em, .give-dock:focus-within {
+    animation: none;
+  }
+  .action > span, .header-give > span { display: inline-block; transition: transform var(--motion-interact) var(--motion-ease); }
+  .action:focus-visible > span, .header-give:focus-visible > span { transform: translateX(var(--space-1)); }
+  .action:active { transform: scale(.98); }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .case-card { transition: border-color var(--motion-interact) var(--motion-ease); }
+  .case-card-portrait img { transition: transform var(--motion-image) var(--motion-ease); }
+  .case-card:hover { border-color: var(--color-emerald); }
+  .case-card:hover .case-card-portrait img { transform: scale(var(--motion-hover-scale)); }
+  .action:hover > span, .header-give:hover > span { transform: translateX(var(--space-1)); }
+  .desktop-nav a, .header-give { transition: color var(--transition-fast) ease, background var(--transition-fast) ease; }
+  .header-give:hover { background: var(--color-ivory); color: var(--color-midnight); }
+}
+
 @media (prefers-reduced-motion:reduce) {
   * { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   *::before { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-  .action:hover { transform: none; }
+  .action:hover, .action:active { transform: none; }
 }

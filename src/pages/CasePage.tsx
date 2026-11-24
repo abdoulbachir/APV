@@ -6,6 +6,7 @@ import { getCaseArtwork } from '../assets/case-artwork';
 import { Portrait } from '../components/Portrait';
 import { ErrorState, LoadingState } from '../components/States';
 import { useAsync } from '../hooks/useAsync';
+import { usePageMotion } from '../hooks/usePageMotion';
 import { fill, useI18n } from '../i18n/I18nContext';
 import type { LedgerEntry } from '../types';
 import { formatDate, formatMoney } from '../utils/format';
@@ -20,6 +21,7 @@ export function CasePage() {
   const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
   const result = useAsync(() => api.getCase(code, locale), [code, locale]);
+  const motionRef = usePageMotion<HTMLElement>(!!result.data && !result.loading && !result.error, result.data);
   useEffect(() => {
     const title = result.loading || (result.data && result.data.case.code.toLowerCase() !== code.toLowerCase()) ? t.redesign.caseLoadingTitle : result.error || !result.data ? t.redesign.caseUnavailableTitle : result.data.case.title;
     document.title = title + ' — ' + SITE_NAME;
@@ -41,7 +43,7 @@ export function CasePage() {
   const showSampleNote = () => { setSampleNote(true); window.setTimeout(() => setSampleNote(false), 3600); };
 
   return (
-    <article className="case-page">
+    <article className="case-page" ref={motionRef}>
       <header className="case-hero section-wrap">
         <Link className="back-link" to="/"><span aria-hidden="true">←</span>{t.casePage.back}</Link>
         <div className="case-hero-grid">
@@ -58,11 +60,11 @@ export function CasePage() {
       </header>
 
       <section className="story-progress section-wrap">
-        <div className="story-copy">
+        <div className="story-copy" data-motion="reveal">
           <p className="section-number">02 /</p><h2>{t.casePage.story}</h2>
           {storyParagraphs.map((paragraph) => <p key={paragraph.slice(0, 24)}>{paragraph}</p>)}
         </div>
-        <div className="progress-panel">
+        <div className="progress-panel" data-motion="funding">
           <h2>{t.casePage.progress}</h2>
           <div className="goal-label"><span>{t.casePage.goal}</span><strong>{item.goal === null ? '—' : formatMoney(item.goal, locale)}</strong></div>
           <div className="progress-values">
@@ -80,25 +82,25 @@ export function CasePage() {
       </section>
 
       <section className="updates-section section-wrap">
-        <div className="content-heading"><p className="section-number">03 /</p><h2>{t.casePage.updates}</h2></div>
-        {updates.length ? <div className="timeline">{updates.map((update) => <article key={update.id}><time dateTime={update.date}>{formatDate(update.date, locale, true)}</time><span className="timeline-node" aria-hidden="true" /><div><p>{update.text}</p><small>{fill(t.casePage.updateBy, { author: update.author })}</small></div></article>)}</div> : <p className="empty-note">{t.casePage.noUpdates}</p>}
+        <div className="content-heading" data-motion="reveal"><p className="section-number">03 /</p><h2>{t.casePage.updates}</h2></div>
+        {updates.length ? <div className="timeline" data-motion="timeline">{updates.map((update) => <article key={update.id}><time dateTime={update.date}>{formatDate(update.date, locale, true)}</time><span className="timeline-node" aria-hidden="true" /><div><p>{update.text}</p><small>{fill(t.casePage.updateBy, { author: update.author })}</small></div></article>)}</div> : <p className="empty-note">{t.casePage.noUpdates}</p>}
       </section>
 
       <section className="trust-grid section-wrap">
         <div className="donors-section">
-          <div className="content-heading"><p className="section-number">04 /</p><h2>{t.casePage.donors}</h2></div>
-          {donors.length ? <ul className="donor-list">{donors.map((donor, index) => <li key={`${donor.date}-${index}`}><span className="donor-dot" aria-hidden="true" /><div><strong>{donor.name ?? t.casePage.anonymous}</strong><time dateTime={donor.date}>{formatDate(donor.date, locale)}</time></div><b>{formatMoney(donor.amount, locale)}</b></li>)}</ul> : <p className="empty-note">{t.casePage.noDonors}</p>}
+          <div className="content-heading" data-motion="reveal"><p className="section-number">04 /</p><h2>{t.casePage.donors}</h2></div>
+          {donors.length ? <ul className="donor-list" data-motion="reveal">{donors.map((donor, index) => <li key={`${donor.date}-${index}`}><span className="donor-dot" aria-hidden="true" /><div><strong>{donor.name ?? t.casePage.anonymous}</strong><time dateTime={donor.date}>{formatDate(donor.date, locale)}</time></div><b>{formatMoney(donor.amount, locale)}</b></li>)}</ul> : <p className="empty-note">{t.casePage.noDonors}</p>}
           <p className="list-note">{t.casePage.donorsNote}</p>
         </div>
         <div className="ledger-section">
-          <div className="content-heading"><p className="section-number">05 /</p><div><h2>{t.casePage.ledger}</h2><p>{t.casePage.ledgerIntro}</p></div></div>
-          {ledger.length ? <ul className="ledger-list">{ledger.map((entry, index) => <li key={`${entry.date}-${index}`} className={`ledger-${entry.kind}`}><div><span>{ledgerLabel(entry.kind, t)}</span><strong>{entry.label}</strong><time dateTime={entry.date}>{formatDate(entry.date, locale)}</time></div><b>{entry.kind === 'disbursement' || entry.kind === 'transfer_out' ? '−' : '+'}{formatMoney(entry.amount, locale)}</b></li>)}</ul> : <p className="empty-note">{t.casePage.noLedger}</p>}
+          <div className="content-heading" data-motion="reveal"><p className="section-number">05 /</p><div><h2>{t.casePage.ledger}</h2><p>{t.casePage.ledgerIntro}</p></div></div>
+          {ledger.length ? <ul className="ledger-list" data-motion="reveal">{ledger.map((entry, index) => <li key={`${entry.date}-${index}`} className={`ledger-${entry.kind}`}><div><span>{ledgerLabel(entry.kind, t)}</span><strong>{entry.label}</strong><time dateTime={entry.date}>{formatDate(entry.date, locale)}</time></div><b>{entry.kind === 'disbursement' || entry.kind === 'transfer_out' ? '−' : '+'}{formatMoney(entry.amount, locale)}</b></li>)}</ul> : <p className="empty-note">{t.casePage.noLedger}</p>}
         </div>
       </section>
 
       <section className="rules-band section-wrap">
         <p className="eyebrow eyebrow-light"><span />{t.casePage.beforeGiving}</p>
-        <div className="rules-grid"><p>{t.casePage.excessRule}</p><p>{t.casePage.deadlineRule}</p><p>{t.casePage.decisionRule}</p><p>{t.casePage.pendingRule}</p></div>
+        <div className="rules-grid" data-motion="steps"><p>{t.casePage.excessRule}</p><p>{t.casePage.deadlineRule}</p><p>{t.casePage.decisionRule}</p><p>{t.casePage.pendingRule}</p></div>
       </section>
 
       {showStickyAction && <div className="give-dock">
