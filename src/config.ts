@@ -4,5 +4,4 @@ export const APP_CONFIG = {
   apiMode: 'mock' as 'mock' | 'real',
   apiBaseUrl: '/api',
   mockDelayMs: 540,
-  mockFailureRate: 0,
 } as const;

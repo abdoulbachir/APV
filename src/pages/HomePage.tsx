@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { CaseCard } from '../components/CaseCard';
+import { CompactCaseCard } from '../components/CompactCaseCard';
+import { featuredCases } from '../utils/case-directory';
+import { fill } from '../i18n/I18nContext';
 import { ErrorState, LoadingState } from '../components/States';
 import { StatsStrip } from '../components/StatsStrip';
 import { useAsync } from '../hooks/useAsync';
@@ -34,6 +37,7 @@ export function HomePage() {
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
   const { stats, cases } = result.data;
   const activeCases = cases.filter(item => item.kind === 'case');
+  const { featured, additional } = featuredCases(activeCases);
   const fund = cases.find(item => item.kind === 'fund');
   const deliveredRatio = stats.received > 0 ? stats.delivered / stats.received : null;
   const barMax = Math.max(stats.received, stats.delivered, 1);
@@ -55,7 +59,9 @@ export function HomePage() {
     </section>
     <section className="active-section section-wrap" id="cases" tabIndex={-1} aria-labelledby="cases-heading">
       <header className="v2-heading" data-motion="reveal"><p className="eyebrow"><span />{t.home.activeCases}</p><div><h2 id="cases-heading">{t.redesign.activeLead} <em>{t.redesign.activeAccent}</em></h2><p>{t.home.activeIntro}</p></div></header>
-      <div className="case-list">{activeCases.length ? activeCases.map(item => <CaseCard key={item.code} item={item} />) : <p className="empty-note">{t.common.emptyCases}</p>}</div>
+      <div className="case-list">{featured ? <CaseCard item={featured} /> : <p className="empty-note">{t.common.emptyCases}</p>}</div>
+      {additional.length > 0 && <div className="featured-grid">{additional.map(item => <CompactCaseCard key={item.code} item={item} />)}</div>}
+      <div className="directory-entry"><Link className="action action-lime" to="/cases">{fill(t.directory.exploreAll, {count: String(activeCases.length)})}<span aria-hidden="true">↗</span></Link></div>
     </section>
     <section className="transparency-section section-wrap" id="record" tabIndex={-1} aria-labelledby="record-heading">
       <header className="v2-heading" data-motion="reveal"><p className="eyebrow"><span />{t.redesign.publicRecord}</p><div><h2 id="record-heading">{t.redesign.transparency}</h2><p>{t.redesign.transparencyIntro}</p></div></header>

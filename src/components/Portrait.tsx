@@ -9,7 +9,7 @@ export function Portrait({ name, variant = 'large', photoUrl, artwork = 'renewal
   const art = artworkSource(artwork);
   const description = showPhoto ? fill(t.redesign.photoLabel, { name }) : (art.generated ? t.redesign.generatedIllustration + '. ' : '') + (artwork === 'home' ? t.redesign.homeArtworkAlt : t.redesign.renewalArtworkAlt);
   return <div className={'portrait portrait-' + variant}>
-    <img src={showPhoto ? photoUrl! : art.url} alt={description} onError={showPhoto ? () => setFailedUrl(photoUrl!) : undefined} />
+    <img loading={variant === 'small' ? 'lazy' : 'eager'} decoding="async" src={showPhoto ? photoUrl! : art.url} alt={description} onError={showPhoto ? () => setFailedUrl(photoUrl!) : undefined} />
     {!showPhoto && <span className="art-caption" aria-hidden="true">{art.generated ? t.redesign.generatedIllustration : t.redesign.illustration}</span>}
   </div>;
 }

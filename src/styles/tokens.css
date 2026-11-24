@@ -1,5 +1,15 @@
 /* Humanity in Motion: individual acts of generosity flow together into a human outcome, expressed through symbolic artwork and a continuous visual thread. Financial milestones belong to the person's story, making transparency feel natural rather than administrative. */
 :root {
+  --size-compact-art: 8rem;
+  --size-directory-heading: clamp(2.2rem,5vw,4.5rem);
+  --size-list-art: 11rem;
+  --category-education: #DAE8D4;
+  --category-medical: #D9E9E5;
+  --category-housing: #F0E5CF;
+  --category-family: #E7E1D2;
+  --category-emergency: #F1DDD3;
+  --category-other: #E6EFE7;
+  --category-ink: #123D32;
   --color-shadow: rgba(0, 0, 0, 0.42);
   --font-display: "Syne", "Arial Black", sans-serif;
   --font-body: "Manrope Variable", "Segoe UI", Arial, sans-serif;

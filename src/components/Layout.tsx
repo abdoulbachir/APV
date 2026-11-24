@@ -8,19 +8,25 @@ export function Layout() {
   const { t } = useI18n();
   return (
     <div className="site-shell">
-      <a className="skip-link" href="#main">{t.nav.home}</a>
+      <a className="skip-link" href="#main" onClick={event => {
+        const main = document.getElementById('main');
+        if (!main) return;
+        event.preventDefault();
+        main.focus({ preventScroll: true });
+        main.scrollIntoView({ block: 'start' });
+      }}>{t.navigationA11y.skip}</a>
       <header className="site-header">
         <Link className="brand" to="/" aria-label={`${SITE_NAME} — ${t.nav.home}`}>
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>{SITE_NAME}</span>
         </Link>
-        <nav className="desktop-nav" aria-label={t.nav.home}>
-          <Link to="/#cases">{t.nav.explore}</Link>
+        <nav className="desktop-nav" aria-label={t.navigationA11y.primary}>
+          <Link to="/cases">{t.nav.explore}</Link>
           <Link to="/#how">{t.nav.how}</Link>
         </nav>
-        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-give" to="/#cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
+        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-give" to="/cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
       </header>
-      <main id="main"><Outlet /></main>
+      <main id="main" tabIndex={-1}><Outlet /></main>
       <footer className="site-footer">
         <div className="footer-line" aria-hidden="true"><i /><i /><i /></div>
         <div>
