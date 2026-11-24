@@ -32,7 +32,9 @@ const realClient: ApiClient = {
 
 async function mockResult<T>(value: T): Promise<T> {
   await new Promise((resolve) => window.setTimeout(resolve, APP_CONFIG.mockDelayMs));
-  if (Math.random() < APP_CONFIG.mockFailureRate) throw new ApiError('mock_network_error', 'Simulated connection error', 503);
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('mockError') === '1') {
+    throw new ApiError('mock_network_error', 'Simulated connection error', 503);
+  }
   return structuredClone(value);
 }
 

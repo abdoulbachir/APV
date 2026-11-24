@@ -2,7 +2,6 @@
 :root {
   --size-compact-art: 8rem;
   --size-directory-heading: clamp(2.2rem,5vw,4.5rem);
-  --size-directory-control: 13rem;
   --size-list-art: 11rem;
   --category-education: #DAE8D4;
   --category-medical: #D9E9E5;

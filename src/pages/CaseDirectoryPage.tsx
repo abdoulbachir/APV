@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Link, useSearchParams, useLocation } from 'react-router-dom';
+import { Link, useSearchParams, useLocation, useNavigationType } from 'react-router-dom';
 import { api } from '../api/client';
 import { APP_CONFIG, SITE_NAME } from '../config';
 import { CompactCaseCard } from '../components/CompactCaseCard';
@@ -13,6 +13,8 @@ export function CaseDirectoryPage() {
   const { t, locale } = useI18n();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const arrival = useRef({ type: navigationType, active: document.activeElement });
   const result = useAsync(() => api.getCases('active', locale), [locale], true);
   const root = usePageMotion<HTMLElement>(!!result.data && !result.error, location.search + locale);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -39,16 +41,32 @@ export function CaseDirectoryPage() {
   useEffect(() => {
     if (result.data && !initialFocus.current) {
       initialFocus.current = true;
-      heading.current?.focus({ preventScroll: true });
-      window.scrollTo({ top: 0, behavior: 'instant' });
+      // A fresh document or history traversal should not steal focus.
+      // A new SPA navigation may focus the title if the visitor has not moved elsewhere.
+      if (arrival.current.type === 'PUSH' || arrival.current.type === 'REPLACE') {
+        if (document.activeElement === document.body || document.activeElement === arrival.current.active) {
+          heading.current?.focus({ preventScroll: true });
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      }
     }
   }, [result.data]);
   useEffect(() => {
-    if (!result.data || result.loading || !params.has('page') || String(page) === params.get('page')) return;
+    if (!result.data || result.loading || result.error) return;
     const next = new URLSearchParams(params);
-    if (page === 1) next.delete('page'); else next.set('page', String(page));
-    setParams(next, { replace: true });
-  }, [page, params, result.data, result.loading, setParams]);
+    // Preserve unrelated parameters such as lang and dev-only test scenarios.
+    const canonical: Record<string, string | null> = {
+      q: query ? query : null,
+      category: category === 'all' ? null : category,
+      sort: sort === 'newest' ? null : sort,
+      view: view === 'grid' ? null : view,
+      page: page === 1 ? null : String(page),
+    };
+    for (const [key, value] of Object.entries(canonical)) {
+      if (value === null) next.delete(key); else next.set(key, value);
+    }
+    if (next.toString() !== params.toString()) setParams(next, { replace: true });
+  }, [page, query, category, sort, view, params, result.data, result.loading, result.error, setParams]);
 
   function change(key: string, value: string, reset = true, replace = false) {
     const next = new URLSearchParams(params);

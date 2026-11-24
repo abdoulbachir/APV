@@ -38,7 +38,7 @@ export function CasePage() {
     return () => window.removeEventListener('scroll', updateStickyAction);
   }, []);
   if (result.loading) return <LoadingState />;
-  if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
+  if (result.error || !result.data) return <ErrorState onRetry={result.retry} error={result.error} missingCase returnTo={returnTo ?? '/cases'} />;
 
   const { case: item, updates, donors, ledger } = result.data;
   const receivedPercent = item.goal && item.goal > 0 ? Math.max(0, item.received / item.goal * 100) : null;

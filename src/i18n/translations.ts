@@ -3,6 +3,8 @@ import type { Case, CaseUpdate, LedgerEntry, PublicDonor, Stats } from '../types
 export type Locale = 'en' | 'fr';
 
 const en = {
+    navigationA11y: { skip: 'Skip to content', primary: 'Primary navigation' },
+    errors: { missingPage: 'Page not found', missingPageBody: 'This page does not exist or has moved.', missingCase: 'Case unavailable', missingCaseBody: 'This case could not be found or is no longer public.', browse: 'Browse active cases', home: 'Return home' },
     directory: {"title":"Find a story to support.","intro":"Discover active cases and follow the impact of every confirmed gift.","search":"Search cases","searchPlaceholder":"Search stories, names or case numbers","category":"Category","allCategories":"All categories","sort":"Sort by","sorts":{"newest":"Newest first","deadline":"Deadline approaching","closest":"Closest to goal","least":"Least funded"},"categories":{"education":"Education","medical":"Medical","housing":"Housing","family":"Family support","emergency":"Emergency","other":"Other"},"clear":"Clear filters","count":"Active cases: {count}","view":"Display mode","grid":"Grid","list":"List","noDeadline":"No deadline","range":"Showing {start}–{end} of {total}","pagination":"Case pages","previous":"Previous","next":"Next","page":"Page {number}","empty":"No matching cases","exploreAll":"Explore all {count} active cases","back":"Back to cases"},
     theme: { darkMode: 'Dark mode', switchLight: 'Switch to light mode', switchDark: 'Switch to dark mode' },
     redesign: {"preview":"Sample preview · illustrative data","explore":"Explore active cases","activeLead":"A real need.","activeAccent":"A direct impact.","publicRecord":"The public record","transparency":"Transparency at a glance.","transparencyIntro":"A clear view of confirmed gifts, delivered support and available funds.","fundsOverview":"Confirmed funds overview","deliveredRatio":"delivered / received","unavailable":"Unavailable","howLead":"Human support. Nothing hidden.","completedUnavailable":"Available in the next phase","givingPreview":"Giving is not open yet. This is a sample for design review.","illustration":"Symbolic illustration","generatedIllustration":"AI-generated illustration","readStory":"Read the story","remaining":"remaining","photoLabel":"Public photo for {name}","homeArtworkAlt":"Symbolic illustration of a sunlit room with two beds and a moving box","renewalArtworkAlt":"Symbolic illustration of a person seen from behind looking toward the sunrise","caseLoadingTitle":"Loading case","caseUnavailableTitle":"Case unavailable"},
@@ -75,7 +77,7 @@ const en = {
       updateText: 'Mariam signed the lease today. The first delivery will cover the deposit and beds; we will share the handoff here when it is complete.',
       updateAuthor: 'Aïcha',
       donors: ['Nadia K.', 'Samuel T.', 'The Diallo family'],
-      ledger: ['Confirmed Zelle gift', 'Confirmed PayPal gift', 'First handoff for the housing deposit'],
+      ledger: ['Confirmed Zelle gift', 'Confirmed PayPal gift', 'First handoff for the housing deposit', 'Confirmed sample gift', 'Confirmed sample gift (donor not listed)'],
     },
 } as const;
 
@@ -84,6 +86,8 @@ type TranslationShape<T> = T extends string ? string : T extends object ? { [K i
 export type Translation = TranslationShape<typeof en>;
 
 const fr = {
+    navigationA11y: { skip: 'Aller au contenu', primary: 'Navigation principale' },
+    errors: { missingPage: 'Page introuvable', missingPageBody: 'Cette page n’existe pas ou a été déplacée.', missingCase: 'Cas indisponible', missingCaseBody: 'Ce cas est introuvable ou n’est plus public.', browse: 'Découvrir les cas actifs', home: 'Retour à l’accueil' },
     directory: {"title":"Trouvez une histoire à soutenir.","intro":"Découvrez les cas actifs et suivez l’impact de chaque don confirmé.","search":"Rechercher des cas","searchPlaceholder":"Rechercher une histoire, un nom ou un numéro","category":"Catégorie","allCategories":"Toutes les catégories","sort":"Trier par","sorts":{"newest":"Les plus récents","deadline":"Échéance proche","closest":"Objectif presque atteint","least":"Les moins financés"},"categories":{"education":"Éducation","medical":"Santé","housing":"Logement","family":"Soutien familial","emergency":"Urgence","other":"Autre"},"clear":"Effacer les filtres","count":"Cas actifs : {count}","view":"Mode d’affichage","grid":"Grille","list":"Liste","noDeadline":"Sans échéance","range":"Résultats {start}–{end} sur {total}","pagination":"Pages de cas","previous":"Précédent","next":"Suivant","page":"Page {number}","empty":"Aucun cas correspondant","exploreAll":"Découvrir les {count} cas actifs","back":"Retour aux cas"},
     theme: { darkMode: 'Mode sombre', switchLight: 'Activer le mode clair', switchDark: 'Activer le mode sombre' },
     redesign: {"preview":"Aperçu · données fictives","explore":"Découvrir les cas actifs","activeLead":"Un besoin réel.","activeAccent":"Un impact direct.","publicRecord":"Le registre public","transparency":"La transparence en un regard.","transparencyIntro":"Une vue claire des dons confirmés, des fonds remis et du solde disponible.","fundsOverview":"Aperçu des fonds confirmés","deliveredRatio":"remis / reçu","unavailable":"Indisponible","howLead":"Un soutien humain. Rien de caché.","completedUnavailable":"Disponible à la prochaine phase","givingPreview":"Les dons ne sont pas encore ouverts. Ceci est un aperçu pour validation du design.","illustration":"Illustration symbolique","generatedIllustration":"Illustration générée par IA","readStory":"Lire son histoire","remaining":"restants","photoLabel":"Photo publique de {name}","homeArtworkAlt":"Illustration symbolique d’une chambre ensoleillée avec deux lits et un carton de déménagement","renewalArtworkAlt":"Illustration symbolique d’une personne vue de dos face au lever du soleil","caseLoadingTitle":"Chargement du cas","caseUnavailableTitle":"Cas indisponible"},
@@ -156,7 +160,7 @@ const fr = {
       updateText: 'Mariam a signé le bail aujourd’hui. La première remise couvrira la caution et les lits ; nous publierons la confirmation ici une fois la remise terminée.',
       updateAuthor: 'Aïcha',
       donors: ['Nadia K.', 'Samuel T.', 'La famille Diallo'],
-      ledger: ['Don Zelle confirmé', 'Don PayPal confirmé', 'Première remise pour la caution du logement'],
+      ledger: ['Don Zelle confirmé', 'Don PayPal confirmé', 'Première remise pour la caution du logement', 'Don fictif confirmé', 'Don fictif confirmé (donateur non affiché)'],
     },
 } as const satisfies Translation;
 
@@ -186,7 +190,10 @@ export function mockContent(locale: Locale): { stats: Stats; cases: Case[]; upda
     ledger: [
       { kind: 'donation', amount: 12500, date: '2026-11-21T12:00:00.000Z', label: text.ledger[0] },
       { kind: 'donation', amount: 25000, date: '2026-11-18T12:00:00.000Z', label: text.ledger[1] },
+      { kind: 'donation', amount: 7500, date: '2026-11-16T12:00:00.000Z', label: text.ledger[3] },
+      { kind: 'donation', amount: 50000, date: '2026-11-11T12:00:00.000Z', label: text.ledger[3] },
       { kind: 'disbursement', amount: 320000, date: '2026-11-09T12:00:00.000Z', label: text.ledger[2] },
+      { kind: 'donation', amount: 472500, date: '2026-11-05T12:00:00.000Z', label: text.ledger[4] },
     ],
   };
 }
