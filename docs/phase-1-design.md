@@ -28,3 +28,7 @@ The image area uses original AI-generated symbolic scenes where `src/assets/hope
 The cinematic entrance and decorative thread draw are finite animations. An IntersectionObserver triggers single-pass section and funding-bar motion, and hover/press states provide lightweight interaction feedback. Actual displayed amounts are never counted up or altered. All optional animations are gated by prefers-reduced-motion, no content is initially hidden, and keyboard focus suppresses movement of interactive areas. No motion libraries or extra dependencies are needed.
 
 Verify on both pages and locales: hero choreography, one-time scroll reveals, final exact funding widths, repeated hash links and destination focus, keyboard interaction, mobile touch controls, and reduced motion. With IntersectionObserver unavailable, all content and bars must still display at their final values.
+
+## Light-first visual direction
+
+Warm ivory, white and sage are the default surfaces, with forest-green typography and emerald actions. The transparency section, footer and small contrast elements retain a deep forest palette. The hero artwork now sits in a separate image column on desktop and its own row on phones: legibility does not depend on the image or an overlay. Motion remains finite and reduced-motion aware. The light and dark financial chart palettes use separate role tokens; verify contrast in each context, including keyboard focus and action hover, before accepting this visual revision.
