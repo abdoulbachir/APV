@@ -17,7 +17,7 @@ export function Layout() {
           <Link to="/#cases">{t.nav.explore}</Link>
           <Link to="/#how">{t.nav.how}</Link>
         </nav>
-        <div className="header-actions"><LanguageSwitch /><Link className="header-give" to="/cases/HELP-014">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
+        <div className="header-actions"><LanguageSwitch /><Link className="header-give" to="/#cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
       </header>
       <main id="main"><Outlet /></main>
       <footer className="site-footer">

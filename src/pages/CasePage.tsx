@@ -18,7 +18,7 @@ export function CasePage() {
   const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
   const result = useAsync(() => api.getCase(code, locale), [code, locale]);
-  useEffect(() => { document.title = t.meta.caseTitle; }, [t]);
+  useEffect(() => { document.title = result.data ? result.data.case.title + ' — APV-GAKASINAY' : t.meta.homeTitle; }, [result.data, t]);
   useEffect(() => {
     const updateStickyAction = () => setShowStickyAction(window.scrollY > 520);
     updateStickyAction();
@@ -29,8 +29,8 @@ export function CasePage() {
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
 
   const { case: item, updates, donors, ledger } = result.data;
-  const receivedPercent = item.goal ? Math.min(100, Math.round(item.received / item.goal * 100)) : 0;
-  const deliveredPercent = item.goal ? Math.min(100, Math.round(item.delivered / item.goal * 100)) : 0;
+  const receivedPercent = item.goal && item.goal > 0 ? Math.max(0, Math.round(item.received / item.goal * 100)) : 0;
+  const deliveredPercent = item.goal && item.goal > 0 ? Math.max(0, Math.round(item.delivered / item.goal * 100)) : 0;
   const storyParagraphs = item.story.split('\n\n');
   const showSampleNote = () => { setSampleNote(true); window.setTimeout(() => setSampleNote(false), 3600); };
 
@@ -39,13 +39,13 @@ export function CasePage() {
       <header className="case-hero section-wrap">
         <Link className="back-link" to="/"><span aria-hidden="true">←</span>{t.casePage.back}</Link>
         <div className="case-hero-grid">
-          <div className="case-portrait-wrap"><Portrait name={item.publicName} /><span className="case-code">{item.code}</span></div>
+          <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} code={item.code} /><span className="case-code">{item.code}</span>{!item.photoUrl && <span className="art-caption">{t.redesign.illustration}</span>}</div>
           <div className="case-identity">
             <p className="eyebrow"><span />{t.casePage.supportLabel}</p>
             <h1>{item.publicName}</h1>
             <p className="case-title">{item.title}</p>
             {item.deadline && <p className="deadline-pill">{fill(t.casePage.deadline, { date: formatDate(item.deadline, locale, true) })}</p>}
-            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote}>{fill(t.casePage.give, { name: item.publicName.replace(/\sD\.$/, '') })}<span aria-hidden="true">↗</span></button>
+            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote}>{fill(t.casePage.give, { name: item.publicName })}<span aria-hidden="true">↗</span></button>
             {sampleNote && !showStickyAction && <p className="sample-note" role="status">{t.casePage.sampleNotice}</p>}
           </div>
         </div>
@@ -58,11 +58,11 @@ export function CasePage() {
         </div>
         <div className="progress-panel">
           <h2>{t.casePage.progress}</h2>
-          <div className="goal-label"><span>{t.casePage.goal}</span><strong>{formatMoney(item.goal ?? 0, locale)}</strong></div>
+          <div className="goal-label"><span>{t.casePage.goal}</span><strong>{item.goal === null ? '—' : formatMoney(item.goal, locale)}</strong></div>
           <div className="progress-route" aria-hidden="true">
             <div className="progress-base" />
-            <div className="progress-received" style={{ height: `${receivedPercent}%` }} />
-            <div className="progress-delivered" style={{ height: `${deliveredPercent}%` }} />
+            <div className="progress-received" style={{ height: `${Math.min(100, receivedPercent)}%` }} />
+            <div className="progress-delivered" style={{ height: `${Math.min(100, deliveredPercent)}%` }} />
             <i className="route-start" /><i className="route-end" />
           </div>
           <div className="progress-values">
@@ -96,7 +96,7 @@ export function CasePage() {
       </section>
 
       {showStickyAction && <div className="give-dock">
-          <button className="action action-orange give-action" type="button" onClick={showSampleNote}>{fill(t.casePage.give, { name: item.publicName.replace(/\sD\.$/, '') })}<span aria-hidden="true">↗</span></button>
+          <button className="action action-orange give-action" type="button" onClick={showSampleNote}>{fill(t.casePage.give, { name: item.publicName })}<span aria-hidden="true">↗</span></button>
           {sampleNote && <p role="status">{t.casePage.sampleNotice}</p>}
         </div>}
     </article>

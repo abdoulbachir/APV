@@ -1,4 +1,4 @@
-/* The design is a living impact field: individual acts appear as quiet points of light that gather around one human story, then resolve into exact, verifiable movement of money. Its future-facing quality comes from cinematic scale, spatial depth, and responsive data—not from cold technology—and every surface keeps the person more important than the interface. */
+/* Humanity in Motion: individual acts of generosity flow together into a human outcome, expressed through symbolic artwork and a continuous visual thread. Financial milestones belong to the person's story, making transparency feel natural rather than administrative. */
 :root {
   --color-midnight: #080d12;
   --color-ocean: #101e25;
@@ -59,4 +59,23 @@
   --blur: 1.25rem;
   --transition-fast: 180ms;
   --transition-slow: 700ms;
+}
+
+:root {
+  --font-editorial: Georgia, 'Times New Roman', serif;
+  --color-forest: #112a25;
+  --color-panel: #142c28;
+  --color-panel-soft: #1b3831;
+  --color-rule: #37584f;
+  --color-ink-green: #145542;
+  --color-dark-fade: rgba(8, 13, 18, 0.88);
+  --color-art-fade: rgba(8, 13, 18, 0.25);
+  --font-size-display: clamp(3.1rem, 6vw, 6.25rem);
+  --font-size-xl: clamp(2rem, 4vw, 3.8rem);
+  --font-size-name: clamp(3rem, 6.5vw, 6rem);
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --section-pad: clamp(3rem, 5vw, 5rem);
+  --hero-min: 31rem;
+  --content-max: 88rem;
 }

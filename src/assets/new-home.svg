@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" role="img" aria-label="Symbolic illustration of a new home with two beds and a moving box">
+<defs><linearGradient id="wall" x2="1" y2="1"><stop stop-color="#27332d"/><stop offset=".45" stop-color="#a88760"/><stop offset="1" stop-color="#5c5141"/></linearGradient><linearGradient id="light" x2="0" y2="1"><stop stop-color="#f8d9a0"/><stop offset="1" stop-color="#bc8d50"/></linearGradient><linearGradient id="floor" x2="1" y2="1"><stop stop-color="#65523c"/><stop offset="1" stop-color="#242d28"/></linearGradient><linearGradient id="linen" x2="0" y2="1"><stop stop-color="#d9ccae"/><stop offset="1" stop-color="#807760"/></linearGradient><linearGradient id="blanket" x2="1" y2="1"><stop stop-color="#698579"/><stop offset="1" stop-color="#263e39"/></linearGradient><radialGradient id="glow"><stop stop-color="#ffeac1" stop-opacity=".8"/><stop offset="1" stop-color="#f0b36a" stop-opacity="0"/></radialGradient><filter id="texture"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".08"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter></defs>
+<g filter="url(#texture)"><path fill="url(#wall)" d="M0 0h900v620H0z"/><path fill="url(#floor)" d="M0 392h900v228H0z"/>
+<path fill="#b4a080" opacity=".6" d="M0 387h900v8H0z"/><path fill="#514739" d="M267 0h304v352H267z"/><path fill="url(#light)" d="M280 0h278v334H280z"/><ellipse fill="url(#glow)" cx="415" cy="148" rx="350" ry="350"/>
+<g fill="none" stroke="#a98354" stroke-width="8"><path d="M419 0v334M280 157h278"/></g><path fill="#e2c49b" opacity=".5" d="M230 0h64q-19 145 1 356h-86q33-196 21-356zM550 0h64q-19 158 4 356h-71q18-165 3-356z"/>
+<path fill="#e5bc7b" opacity=".23" d="M280 334h278L850 620H110z"/>
+<g stroke="#bea37d" opacity=".25"><path d="M450 394L31 620M450 394L240 620M450 394v226M450 394l230 226M450 394l430 226" /></g>
+<path fill="#4d392b" d="M26 302h267v160H26zM630 273h242v160H630z"/>
+<path fill="#8a6c4d" d="M39 318h241v112H39zM643 288h216v120H643z"/>
+<path fill="url(#linen)" d="M36 370h240l96 162H0zM643 348h214l43 161-335 2z"/>
+<path fill="#efe3c7" d="M53 371q-8-28 12-31l115 1q25 0 35 32zM664 352q-3-25 20-30h111q22 0 29 31z"/>
+<path fill="url(#blanket)" d="M0 443l302-2 70 91-24 88H0zM606 425l268-2 26 82v115H565l-1-109z"/>
+<g stroke="#a8b9a2" stroke-width="2" opacity=".29" fill="none"><path d="M24 449l-4 171M75 449l14 171M145 449l20 171M213 449l42 171M641 431l-42 189M707 431l-9 189M776 431l14 189M841 431l40 189"/></g>
+<path fill="#795a3d" d="M342 349h150v111H342z"/><path fill="#a58357" d="M334 343h166v13H334z"/><path fill="#433e2c" d="M397 306h43l-6 36h-31z"/><g fill="#496a50"><path d="M418 311q-67-17-44-66 44 16 44 66zM419 313q54-4 53-65-48 15-53 65zM418 306q-27-66 10-81 20 45-10 81z"/></g>
+<path fill="#a57d4e" d="M367 455l109-22 95 38-110 28z"/><path fill="#b18a59" d="M367 455l94 44v106l-94-40z"/><path fill="#7e5c3d" d="M461 499l110-28v108l-110 26z"/><path fill="#dac29a" d="M413 446l96 42 18-5-93-41z"/>
+<path fill="none" stroke="#e7d3b2" stroke-opacity=".35" stroke-width="2" d="M367 455l94 44 110-28M461 499v106"/>
+</g></svg>

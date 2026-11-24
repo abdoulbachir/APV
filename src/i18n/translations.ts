@@ -4,6 +4,7 @@ export type Locale = 'en' | 'fr';
 
 export const translations = {
   en: {
+    redesign: {"preview":"Sample preview · illustrative data","explore":"Explore active cases","activeLead":"A real need.","activeAccent":"A direct impact.","publicRecord":"The public record","transparency":"Transparency at a glance.","transparencyIntro":"A clear view of confirmed gifts, delivered support and available funds.","fundsOverview":"Confirmed funds overview","deliveredRatio":"delivered / received","unavailable":"Unavailable","howLead":"Human support. Nothing hidden.","completedUnavailable":"Available in the next phase","givingPreview":"Giving is not open yet. This is a sample for design review.","illustration":"Symbolic illustration","readStory":"Read the story","receivedOfGoal":"of goal received","remaining":"remaining","photoLabel":"Public photo for {name}"},
     meta: { homeTitle: 'APV-GAKASINAY — Help moves between us', caseTitle: 'Support Mariam D. — APV-GAKASINAY' },
     nav: { home: 'Home', explore: 'Explore', how: 'How it works', give: 'Give today', language: 'Language', english: 'EN', french: 'FR', openMenu: 'Open menu', closeMenu: 'Close menu' },
     home: {
@@ -77,6 +78,7 @@ export const translations = {
     },
   },
   fr: {
+    redesign: {"preview":"Aperçu · données fictives","explore":"Découvrir les cas actifs","activeLead":"Un besoin réel.","activeAccent":"Un impact direct.","publicRecord":"Le registre public","transparency":"La transparence en un regard.","transparencyIntro":"Une vue claire des dons confirmés, des fonds remis et du solde disponible.","fundsOverview":"Aperçu des fonds confirmés","deliveredRatio":"remis / reçu","unavailable":"Indisponible","howLead":"Un soutien humain. Rien de caché.","completedUnavailable":"Disponible à la prochaine phase","givingPreview":"Les dons ne sont pas encore ouverts. Ceci est un aperçu pour validation du design.","illustration":"Illustration symbolique","readStory":"Lire son histoire","receivedOfGoal":"de l’objectif reçu","remaining":"restants","photoLabel":"Photo publique de {name}"},
     meta: { homeTitle: 'APV-GAKASINAY — L’aide circule entre nous', caseTitle: 'Soutenir Mariam D. — APV-GAKASINAY' },
     nav: { home: 'Accueil', explore: 'Découvrir', how: 'Comment ça marche', give: 'Donner maintenant', language: 'Langue', english: 'EN', french: 'FR', openMenu: 'Ouvrir le menu', closeMenu: 'Fermer le menu' },
     home: {

@@ -1,74 +1,70 @@
 import { useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { CaseCard } from '../components/CaseCard';
 import { ErrorState, LoadingState } from '../components/States';
 import { StatsStrip } from '../components/StatsStrip';
-import { Portrait } from '../components/Portrait';
-import { Link } from 'react-router-dom';
 import { useAsync } from '../hooks/useAsync';
 import { useI18n } from '../i18n/I18nContext';
 import { formatMoney } from '../utils/format';
+import { APP_CONFIG } from '../config';
+import heroArt from '../assets/hope-window.svg';
 
 export function HomePage() {
   const { t, locale } = useI18n();
+  const { hash } = useLocation();
   const result = useAsync(async () => {
     const [stats, cases] = await Promise.all([api.getStats(locale), api.getCases('active', locale)]);
     return { stats, cases };
   }, [locale]);
-
   useEffect(() => { document.title = t.meta.homeTitle; }, [t]);
+  useEffect(() => {
+    if (!result.loading && hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [result.loading, hash]);
   if (result.loading) return <LoadingState />;
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} />;
-
-  const activeCases = result.data.cases.filter((item) => item.kind === 'case');
-  const fund = result.data.cases.find((item) => item.kind === 'fund');
-
-  return (
-    <>
-      <section className="home-hero">
-        <div className="hero-field" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-        <div className="hero-copy">
-          <p className="eyebrow"><span />{t.home.eyebrow}</p>
-          <h1><span>{t.home.headlineLead}</span><em>{t.home.headlineAccent}</em></h1>
-          <p className="hero-purpose">{t.home.purpose}</p>
-          {activeCases[0] && <Link className="action action-lime hero-action" to={`/cases/${activeCases[0].code}`}>{t.home.viewCase}<span aria-hidden="true">↗</span></Link>}
+  const { stats, cases } = result.data;
+  const activeCases = cases.filter(item => item.kind === 'case');
+  const fund = cases.find(item => item.kind === 'fund');
+  const deliveredRatio = stats.received > 0 ? stats.delivered / stats.received : null;
+  const barMax = Math.max(stats.received, stats.delivered, 1);
+  const percent = new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 });
+  return <>
+    <section className="home-hero">
+      <div className="hero-art" aria-hidden="true"><img src={heroArt} alt="" /></div>
+      <div className="hero-copy">
+        {APP_CONFIG.apiMode === 'mock' && <p className="preview-label">{t.redesign.preview}</p>}
+        <p className="eyebrow"><span />{t.home.eyebrow}</p>
+        <h1><span>{t.home.headlineLead}</span><em>{t.home.headlineAccent}</em></h1>
+        <p className="hero-purpose">{t.home.purpose}</p>
+        <div className="hero-actions">
+          <Link className="action action-lime" to="/#cases">{t.redesign.explore}<span aria-hidden="true">↗</span></Link>
+          <Link className="action action-outline" to="/#how">{t.nav.how}<span aria-hidden="true">↓</span></Link>
         </div>
-        {activeCases[0] && <div className="hero-visual"><Portrait name={activeCases[0].publicName} /><span className="hero-orbit orbit-one" aria-hidden="true" /><span className="hero-orbit orbit-two" aria-hidden="true" /><div className="hero-case-tag"><span>{activeCases[0].code}</span><strong>{activeCases[0].publicName}</strong></div></div>}
-        <StatsStrip stats={result.data.stats} />
-      </section>
-
-      <section className="active-section section-wrap" id="cases">
-        <header className="section-heading">
-          <p className="section-number">01 /</p>
-          <div><h2>{t.home.activeCases}</h2><p>{t.home.activeIntro}</p></div>
-        </header>
-        {activeCases.length ? activeCases.map((item) => <CaseCard key={item.code} item={item} />) : <p className="empty-note">{t.common.emptyCases}</p>}
-      </section>
-
-      <section className="fund-band section-wrap">
-        <div className="fund-orbit" aria-hidden="true"><i /><i /></div>
-        <div className="fund-copy">
-          <p className="eyebrow eyebrow-light"><span />{t.home.generalFund}</p>
-          <h2>{t.home.fundTitle}</h2>
-          <p>{t.home.fundBody}</p>
+      </div>
+      <StatsStrip stats={stats} />
+    </section>
+    <section className="active-section section-wrap" id="cases">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.home.activeCases}</p><div><h2>{t.redesign.activeLead} <em>{t.redesign.activeAccent}</em></h2><p>{t.home.activeIntro}</p></div></header>
+      <div className="case-list">{activeCases.length ? activeCases.map(item => <CaseCard key={item.code} item={item} />) : <p className="empty-note">{t.common.emptyCases}</p>}</div>
+    </section>
+    <section className="transparency-section section-wrap" id="record">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.redesign.publicRecord}</p><div><h2>{t.redesign.transparency}</h2><p>{t.redesign.transparencyIntro}</p></div></header>
+      <div className="transparency-grid">
+        <div className="record-panel">
+          <h3>{t.redesign.fundsOverview}</h3>
+          <div className="record-row"><span>{t.stats.received}</span><strong>{formatMoney(stats.received, locale)}</strong><div className="record-track"><span style={{width: Math.max(0, stats.received / barMax * 100) + '%'}} /></div></div>
+          <div className="record-row delivered-row"><span>{t.stats.delivered}</span><strong>{formatMoney(stats.delivered, locale)}</strong><div className="record-track"><span style={{width: Math.max(0, stats.delivered / barMax * 100) + '%'}} /></div></div>
+          {deliveredRatio !== null && <p className="record-ratio"><strong>{percent.format(deliveredRatio)}</strong> {t.redesign.deliveredRatio}</p>}
         </div>
-        <div className="fund-total">
-          <span>{t.home.fundBalance}</span>
-          <strong>{formatMoney((fund?.received ?? 0) - (fund?.delivered ?? 0), locale)}</strong>
-          <span className="future-link" aria-disabled="true">{t.home.fundSoon}</span>
-        </div>
-      </section>
-
-      <section className="how-section section-wrap" id="how">
-        <div className="how-title">
-          <p className="eyebrow"><span />{t.home.howEyebrow}</p>
-          <h2>{t.home.howTitle}</h2>
-        </div>
-        <ol className="how-steps">
-          {t.home.steps.map((step) => <li key={step.number}><span>{step.number}</span><div><h3>{step.title}</h3><p>{step.text}</p></div></li>)}
-        </ol>
-        <div className="completed-callout"><span aria-hidden="true">↘</span><p>{t.home.completed}</p><span className="future-link" aria-disabled="true">{t.home.completedSoon}</span></div>
-      </section>
-    </>
-  );
+        <div className="fund-panel"><div><p className="eyebrow">{t.home.generalFund}</p><h3>{t.home.fundTitle}</h3>{fund ? <strong className="fund-value">{formatMoney(fund.received - fund.delivered, locale)}</strong> : <p>{t.redesign.unavailable}</p>}<p>{t.home.fundBalance}</p><p className="fund-explain">{t.home.fundBody}</p></div><div className="fund-orbit" aria-hidden="true"><i /><i /></div></div>
+      </div>
+    </section>
+    <section className="how-section section-wrap" id="how">
+      <header className="v2-heading"><p className="eyebrow"><span />{t.home.howEyebrow}</p><div><h2>{t.redesign.howLead}</h2></div></header>
+      <ol className="how-steps">{t.home.steps.map(step => <li key={step.number}><span>{step.number}</span><div><h3>{step.title}</h3><p>{step.text}</p></div></li>)}</ol>
+      <div className="completed-callout"><span aria-hidden="true">↘</span><p>{t.home.completed}</p><span className="future-link">{t.redesign.completedUnavailable}</span></div>
+      {APP_CONFIG.apiMode === 'mock' && <p className="preview-notice">{t.redesign.givingPreview}</p>}
+    </section>
+  </>;
 }
