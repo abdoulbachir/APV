@@ -42,7 +42,7 @@
   --radius-xl: 1.5rem;
   --radius-round: 999px;
   --page-pad: clamp(1rem, 4vw, 4.5rem);
-  --content-max: 88rem;
+  --content-max: clamp(88rem, 70vw, 108rem);
   --text-max: 44rem;
   --touch: 2.75rem;
   --header-height: 5rem;
@@ -103,6 +103,8 @@
   --font-size-hero-accent: clamp(3.1rem,6.15vw,6.4rem);
   --font-size-mobile-hero-accent: clamp(2.8rem,10.4vw,4.25rem);
   --font-size-stat: clamp(2rem,3.1vw,3.25rem);
+  --font-size-record-ratio: clamp(1.9rem, 3vw, 3rem);
+  --font-size-brand: 1rem;
   --font-size-section: clamp(1.8rem,3.2vw,3.25rem);
   --font-size-case-name: clamp(2.4rem,4.5vw,4.6rem);
   --font-size-case-title: clamp(1.7rem,2.9vw,3rem);
