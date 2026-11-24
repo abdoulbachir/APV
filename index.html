@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the saved preference before the first paint. Light is the default.
+      try { document.documentElement.dataset.theme = localStorage.getItem("apv-theme") === "dark" ? "dark" : "light"; }
+      catch { document.documentElement.dataset.theme = "light"; }
+    </script>
     <title>APV-GAKASINAY</title>
   </head>
   <body>

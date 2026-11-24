@@ -32,3 +32,7 @@ Verify on both pages and locales: hero choreography, one-time scroll reveals, fi
 ## Light-first visual direction
 
 Warm ivory, white and sage are the default surfaces, with forest-green typography and emerald actions. The transparency section, footer and small contrast elements retain a deep forest palette. The hero artwork now sits in a separate image column on desktop and its own row on phones: legibility does not depend on the image or an overlay. Motion remains finite and reduced-motion aware. The light and dark financial chart palettes use separate role tokens; verify contrast in each context, including keyboard focus and action hover, before accepting this visual revision.
+
+## Light and dark themes
+
+Light is the default on a first visit. The header sun/moon button toggles the global color scheme without navigation, data fetching or reload; the selected value is saved locally as `apv-theme` and applied before first paint. Both modes share components, translations, artwork, motion and semantic design tokens. Dark mode restores the immersive desktop hero with an opaque copy area while keeping the safer separate artwork on tablet and mobile. Verify both themes at all responsive widths, in both languages, including a reload, navigation between pages, keyboard access and reduced-motion mode. No third-party tracking or new dependency is required.

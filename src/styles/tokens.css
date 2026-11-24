@@ -137,4 +137,43 @@
   --font-size-light-hero-accent: clamp(3.1rem,5.4vw,6rem);
   --font-size-tablet-hero: clamp(2.35rem,4.5vw,3.6rem);
   --font-size-tablet-hero-accent: clamp(2.45rem,4.8vw,3.8rem);
+  --color-night: #080D12;
+  --color-night-card: #142C28;
+  --color-night-soft: #101E25;
+  --color-night-border: #37584F;
+  --action-bg: var(--color-primary);
+  --action-hover: var(--color-primary-hover);
+  --action-ink: var(--color-white);
+  --control-border: var(--color-boundary);
+  --size-theme-icon: 1.25rem;
+  --theme-scrim-start: 0%;
+  --theme-scrim-solid: 46%;
+  --theme-scrim-end: 85%;
+}
+
+/* Dark mode shares the same semantic roles as the existing contrast islands. */
+:root[data-theme="dark"], .transparency-section, .site-footer, .completed-callout, .give-dock p {
+  --surface-page: var(--color-deep-forest);
+  --surface-card: var(--color-dark-card);
+  --surface-soft: var(--color-dark-card);
+  --text-main: var(--color-ivory-light);
+  --text-muted: var(--color-dark-muted);
+  --accent: var(--color-bright-mint);
+  --accent-secondary: var(--color-lime-bright);
+  --border-soft: var(--color-dark-border);
+  --focus-ring: var(--color-lime-bright);
+  --funding-track-color: var(--color-dark-track);
+  --funding-received-color: var(--color-dark-received);
+  --funding-delivered-color: var(--color-lime-bright);
+  --funding-outline-color: var(--color-dark-outline);
+  --action-bg: var(--color-lime-bright);
+  --action-hover: var(--color-ivory-light);
+  --action-ink: var(--color-night);
+  --control-border: var(--color-dark-outline);
+}
+:root[data-theme="dark"] {
+  --surface-page: var(--color-night);
+  --surface-card: var(--color-night-card);
+  --surface-soft: var(--color-night-soft);
+  --border-soft: var(--color-night-border);
 }

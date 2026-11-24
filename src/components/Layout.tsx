@@ -2,6 +2,7 @@ import { Link, Outlet } from 'react-router-dom';
 import { SITE_NAME } from '../config';
 import { useI18n } from '../i18n/I18nContext';
 import { LanguageSwitch } from './LanguageSwitch';
+import { ThemeSwitch } from './ThemeSwitch';
 
 export function Layout() {
   const { t } = useI18n();
@@ -17,7 +18,7 @@ export function Layout() {
           <Link to="/#cases">{t.nav.explore}</Link>
           <Link to="/#how">{t.nav.how}</Link>
         </nav>
-        <div className="header-actions"><LanguageSwitch /><Link className="header-give" to="/#cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
+        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-give" to="/#cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
       </header>
       <main id="main"><Outlet /></main>
       <footer className="site-footer">
