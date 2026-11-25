@@ -592,7 +592,9 @@ export function loadContract() {
   const exampleOf = operationId => {
     const found = operations.find(o => o.operation.operationId === operationId);
     if (!found) throw new Error(`no operation ${operationId}`);
-    const media = found.operation.responses['200'].content['application/json'];
+    const success = Object.entries(found.operation.responses).find(([status, response]) => status.startsWith('2') && response.content);
+    if (!success) throw new Error(`operation ${operationId} has no success response with a body`);
+    const media = success[1].content['application/json'];
     return { example: media.example, schema: media.schema };
   };
   return { document, check, checkNamed, resolve, operations, exampleOf };
