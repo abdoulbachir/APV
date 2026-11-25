@@ -31,4 +31,13 @@ class ClientAddressTest {
         assertThat(ClientAddress.of(from("127.0.0.1", null), List.of("127.0.0.1"))).isEqualTo("127.0.0.1");
         assertThat(ClientAddress.of(from("127.0.0.1", "not an address <script>"), List.of("127.0.0.1"))).isEqualTo("127.0.0.1");
     }
+
+    /** Independent review, D4: a header that holds no entry at all was answered 500. */
+    @Test
+    void a8_8_aForwardedHeaderWithNoEntryFallsBackToTheConnection() {
+        for (String header : new String[] {",", ",,", " , ", ", ,", "198.51.100.7,", ";", ",\t,"}) {
+            assertThat(ClientAddress.of(from("127.0.0.1", header), List.of("127.0.0.1"))).as("[%s]", header).isEqualTo("127.0.0.1");
+        }
+        assertThat(ClientAddress.of(from("127.0.0.1", ",198.51.100.7"), List.of("127.0.0.1"))).isEqualTo("198.51.100.7");
+    }
 }

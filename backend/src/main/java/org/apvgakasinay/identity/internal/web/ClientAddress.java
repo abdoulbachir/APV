@@ -18,8 +18,8 @@ final class ClientAddress {
         if (trustedProxies.contains(connection)) {
             String forwarded = request.getHeader("X-Forwarded-For");
             if (forwarded != null && !forwarded.isBlank()) {
-                String[] hops = forwarded.split(",");
-                String last = hops[hops.length - 1].trim();
+                // Whatever follows the last comma, which is nothing at all when the header ends with one.
+                String last = forwarded.substring(forwarded.lastIndexOf(',') + 1).trim();
                 if (last.matches("[0-9A-Fa-f:.]{2,45}")) {
                     return last;
                 }

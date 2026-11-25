@@ -35,6 +35,9 @@ import org.slf4j.helpers.MessageFormatter;
  *    have, and they are replaced before the message is logged: a UUID (the form the session
  *    store uses), the Base64 of a UUID (the form the cookie carries), and an Argon2 hash. A
  *    retired or expired identifier has the same shape as a live one, so it is covered equally.
+ *    Bytes written as a hexadecimal literal are replaced whole, whatever they hold: that is
+ *    how the database driver quotes a stored session attribute when a write fails, and such a
+ *    value can be a serialized identifier or CSRF token that no text pattern would recognise.
  *
  * 3. The exception attached to a log line is treated like the message: its own message and
  *    those of its causes and suppressed exceptions are searched for the same shapes. A
@@ -60,12 +63,18 @@ public final class SensitiveLogFilter extends TurboFilter {
 
     static final String ID = "[redacted-id]";
     static final String HASH = "[redacted-hash]";
+    static final String BYTES = "[redacted-bytes]";
 
     private static final Pattern UUID = Pattern.compile(
             "(?<![0-9A-Za-z])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![0-9A-Za-z])");
     /** A UUID is 36 characters, so its Base64 is exactly 48 with no padding. Checked by decoding. */
     private static final Pattern BASE64_OF_36 = Pattern.compile("(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{48}(?![A-Za-z0-9+/_=-])");
     private static final Pattern ARGON2 = Pattern.compile("(\\{argon2[a-z]*\\})?\\$argon2[a-z]*\\$[A-Za-z0-9+/=$,]+");
+    /**
+     * Bytes in hexadecimal: the quoted literal PostgreSQL and its driver print ('\x…', with or
+     * without the ::bytea cast, empty included), and any other \x followed by eight bytes or more.
+     */
+    private static final Pattern HEX_BYTES = Pattern.compile("E?'\\\\x[0-9a-fA-F]*'(?:::bytea)?|\\\\x[0-9a-fA-F]{16,}");
     private static final Marker REDACTED = MarkerFactory.getMarker("APV_REDACTED");
     private static final String SELF = SensitiveLogFilter.class.getName();
 
@@ -183,12 +192,16 @@ public final class SensitiveLogFilter extends TurboFilter {
         return false;
     }
 
-    /** The message with every session-identifier shape and password hash replaced. */
+    /** The message with every session-identifier shape, password hash and hexadecimal byte literal replaced. */
     static String redact(String message) {
-        if (message == null || message.length() < 20) {
+        if (message == null || message.length() < 4) {
             return message;
         }
         String result = message;
+        if (result.indexOf("\\x") >= 0) {
+            // First, so that nothing later can match inside a literal and leave the rest of it.
+            result = HEX_BYTES.matcher(result).replaceAll(Matcher.quoteReplacement(BYTES));
+        }
         if (result.indexOf('-') >= 0) {
             result = UUID.matcher(result).replaceAll(Matcher.quoteReplacement(ID));
         }

@@ -92,10 +92,13 @@ class AuthController {
         // sign-in that was waiting for a second factor is over, whatever the password turns out to be.
         endPendingSession(request, current);
         IdentityService.SignIn result = identity.login(email, password, request, response, current.caller());
-        if (result.state() == AUTHENTICATED) {
-            return new Responses.SignedIn("authenticated", views.of(result.account(), request.getSession(false)));
-        }
-        return new Responses.SecondFactorPending(result.state().code(), Timestamps.format(result.pendingExpiresAt()));
+        // The answer is built first and the session stored after: once the session is stored the
+        // answer has started to leave, and nothing that could still fail may come after that.
+        Object answer = result.state() == AUTHENTICATED
+                ? new Responses.SignedIn("authenticated", views.of(result.account(), request.getSession(false)))
+                : new Responses.SecondFactorPending(result.state().code(), Timestamps.format(result.pendingExpiresAt()));
+        identity.confirmSignIn(result, request, response, current.caller());
+        return answer;
     }
 
     /** Succeeds also when there was no session, so it can always be called. */

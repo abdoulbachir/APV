@@ -3,10 +3,13 @@ package org.apvgakasinay.identity.internal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -158,6 +161,34 @@ public class Sessions {
         contexts.saveContext(context, request, response);
     }
 
+    /**
+     * Writes this request's session to the store now, and says whether it is there.
+     *
+     * The session store normally writes a session when the answer starts to leave, which is
+     * after the operation has decided what to answer and has recorded it. Sending the headers
+     * of a successful JSON answer here makes that write happen first. It fails in one known
+     * way: the session's row was deleted while this request was running, so its attributes
+     * have nothing to belong to. Then nothing has been sent, the session is dropped from this
+     * request, and the caller refuses. Any other failure is an error like any other.
+     *
+     * Only for operations whose successful answer is 200 with a JSON body.
+     *
+     * @return false when the session no longer exists
+     */
+    public boolean storeNow(HttpServletRequest request, HttpServletResponse response) {
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType("application/json");
+        try {
+            response.flushBuffer();
+            return true;
+        } catch (DataIntegrityViolationException rowIsGone) {
+            end(request);
+            return false;
+        } catch (IOException clientGone) {
+            throw new UncheckedIOException(clientGone);
+        }
+    }
+
     /** Ends the session of this request, if there is one. */
     public static void end(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -175,6 +206,11 @@ public class Sessions {
     /** Deletes every stored session of an account, except one that is to continue. */
     public void endAllOf(Account account, String exceptSessionId) {
         store.endAllOf(account, exceptSessionId);
+    }
+
+    /** Ends the session that had this identifier until a sign-in, second factor or password change replaced it. */
+    public void endSuccessorOf(String replacedSessionId) {
+        store.endSuccessorOf(replacedSessionId);
     }
 
     /** True when a stored session with this identifier still exists. */

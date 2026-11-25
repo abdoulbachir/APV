@@ -15,6 +15,9 @@ spring:
     exclude:
       # No built-in user and no generated password: accounts come only from the identity module.
       - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      # No framework error page and no /error route: an error nothing else answered is given the
+      # contract's body by the server's own error report (shared/ApiErrorReportValve).
+      - org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration
   session:
     jdbc:
       # The session tables are created by a Flyway migration, never by Spring Session itself.

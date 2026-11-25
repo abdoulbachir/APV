@@ -27,6 +27,20 @@ public class SessionStore {
                 .update();
     }
 
+    /**
+     * Deletes the session that used to have this identifier, if there is one. Every replaced
+     * identifier is recorded with the session it belonged to (migration V4), so a request that
+     * still holds the old identifier can end the session under its new one.
+     */
+    public void endSuccessorOf(String replacedSessionId) {
+        jdbc.sql("""
+                delete from spring_session
+                 where primary_id in (select session_primary_id from spring_session_retired where session_id = :id)
+                """)
+                .param("id", replacedSessionId)
+                .update();
+    }
+
     public boolean exists(String sessionId) {
         return jdbc.sql("select exists (select 1 from spring_session where session_id = :id)")
                 .param("id", sessionId).query(Boolean.class).single();

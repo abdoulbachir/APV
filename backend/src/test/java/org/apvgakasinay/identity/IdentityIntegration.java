@@ -62,6 +62,9 @@ abstract class IdentityIntegration {
     @Autowired
     StaffAdministration staffAdministration;
 
+    @Autowired
+    org.springframework.transaction.PlatformTransactionManager transactions;
+
     final Contract contract = Contract.get();
 
     /** A staff member with an active second factor, and the browser they are signed in with. */
@@ -70,7 +73,8 @@ abstract class IdentityIntegration {
 
     @BeforeEach
     void cleanIdentityData() {
-        // TRUNCATE is how a disposable database is reset; it is the one thing the append-only and one-way rules do not see.
+        makeDisposableAgain();
+        // TRUNCATE is how a disposable database is reset, and it is allowed on a disposable database only.
         jdbc.sql("""
                 truncate table spring_session_retired, spring_session_attributes, spring_session, pending_sign_in, auth_throttle, audit_event, one_time_credential,
                                account_recovery_code, account_totp, account_password, account, identity_guard
@@ -80,6 +84,23 @@ abstract class IdentityIntegration {
         clock.pin(START);
         publicClock.pin(START);
         Browser.RECORDED.clear();
+    }
+
+    /**
+     * A test may have made this database real. A real database refuses TRUNCATE on its protected
+     * tables and never becomes disposable again (migration V5). Only the database's superuser,
+     * which the test container's user is, can take that back, by switching every trigger off
+     * for one transaction. The application has no such path.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void makeDisposableAgain() {
+        if (jdbc.sql("select coalesce(bool_or(database_real), false) from identity_guard").query(Boolean.class).single()) {
+            new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.sql("set local session_replication_role = replica").update();
+                jdbc.sql("truncate table identity_guard").update();
+                jdbc.sql("insert into identity_guard default values").update();
+            });
+        }
     }
 
     Browser browser() {
