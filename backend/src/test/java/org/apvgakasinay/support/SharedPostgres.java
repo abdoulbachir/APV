@@ -20,5 +20,8 @@ public final class SharedPostgres {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // The container is disposable, so the destructive fixture loader may use it wherever it runs.
+        registry.add("apv.fixtures.allowed-hosts", () -> "localhost,127.0.0.1,[::1]," + POSTGRES.getHost());
+        registry.add("apv.media.dev-root", () -> TestMedia.root().toString());
     }
 }

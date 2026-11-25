@@ -223,6 +223,92 @@ class LedgerRulesIT extends PostgresIntegration {
     }
 
     @Test
+    void theGeneralFundNeverPaysABeneficiaryDirectly() {
+        // The fund holds 40000, so this is not refused for lack of money.
+        assertThat(detail("FUND").at("/financials/available").asLong()).isEqualTo(40000);
+        assertRefused("does not pay beneficiaries directly", () -> insert("X1", "FUND", "disbursement", 100, "2026-11-20T12:00:00Z", null, null));
+        assertThat(detail("FUND").at("/case/delivered").asLong()).isZero();
+        // The approved route still works: transfer to a case, deliver from the case, and undo part of the transfer.
+        TransactionTemplate together = new TransactionTemplate(transactions);
+        together.executeWithoutResult(status -> {
+            insert("X1", "FUND", "transfer_out", 5000, "2026-11-20T12:00:00Z", null, "T9");
+            insert("X2", "HELP-904", "transfer_in", 5000, "2026-11-20T12:00:00Z", null, "T9");
+        });
+        insert("X3", "HELP-904", "disbursement", 3000, "2026-11-21T12:00:00Z", null, null);
+        together.executeWithoutResult(status -> {
+            insert("X4", "FUND", "transfer_out_reversal", 2000, "2026-11-22T12:00:00Z", "X1", "T10");
+            insert("X5", "HELP-904", "transfer_in_reversal", 2000, "2026-11-22T12:00:00Z", "X2", "T10");
+        });
+        assertThat(detail("FUND").at("/financials/available").asLong()).isEqualTo(37000);
+        assertThat(detail("FUND").at("/case/delivered").asLong()).isZero();
+        assertThat(detail("HELP-904").at("/case/delivered").asLong()).isEqualTo(3000);
+        assertThat(detail("HELP-904").at("/financials/available").asLong()).isZero();
+        assertThat(get("/api/stats").ok().json().get("delivered").asLong()).isEqualTo(58000);
+    }
+
+    @Test
+    void thePlatformTotalFollowsTheLedger() {
+        assertThat(platformTotal()).isEqualTo(ledgerSum()).isEqualTo(new java.math.BigDecimal("212500"));
+        insert("X1", "HELP-904", "donation", 1234, "2026-11-20T12:00:00Z", null, null);
+        assertThat(platformTotal()).isEqualTo(ledgerSum());
+        // A refused insert leaves the total untouched.
+        assertRefused("would leave case", () -> insert("X2", "HELP-904", "disbursement", 999_999, "2026-11-21T12:00:00Z", null, null));
+        assertThat(platformTotal()).isEqualTo(ledgerSum());
+        // Nobody edits the total past the bound by hand either.
+        assertThatThrownBy(() -> jdbc.sql("update ledger_platform_total set gross_cents = 1000000000000001").update())
+                .isInstanceOf(DataAccessException.class).hasMessageContaining("ledger_platform_total_within_bound");
+    }
+
+    private java.math.BigDecimal platformTotal() {
+        return jdbc.sql("select gross_cents from ledger_platform_total").query(java.math.BigDecimal.class).single();
+    }
+
+    private java.math.BigDecimal ledgerSum() {
+        return jdbc.sql("select coalesce(sum(amount_cents), 0)::numeric(20, 0) from ledger_entry").query(java.math.BigDecimal.class).single();
+    }
+
+    /**
+     * Two transactions insert on two different cases at the same time, with room for only one
+     * of them under the platform bound. The second must wait for the first, then be refused.
+     * (The total is moved next to the bound by hand; reaching it for real takes 100,000
+     * maximal movements.)
+     */
+    @Test
+    void thePlatformBoundHoldsWhenTwoCasesAreWrittenAtTheSameTime() throws Exception {
+        jdbc.sql("update ledger_platform_total set gross_cents = 1000000000000000 - 1000").update();
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (Connection first = dataSource.getConnection()) {
+            first.setAutoCommit(false);
+            try (Statement statement = first.createStatement()) {
+                statement.executeUpdate("""
+                        insert into ledger_entry (public_id, case_id, kind, amount_cents, effective_at)
+                        values ('X1', (select id from aid_case where code = 'HELP-904'), 'donation', 600, '2026-11-20T12:00:00Z')
+                        """);
+            }
+            java.util.concurrent.Future<Throwable> second = executor.submit(() -> {
+                try {
+                    insert("X2", "HELP-901", "donation", 600, "2026-11-20T12:00:00Z", null, null);
+                    return null;
+                } catch (Throwable refused) {
+                    return refused;
+                }
+            });
+            // While the first transaction is open, the second cannot finish either way.
+            assertThatThrownBy(() -> second.get(1500, java.util.concurrent.TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+            first.commit();
+            Throwable outcome = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(outcome).as("the second insert must be refused").isNotNull();
+            assertThat(outcome).hasStackTraceContaining("ledger_platform_total_within_bound");
+        } finally {
+            executor.shutdownNow();
+        }
+        assertThat(jdbc.sql("select count(*) from ledger_entry where public_id = 'X1'").query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from ledger_entry where public_id = 'X2'").query(Long.class).single()).isZero();
+        assertThat(platformTotal()).isEqualTo(new java.math.BigDecimal("999999999999600"));
+    }
+
+    @Test
     void donorListingsBelongToDonations() {
         assertThatThrownBy(() -> jdbc.sql("""
                 insert into donation_listing (ledger_entry_id, public_id, visibility)

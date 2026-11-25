@@ -1,6 +1,10 @@
-# Local development only. Loads fictional data at every start. Never use in production.
+# Local development only. Never use in production.
+#
+# DESTRUCTIVE: at every start this profile DELETES everything in the database and loads the
+# fictional dataset below. The loader refuses a database that is not on this machine, and a
+# database holding cases that did not come from a fixture.
 apv:
   fixtures:
-    path: ${APV_FIXTURES_PATH:../contract/fixtures/example.json}
+    path: ${APV_FIXTURES_PATH:../contract/fixtures/dataset.json}
   media:
     dev-root: ${APV_FIXTURES_MEDIA_ROOT:../contract/fixtures}

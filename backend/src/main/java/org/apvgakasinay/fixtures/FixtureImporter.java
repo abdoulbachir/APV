@@ -21,6 +21,7 @@ import java.util.Map;
 import org.apvgakasinay.shared.AppClock;
 import org.apvgakasinay.shared.Deadlines;
 import org.apvgakasinay.shared.SearchText;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Loads a shared fixture file (contract/fixtures/fixture.schema.json, version 2) into the
- * database, replacing everything that was there. Development and tests only: this bean does
+ * database, DELETING everything that was there. Development and tests only: this bean does
  * not exist outside the dev and test profiles, so production can never load fictional data.
  *
  * It is generic: it knows the format, not any particular case or amount. It stores inputs
@@ -44,11 +45,42 @@ public class FixtureImporter {
     private final JdbcClient jdbc;
     private final AppClock clock;
     private final JsonMapper json;
+    private final String databaseUrl;
+    private final String allowedHosts;
 
-    public FixtureImporter(JdbcClient jdbc, AppClock clock, JsonMapper json) {
+    public FixtureImporter(
+            JdbcClient jdbc,
+            AppClock clock,
+            JsonMapper json,
+            @Value("${spring.datasource.url}") String databaseUrl,
+            @Value("${apv.fixtures.allowed-hosts:" + DatabaseTarget.LOCAL_HOSTS + "}") String allowedHosts) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.json = json;
+        this.databaseUrl = databaseUrl;
+        this.allowedHosts = allowedHosts;
+    }
+
+    /**
+     * DESTRUCTIVE: the import deletes everything in the database first. Two independent checks
+     * stand in the way of doing that to anything but a disposable development or test database.
+     *
+     * 1. The database must be on this machine (or on a host explicitly listed in
+     *    apv.fixtures.allowed-hosts, for a container network).
+     * 2. The database must be empty, or its content must itself have come from a fixture. A
+     *    database that ever held real cases is marked "real" and is never replaced.
+     */
+    private void refuseUnlessDisposable() {
+        if (!DatabaseTarget.isAllowed(databaseUrl, allowedHosts)) {
+            throw new FixtureException("refusing to load a fixture: the database at " + DatabaseTarget.host(databaseUrl)
+                    + " is not on this machine and is not listed in apv.fixtures.allowed-hosts");
+        }
+        String origin = jdbc.sql("select data_origin from organization_settings").query(String.class).single();
+        long cases = jdbc.sql("select count(*) from aid_case").query(Long.class).single();
+        if (cases > 0 && !"fixture".equals(origin)) {
+            throw new FixtureException("refusing to load a fixture: this database holds " + cases
+                    + " cases that did not come from a fixture, and loading would delete them");
+        }
     }
 
     @Transactional
@@ -65,6 +97,7 @@ public class FixtureImporter {
         if (!Integer.valueOf(SUPPORTED_VERSION).equals(fixture.get("version"))) {
             throw new FixtureException("unsupported fixture version " + fixture.get("version") + ", expected " + SUPPORTED_VERSION);
         }
+        refuseUnlessDisposable();
         Loader loader = new Loader();
         loader.clear();
         loader.settings(fixture);
@@ -92,7 +125,7 @@ public class FixtureImporter {
         }
 
         void settings(Map<String, Object> fixture) {
-            jdbc.sql("update organization_settings set timezone = :timezone").param("timezone", zone(text(fixture, "timezone")).getId()).update();
+            jdbc.sql("update organization_settings set timezone = :timezone, data_origin = 'fixture'").param("timezone", zone(text(fixture, "timezone")).getId()).update();
         }
 
         void categories(List<Map<String, Object>> categories) {
@@ -232,7 +265,8 @@ public class FixtureImporter {
                         .param("textFr", body.get("fr"))
                         .param("postedAt", utc(Instant.parse(text(update, "date"))))
                         .param("author", text(update, "author"))
-                        .param("avatar", avatarFile == null ? null : media(avatarFile, "avatar", consent))
+                        // Consent alone is not enough: nothing attached to a draft case is public.
+                        .param("avatar", avatarFile == null ? null : media(avatarFile, "avatar", consent && isPublic))
                         .param("consent", consent)
                         .param("photo", photo == null ? null : media(text(photo, "file"), "update_photo", isPublic))
                         .param("photoAltEn", photoAlt.get("en"))

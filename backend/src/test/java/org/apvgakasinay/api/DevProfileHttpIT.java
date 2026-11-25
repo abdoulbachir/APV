@@ -30,7 +30,6 @@ class DevProfileHttpIT {
     static void settings(DynamicPropertyRegistry registry) {
         SharedPostgres.register(registry);
         registry.add("apv.fixtures.path", () -> Repo.contract("fixtures/example.json").toString());
-        registry.add("apv.media.dev-root", () -> Repo.contract("fixtures").toString());
     }
 
     @Value("${local.server.port}")

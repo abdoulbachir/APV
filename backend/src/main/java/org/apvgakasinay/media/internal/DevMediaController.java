@@ -1,5 +1,6 @@
 package org.apvgakasinay.media.internal;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -22,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * It serves a file only when the token belongs to a published picture. The file location
  * comes from the database row, never from the request, and must stay inside the configured
- * folder. Every size variant returns the same file here.
+ * folder, also after symbolic links are resolved. Every size variant returns the same original
+ * file here; resized copies come with the real storage service.
  */
 @RestController
 @Profile({"dev", "test"})
@@ -48,7 +50,17 @@ class DevMediaController {
             return ResponseEntity.notFound().build();
         }
         Path file = root.resolve(storageKey.get()).normalize();
-        if (!file.startsWith(root) || !Files.isRegularFile(file)) {
+        if (!file.startsWith(root)) {
+            return ResponseEntity.notFound().build();
+        }
+        try {
+            // Resolving symbolic links: a link inside the folder that points outside it is refused.
+            Path real = file.toRealPath();
+            if (!real.startsWith(root.toRealPath()) || !Files.isRegularFile(real)) {
+                return ResponseEntity.notFound().build();
+            }
+            file = real;
+        } catch (IOException missing) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
