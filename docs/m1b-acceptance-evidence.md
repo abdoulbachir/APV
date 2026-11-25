@@ -8,7 +8,7 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1, still open (see "Independent re-check" below).
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend has corrected it and the coordinator has verified the correction (see "Independent re-check" and "R1 corrected" below). The owner has not yet accepted the milestone.
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -60,7 +60,7 @@ The same reviewer re-checked the second round with its own environment and input
 | Second factor or password change racing sign-out | No 500 in 244 rounds. One new defect, R1. |
 | Regression | Findings 2 to 5 still corrected; 22 of 22 checks through the real frontend, including enrollment over HTTPS under production rules. |
 
-**R1 (low, open).** A sign-out that races a password change of the same session can answer 204 while the session stays signed in under the identifier the password change issued (25 of 210 rounds, sign-out sent 52 to 74 ms after the change). The sign-out request is refused the session at step 6 because the security version changed, finds no session, and never reaches the successor lookup added for D1. The session belongs to the same person; it needs two actions of one session within milliseconds. It breaks the rule stated for D1: after a sign-out answered 204 nobody is left signed in.
+**R1 (low; corrected afterwards, see below).** A sign-out that races a password change of the same session can answer 204 while the session stays signed in under the identifier the password change issued (25 of 210 rounds, sign-out sent 52 to 74 ms after the change). The sign-out request is refused the session at step 6 because the security version changed, finds no session, and never reaches the successor lookup added for D1. The session belongs to the same person; it needs two actions of one session within milliseconds. It breaks the rule stated for D1: after a sign-out answered 204 nobody is left signed in.
 
 Stated by the reviewer, no action required for this milestone:
 
@@ -73,10 +73,27 @@ Stated by the reviewer, no action required for this milestone:
 
 Reviewer's verdict: acceptable from its side, with R1 to be fixed or accepted by the owner; not a statement of production readiness. Not tested there: D3, real-time expiry, other browsers, screen reader, password manager.
 
+### R1 corrected at `29d623c`
+
+The owner chose to have R1 fixed. The backend corrected it in `0d54613` (test first, failing in CI on the old code) and `54c0ff9` (328 backend tests), merged into the integration branch as `29d623c`. Sign-out now names the session by the identifier the request arrived with, so it also ends a session a password change has just renamed. No contract, error code or order of checks changed. The second-factor and enrollment paths did not have the gap.
+
+- **Review of the change by the coordinator:** nothing wrong found. A request reaches the operation only with a live session and that session's own token at step 4, so a stale cookie cannot use the lookup to end another session, as the reviewer had established for D1.
+- **Whole harness at `29d623c`:** 79 PASS, 2 PARTIAL (10.15, 10.16), 0 FAIL (`tests/acceptance/results-2026-11-25-rerun-29d623c.json`). Production-rule backend log: no identifier-shaped text, no hex literal, no ERROR line. `devclock.mjs` and `oldid.mjs` were throttled in the sequence and were repeated with cleared counters: both as expected.
+- **R1 itself, `tests/acceptance/r1.mjs`, 150 rounds each:**
+
+| Build | Both answered 204 | New cookie still signed in after a 204 sign-out | 5xx |
+|---|---|---|---|
+| `29d623c` (corrected) | 88 | 0 | 0 |
+| `919515c` (before the correction), as control | 28 | 2 | 0 |
+
+The control shows the script can see the defect; its rate is lower than the reviewer's 25 of 210. The check is statistical: the order cannot be forced from outside, which the backend's own test does with a held request.
+
+Not done: a third round by the independent reviewer on this one change.
+
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
-- R1 (below): fix by the backend, or acceptance by the owner as a known limitation.
+- The owner's acceptance of the milestone and authorization to merge. R1 was not re-checked by the independent reviewer after its correction; the coordinator verified it (above).
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
