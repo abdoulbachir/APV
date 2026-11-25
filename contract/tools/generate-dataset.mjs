@@ -1,5 +1,6 @@
 // Deterministic expansion of the approved directory, using the M0A example for edge cases.
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { readJson, projectPublic, root } from './lib.mjs';
 const stories = {
@@ -113,4 +114,25 @@ function build(example,stories){
  return f;
 }
 const dataset = build(readJson('fixtures/example.json'), stories);
-for (const [name,value] of [['dataset.json',dataset],['dataset.public.json',projectPublic(dataset)]]) writeFileSync(path.join(root,'fixtures',name),JSON.stringify(value)+'\n');
+const full = JSON.stringify(dataset) + '\n';
+const projection = JSON.stringify(projectPublic(dataset)) + '\n';
+// All three outputs are ignored by Git. The private full fixture stays outside src/.
+// Atomic replacement and no-op writes avoid partially read files and unnecessary HMR.
+function writeGenerated(file, content) {
+  try {
+    if (readFileSync(file, 'utf8') === content) return;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const temporary = file + '.' + randomUUID() + '.tmp';
+  try {
+    writeFileSync(temporary, content, { flag: 'wx' });
+    renameSync(temporary, file);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+writeGenerated(path.join(root, 'fixtures/dataset.json'), full);
+writeGenerated(path.join(root, 'fixtures/dataset.public.json'), projection);
+writeGenerated(path.join(root, '../src/api/dataset.public.json'), projection);
+console.log('Generated fictional fixtures: ' + dataset.cases.length + ' cases (development/test only).');

@@ -69,15 +69,6 @@ const en = {
     },
     common: { loading: 'Gathering the latest numbers…', retry: 'Try again', errorTitle: 'We could not load this page', errorBody: 'The connection did not come through. Please try once more.', emptyCases: 'There are no active cases right now.', usd: 'USD' },
     footer: { line: 'Gifts are not tax-deductible.', note: 'A small circle with a public record.', language: 'Language' },
-    mock: {
-      caseTitle: 'A safe start after the fire',
-      publicName: 'Mariam D.',
-      story: 'Mariam has been rebuilding a steady home for herself and her two children after an electrical fire damaged their apartment. They are safe and staying with relatives nearby.\n\nThis support will cover a deposit, two beds, and essential kitchen items so the family can settle into a new place without taking on more debt.',
-      updateText: 'Mariam signed the lease today. The first delivery will cover the deposit and beds; we will share the handoff here when it is complete.',
-      updateAuthor: 'Aïcha',
-      donors: ['Nadia K.', 'Samuel T.', 'The Diallo family'],
-      ledger: ['Confirmed Zelle gift', 'Confirmed PayPal gift', 'First handoff for the housing deposit', 'Confirmed sample gift', 'Confirmed sample gift (donor not listed)'],
-    },
 } as const;
 
 // Widen translated strings, but enforce the same nested keys and tuple shape.
@@ -153,15 +144,6 @@ const fr = {
     },
     common: { loading: 'Nous rassemblons les derniers chiffres…', retry: 'Réessayer', errorTitle: 'Impossible de charger cette page', errorBody: 'La connexion n’a pas abouti. Veuillez réessayer.', emptyCases: 'Il n’y a aucun cas actif pour le moment.', usd: 'USD' },
     footer: { line: 'Les dons ne sont pas déductibles des impôts.', note: 'Un petit cercle avec un registre public.', language: 'Langue' },
-    mock: {
-      caseTitle: 'Un nouveau départ après l’incendie',
-      publicName: 'Mariam D.',
-      story: 'Mariam reconstruit un foyer stable pour elle et ses deux enfants après qu’un incendie électrique a endommagé leur appartement. Ils sont en sécurité et logent chez des proches.\n\nCe soutien couvrira une caution, deux lits et les éléments essentiels de cuisine, afin que la famille puisse s’installer sans s’endetter davantage.',
-      updateText: 'Mariam a signé le bail aujourd’hui. La première remise couvrira la caution et les lits ; nous publierons la confirmation ici une fois la remise terminée.',
-      updateAuthor: 'Aïcha',
-      donors: ['Nadia K.', 'Samuel T.', 'La famille Diallo'],
-      ledger: ['Don Zelle confirmé', 'Don PayPal confirmé', 'Première remise pour la caution du logement', 'Don fictif confirmé', 'Don fictif confirmé (donateur non affiché)'],
-    },
 } as const satisfies Translation;
 
 export const translations = { en, fr } as const;

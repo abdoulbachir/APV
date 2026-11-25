@@ -1,5 +1,5 @@
 export const SITE_NAME = 'APV-GAKASINAY';
-const mode = import.meta.env.VITE_API_MODE ?? 'mock';
+const mode = import.meta.env.VITE_API_MODE ?? 'real';
 if (mode !== 'mock' && mode !== 'real') throw new Error('Invalid VITE_API_MODE');
 export const APP_CONFIG = {
   apiMode: mode as 'mock' | 'real',

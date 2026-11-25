@@ -15,8 +15,21 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Clean-checkout production build (no fictional data generated)
+        run: |
+          npm run build
+          npm run test:production-build
+          test ! -e contract/fixtures/dataset.json
+          test ! -e contract/fixtures/dataset.public.json
+          test ! -e src/api/dataset.public.json
       - run: npm test
-      - run: npm run build
-      - run: VITE_API_MODE=real npm run build
+      - name: Explicit fictional design preview
+        run: |
+          npm run build:mock
+          node tests/check-production-build.mjs --mock
+      - name: Real build even with local fixtures present
+        run: |
+          VITE_API_MODE=real npm run build
+          npm run test:production-build
       - run: npm audit
       - run: npm audit --omit=dev

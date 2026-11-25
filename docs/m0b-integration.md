@@ -12,6 +12,7 @@ From the repository root:
 
 ```bash
 npm ci
+npm run fixtures:generate
 test -e .env || cp .env.example .env
 docker compose up -d --wait
 ```
