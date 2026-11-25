@@ -48,7 +48,7 @@ The backend corrected D1, D2, D4, D5 and D6 in `2f03320`, `eaaeed7` and `9d49d27
 
 ### Still open
 
-- The owner's decisions on D2 and D3, and on the contract wording proposals.
+- **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
 - The independent reviewer's targeted re-check of the second-round corrections.
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
@@ -126,7 +126,7 @@ Production is not affected: nothing pins the clock there. Wanted: identity on th
 
 ## Contract wording: two proposals for the owner
 
-Both describe what is implemented and tested. Neither changes a schema, an error code or which request is refused. They need the owner's approval because they change the words of an accepted contract.
+**Approved by the owner on 2026-11-25 and applied to the contract.** Both describe what is implemented and tested. Neither changes a schema, an error code or which request is refused. They need the owner's approval because they change the words of an accepted contract.
 
 1. **Rate limits keyed on the body** (`identity-and-security.md` 4.3). The table puts all rate limits at step 5, but the email is not known until the body is validated at step 7. Proposed: step 5 reads "Rate limits keyed on the client address"; step 8 gains "Counters keyed on what is being guessed (email, account, pending sign-in) are advanced first, before the secret is checked (7.3); when exceeded the answer is 429". Consequence to state openly: a request refused at step 6 or 7 does not touch those counters, and their 429 comes after a 400, 401 or 409, not before.
 2. **When a pending session is discarded** (4.3: "discarded first"). Proposed: "discarded once the request has passed step 7, immediately before the operation's own checks. A request refused at steps 1 to 7 leaves the pending sign-in as it was." The other reading, discarding before validation, would let a malformed request end someone's pending sign-in.
