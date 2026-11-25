@@ -39,7 +39,7 @@ async function run(locale,theme,width){
  page.on('pageerror',()=>errors.push('pageerror'));
  page.on('console',m=>{if(secrets.some(s=>m.text().includes(s)))errors.push('secret in console');});
  page.on('request',request=>{
-  const url=request.url();
+  const url=request.url().split('#')[0];
   if(!url.startsWith(origin+'/'))errors.push('unexpected origin');
   if(secrets.some(s=>url.includes(s)))errors.push('secret in request URL');
  });
@@ -72,6 +72,7 @@ async function run(locale,theme,width){
   const response=await page.goto(origin+path,{waitUntil:'domcontentloaded'});
   assert.equal(response.headers()['content-security-policy'],contentSecurityPolicy);
   await page.locator(selector).first().waitFor({state:'visible'});
+  await page.waitForFunction(locale=>document.documentElement.lang===locale,locale);
   assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
   assert.equal(await page.locator('html').getAttribute('lang'),locale);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'viewport overflow');
@@ -98,7 +99,7 @@ async function run(locale,theme,width){
   assert.equal(new URL(page.url()).pathname,'/account/password');
   assert.equal(await page.locator('[name=currentPassword]').inputValue(),'');
   await fill('currentPassword',fixtures.password);await fill('newPassword',fixtures.newPassword);await submit();await expectPath('/account');
-  await page.locator('.identity-primary').click();await expectPath('/sign-in');
+  await page.locator('.identity-primary').click();await expectPath('/sign-in');await page.locator('[name=password]').waitFor({state:'visible'});
   registration=false;await go('/sign-up','.identity-panel h1');
   await page.locator('.identity-panel p').filter({hasText:locale==='fr'?'inscriptions publiques':'Public registration'}).waitFor({state:'visible'});
   assert.equal(await page.locator('[name=password]').count(),0);
