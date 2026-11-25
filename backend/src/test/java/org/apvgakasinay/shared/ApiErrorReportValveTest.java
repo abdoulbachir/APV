@@ -58,6 +58,14 @@ class ApiErrorReportValveTest {
         }
     }
 
+    /** A request line the server cannot even read: a raw backslash, a character no path may hold, a space, a broken method. */
+    @Test
+    void a9_10_aRequestLineTheServerCannotReadIsAnsweredTheSameWay() {
+        for (String line : new String[] {"GET /api\\me", "GET /api/me|x", "GET /api/a b", "G<T /api/me", "GET /api/me%zz"}) {
+            assertContractError(RawHttp.send(port, line), 400, "validation_error");
+        }
+    }
+
     @Test
     void a9_10_everyOtherErrorOfTheServerItselfHasTheSameShape() {
         // Nothing is deployed here, so any well-formed path is the server's own 404.

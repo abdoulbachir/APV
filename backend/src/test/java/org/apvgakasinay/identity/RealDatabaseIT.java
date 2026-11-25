@@ -220,8 +220,8 @@ class RealDatabaseIT {
         List<String> statements = List.of(
                 "truncate audit_event",
                 "truncate table audit_event restart identity cascade",
-                "truncate table ledger_entry",
                 "truncate table ledger_entry cascade",
+                "truncate table donation_listing, ledger_entry",
                 "truncate table aid_case cascade",
                 "truncate table ledger_platform_total",
                 "truncate table identity_guard",

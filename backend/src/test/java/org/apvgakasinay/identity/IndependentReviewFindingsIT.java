@@ -21,6 +21,7 @@ import org.springframework.dao.DataAccessException;
  * D1, D2, D4 and D5 here; D6 in SensitiveLogFilterTest; the real-database half of D5 in
  * RealDatabaseIT; the server's own error page of D4 also in ApiErrorReportValveTest.
  */
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class IndependentReviewFindingsIT extends IdentityIntegration {
 
     private static final List<String> POSTS_WITH_BODY = List.of("/api/auth/register", "/api/auth/login", "/api/auth/change-password",
@@ -127,6 +128,19 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
     // D1
     // ------------------------------------------------------------------------------------
 
+    private org.springframework.boot.test.system.CapturedOutput log;
+
+    /** What the server logged about its errors, without stack frames: the log is already redacted. */
+    private String errorsLogged() {
+        StringBuilder lines = new StringBuilder();
+        for (String line : log.getAll().split("\\R")) {
+            if ((line.contains("Exception") || line.contains(" ERROR ")) && !line.startsWith("\tat ") && lines.length() < 6000) {
+                lines.append(line, 0, Math.min(line.length(), 500)).append('\n');
+            }
+        }
+        return lines.toString();
+    }
+
     /** One round: a correct sign-in and a sign-out sent at the same moment on one anonymous session. Returns true when the sign-in was refused. */
     private boolean signInAgainstSignOut(String email, String expectedStatus) {
         Browser tab = browser();
@@ -138,7 +152,7 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
                 () -> other.postEmpty("/api/auth/logout")));
         Browser.Answer login = answers.get(0);
         Browser.Answer logout = answers.get(1);
-        assertThat(login.status()).as("sign-in racing a sign-out: %s", login.body()).isIn(200, 403);
+        assertThat(login.status()).as("sign-in racing a sign-out: %s%n%s", login.body(), login.status() >= 500 ? errorsLogged() : "").isIn(200, 403);
 
         if (logout.status() == 204) {
             if (login.status() == 403) {
@@ -174,7 +188,8 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
      * staff, whose sign-in ends in a pending session.
      */
     @Test
-    void a3_6_aSignInWhoseSessionIsEndedBySignOutIsRefusedAndNotRecordedAsASuccess() {
+    void a3_6_aSignInWhoseSessionIsEndedBySignOutIsRefusedAndNotRecordedAsASuccess(org.springframework.boot.test.system.CapturedOutput output) {
+        log = output;
         String donor = "sample.donor@example.org";
         assertThat(register(browser(), donor, PASSWORD).status()).isEqualTo(202);
         Staff owner = staff("sample.owner@example.org", "super_admin");
@@ -268,7 +283,7 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
         }
         // More of the same kind. Whatever each is answered, it is an error in the contract's shape and never a success.
         for (String path : List.of("/api/me%2F", "/api/me%2f..", "/api/me;jsessionid=1", "/api/./me", "/api/me/.", "/api/%2e%2e/api/me", "/api/me%5C",
-                "/api/me%3B", "/api/cases//", "/api/auth/login%", "/api/auth/login%zz", "//api/me", "/api/me%0d%0a", "/error", "/api/error")) {
+                "/api/me%3B", "/api/cases//", "/api/auth/login%", "/api/auth/login%zz", "//api/me", "/api/me%0d%0a", "/api\\me", "/api/me|x", "/error", "/api/error")) {
             RawHttp.Answer answer = RawHttp.send(port, "GET " + path);
             assertContractError(answer, "GET " + path);
             assertThat(answer.status()).as("GET " + path).isIn(400, 404, 405);
