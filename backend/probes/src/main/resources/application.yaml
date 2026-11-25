@@ -1,0 +1,18 @@
+# Probe configuration. Sessions are stored in PostgreSQL by Spring Session JDBC.
+spring:
+  application:
+    name: apv-identity-probes
+  session:
+    jdbc:
+      # The probe lets Spring Session create its documented tables. The real implementation
+      # creates the same tables with a Flyway migration and switches this off.
+      initialize-schema: always
+      # No cleanup during the probe, so that "expired but not yet cleaned up" rows really exist.
+      cleanup-cron: "0 0 0 1 1 *"
+server:
+  servlet:
+    session:
+      cookie:
+        name: apv_session
+        http-only: true
+        same-site: lax

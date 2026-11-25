@@ -1,0 +1,8 @@
+# Sessions kept by the embedded server, with no database. Used to run the framework-level
+# scenarios (second factor, CSRF, absolute deadline) where no Docker is available.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.session.jdbc.autoconfigure.JdbcSessionAutoConfiguration
+      - org.springframework.boot.session.autoconfigure.SessionAutoConfiguration
