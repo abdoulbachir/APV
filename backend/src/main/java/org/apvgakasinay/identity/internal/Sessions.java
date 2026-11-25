@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -176,12 +176,19 @@ public class Sessions {
      * @return false when the session no longer exists
      */
     public boolean storeNow(HttpServletRequest request, HttpServletResponse response) {
+        // The identifier the request arrived with: the one the stored row has until this write.
+        String arrivedWith = request.getRequestedSessionId();
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json");
         try {
             response.flushBuffer();
             return true;
-        } catch (DataIntegrityViolationException rowIsGone) {
+        } catch (DataAccessException failed) {
+            // The database words this failure in more than one way, so the question is asked
+            // directly: is the row still there? If it is, this was some other failure.
+            if (arrivedWith != null && store.exists(arrivedWith)) {
+                throw failed;
+            }
             end(request);
             return false;
         } catch (IOException clientGone) {
