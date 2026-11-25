@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +44,12 @@ class PostgresProbeIT extends ProbeScenarios {
 
     @Autowired
     FindByIndexNameSessionRepository<? extends Session> sessions;
+
+    /** Every test starts with no stored session, so counts of an account's sessions are exact. */
+    @BeforeEach
+    void noStoredSessions() {
+        jdbc.sql("delete from SPRING_SESSION").update();
+    }
 
     /** The cookie carries the session identifier in Base64. */
     private static String sessionIdOf(Browser browser) {
