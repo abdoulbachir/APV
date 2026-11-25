@@ -1,0 +1,72 @@
+name: Live public API integration
+on:
+  pull_request:
+    paths:
+      - backend/**
+      - src/**
+      - contract/**
+      - compose.yaml
+      - .env.example
+      - vite.config.ts
+      - package.json
+      - package-lock.json
+      - tests/live-api.mjs
+      - .github/workflows/integration.yml
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: backend/.java-version
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: npm ci
+      - name: Build executable backend
+        working-directory: backend
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+      - name: Start isolated CI PostgreSQL
+        run: |
+          cp .env.example .env
+          docker compose -p apv-m0b-ci up -d --wait
+      - name: Verify real frontend adapter against Spring Boot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set -a
+          source .env
+          set +a
+          (cd backend && exec java -jar target/apv-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=dev) > "$RUNNER_TEMP/apv-backend.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8080/api/cases/HELP-014 >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$RUNNER_TEMP/apv-backend.log"
+            exit 1
+          fi
+          node --experimental-strip-types tests/live-api.mjs
+      - name: Backend log on failure
+        if: failure()
+        run: |
+          if [ -f "$RUNNER_TEMP/apv-backend.log" ]; then tail -n 200 "$RUNNER_TEMP/apv-backend.log"; fi
+          docker compose -p apv-m0b-ci logs --tail=100 || true
+      - name: Remove isolated CI database
+        if: always()
+        run: docker compose -p apv-m0b-ci down -v
