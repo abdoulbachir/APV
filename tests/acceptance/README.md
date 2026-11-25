@@ -47,6 +47,6 @@ Run the scripts in that order and one at a time: `b2` to `b4` continue with the 
 
 ## Known limits
 
-- The run of 2026-11-25 was done from a scratch directory. From this location `setup.sh`, `b1.mjs` (all checks passed again) and `teardown.sh` were run once to check the packaging; the other scripts were not re-run from here.
+- The first run of 2026-11-25 was done from a scratch directory. The whole sequence was then run from this location at `bfb1abb` (`results-2026-11-25-rerun-bfb1abb.json`).
 - `b1` and `b3` wait for a new 30-second step before each authenticator code, which is most of their running time.
 - Headless Chromium only. No back-forward cache restoration, screen reader or password manager.
