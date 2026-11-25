@@ -1,4 +1,4 @@
-import dataset from '../../contract/fixtures/dataset.public.json';
+import dataset from './dataset.public.json';
 import { APP_CONFIG } from '../config';
 import { ApiError, type ApiClient } from './client';
 import { createMockModel, ModelError, type PublicFixture } from './mock-model';

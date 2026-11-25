@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createMockModel, cutoff, normalize } from '../src/api/mock-model.ts';
-const dataset=JSON.parse(readFileSync(new URL('../contract/fixtures/dataset.public.json',import.meta.url),'utf8'));
+const dataset=JSON.parse(readFileSync(new URL('../src/api/dataset.public.json',import.meta.url),'utf8'));
 const model=createMockModel(dataset);
 test('directory preserves 200 cases, pagination and featured order',()=>{
  const first=model.list({sort:'featured'},'en');

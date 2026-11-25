@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams, useLocation, useNavigationType } from 'react-router-dom';
 import { APP_CONFIG } from '../config';
 import { api } from '../api/client';
 import { SITE_NAME } from '../config';
@@ -21,6 +21,11 @@ function ledgerLabel(kind: LedgerEntry['kind'], t: ReturnType<typeof useI18n>['t
 export function CasePage() {
   const { code = '' } = useParams();
   const location = useLocation();
+  const navigationType=useNavigationType();
+  const heading=useRef<HTMLHeadingElement>(null);
+  const arrival=useRef({code,type:navigationType,active:document.activeElement,handled:false});
+  // Track case changes, not locale changes, and avoid stealing focus after a visitor moves it.
+  if(arrival.current.code!==code) arrival.current={code,type:navigationType,active:document.activeElement,handled:false};
   const source = location.state?.directoryFrom;
   const returnTo = typeof source === 'string' && (source === '/cases' || source.startsWith('/cases?')) ? source : null;
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [code]);
@@ -38,6 +43,14 @@ export function CasePage() {
     const title = result.loading || (result.data && result.data.case.code.toLowerCase() !== code.toLowerCase()) ? t.redesign.caseLoadingTitle : result.error || !result.data ? t.redesign.caseUnavailableTitle : result.data.case.title;
     document.title = title + ' — ' + SITE_NAME;
   }, [code, result.data, result.loading, result.error, t]);
+  useEffect(()=>{
+    const nav=arrival.current;
+    if(nav.handled||result.loading||result.error||!result.data)return;
+    nav.handled=true;
+    if((nav.type==='PUSH'||nav.type==='REPLACE')&&(document.activeElement===document.body||document.activeElement===nav.active)){
+      heading.current?.focus({preventScroll:true});
+    }
+  },[code,result.data,result.loading,result.error]);
   useEffect(() => {
     const updateStickyAction = () => setShowStickyAction(window.scrollY > 520);
     updateStickyAction();
@@ -50,7 +63,20 @@ export function CasePage() {
   const { case: item, financials, photos } = result.data;
   const updates=updateHistory.items, donors=donorHistory.items, ledger=ledgerHistory.items;
   const actionNote=item.acceptingDonations?t.publicRead.givingNotOpen:t.publicRead.unavailableGiving;
-  const historyButton=(history: ReturnType<typeof useHistory<CaseUpdate>> | ReturnType<typeof useHistory<PublicDonor>> | ReturnType<typeof useHistory<LedgerEntry>>)=><>{history.error && <p role="alert">{history.error==='changed'?t.publicRead.historyChanged:t.publicRead.retryHistory}</p>}{history.error==='changed'?<button type="button" className="action action-outline" onClick={result.retry}>{t.common.retry}</button>:history.hasMore&&<button type="button" className="action action-outline" disabled={history.loading} onClick={history.load}>{history.loading?t.common.loading:t.publicRead.more}</button>}</>;
+  const givingLabel=fill(t.casePage.give,{name:item.publicName||item.title});
+  // Keep the same focusable element after completion. aria-disabled prevents operation
+  // without dropping keyboard focus, including while the next request is in flight.
+  const historyButton=(history: ReturnType<typeof useHistory<CaseUpdate>> | ReturnType<typeof useHistory<PublicDonor>> | ReturnType<typeof useHistory<LedgerEntry>>)=><>
+    {history.error && <p role="alert">{history.error==='changed'?t.publicRead.historyChanged:t.publicRead.retryHistory}</p>}
+    {history.showControls && <>
+      <button type="button" className="action action-outline" aria-disabled={history.loading||(!history.hasMore&&history.error!=='changed')} onClick={()=>{
+        if(history.loading)return;
+        if(history.error==='changed')result.retry();
+        else if(history.hasMore)void history.load();
+      }}>{history.error==='changed'?t.common.retry:history.loading?t.common.loading:history.hasMore?t.publicRead.more:t.publicRead.allLoaded}</button>
+      <p role="status" className="history-status">{history.lastLoaded>0?fill(t.publicRead.historyLoaded,{count:String(history.lastLoaded),shown:String(history.items.length),total:String(history.total)})+(history.hasMore?'':' '+t.publicRead.allLoaded):''}</p>
+    </>}
+  </>;
   const receivedPercent = item.goal && item.goal > 0 ? Math.max(0, item.received / item.goal * 100) : null;
   const deliveredPercent = item.goal && item.goal > 0 ? Math.max(0, item.delivered / item.goal * 100) : null;
   const formatPercent = (value: number) => new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 }).format(value / 100);
@@ -66,10 +92,10 @@ export function CasePage() {
           <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} photoAlt={item.photoAlt} photoAltLanguage={item.photoAltLanguage} artwork={getCaseArtwork(item.code)} /><span className="case-code">{item.code}</span></div>
           <div className="case-identity">
             <p className="eyebrow"><span />{t.casePage.supportLabel}</p>
-            <h1>{item.publicName || item.title}</h1>
+            <h1 ref={heading} tabIndex={-1}>{item.publicName || item.title}</h1>
             <p className="case-title" lang={item.titleLanguage}>{item.title}</p>
             {item.deadline && <p className="deadline-pill">{fill(t.casePage.deadline, { date: formatDate(item.deadline, locale, true) })}</p>}
-            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{fill(t.casePage.give, { name: item.publicName || item.title })}<span aria-hidden="true">↗</span></button>
+            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{givingLabel}<span aria-hidden="true">↗</span></button>
             {(sampleNote || !item.acceptingDonations) && !showStickyAction && <p className="sample-note" role="status">{actionNote}</p>}
           </div>
         </div>
@@ -122,7 +148,7 @@ export function CasePage() {
       </section>
 
       {showStickyAction && <div className="give-dock">
-          <button className="action action-orange give-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{fill(t.casePage.give, { name: item.publicName })}<span aria-hidden="true">↗</span></button>
+          <button className="action action-orange give-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{givingLabel}<span aria-hidden="true">↗</span></button>
           {(sampleNote || !item.acceptingDonations) && <p role="status">{actionNote}</p>}
         </div>}
     </article>

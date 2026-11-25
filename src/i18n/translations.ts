@@ -34,7 +34,7 @@ const en = {
     },
     stats: { aria: 'Community totals', received: 'Received', delivered: 'Delivered', helped: 'Cases helped', receivedNote: 'confirmed gifts', deliveredNote: 'handed to people', helpedNote: 'so far' },
     caseCard: { received: 'received', delivered: 'delivered', ofGoal: 'of goal', openCase: 'Open case for {name}' },
-    publicRead: { fundDonations: 'External gifts', fundAllocated: 'Net allocated to cases', available: 'Available balance', shortfall: 'Funding shortfall', unavailableGiving: 'This case is not accepting new gifts.', givingNotOpen: 'Giving is not open yet.', more: 'Load more', retryHistory: 'Could not load more. Try again.', gallery: 'Case pictures', tooLong: 'Search must be at most 80 characters after trimming.', corrected: 'Corrected', net: 'Net amount', historyChanged: 'The record changed. Reload this case.', allocated: 'Allocated' },
+    publicRead: { fundDonations: 'External gifts', fundAllocated: 'Net allocated to cases', available: 'Available balance', shortfall: 'Funding shortfall', unavailableGiving: 'This case is not accepting new gifts.', givingNotOpen: 'Giving is not open yet.', more: 'Load more', allLoaded: 'All history loaded', historyLoaded: 'Loaded {count} more entries. {shown} of {total} displayed.', retryHistory: 'Could not load more. Try again.', gallery: 'Case pictures', tooLong: 'Search must contain at most 200 characters in total and at most 80 after trimming leading and trailing whitespace.', corrected: 'Corrected', net: 'Net amount', historyChanged: 'The record changed. Reload this case.', allocated: 'Allocated' },
     casePage: {
       back: 'All active cases',
       supportLabel: 'One story. One clear need.',
@@ -43,7 +43,7 @@ const en = {
       goal: 'Goal',
       received: 'Received',
       delivered: 'Delivered',
-      progressNote: 'Only confirmed gifts enter the live total. Every handoff remains visible.',
+      progressNote: 'Confirmed gifts and net transfers make up the allocated amount. Every handoff remains visible.',
       deadline: 'Support by {date}',
       give: 'Give to {name}',
       sampleNotice: 'Giving opens after this sample is approved.',
@@ -118,7 +118,7 @@ const fr = {
     },
     stats: { aria: 'Totaux de la communauté', received: 'Reçu', delivered: 'Remis', helped: 'Cas aidés', receivedNote: 'dons confirmés', deliveredNote: 'remis aux personnes', helpedNote: 'jusqu’ici' },
     caseCard: { received: 'reçu', delivered: 'remis', ofGoal: 'de l’objectif', openCase: 'Ouvrir le cas de {name}' },
-    publicRead: { fundDonations: 'Dons externes', fundAllocated: 'Montant net affecté aux cas', available: 'Solde disponible', shortfall: 'Déficit de financement', unavailableGiving: 'Ce cas ne reçoit plus de nouveaux dons.', givingNotOpen: 'Les dons ne sont pas encore ouverts.', more: 'Afficher la suite', retryHistory: 'Impossible de charger la suite. Réessayez.', gallery: 'Photos du cas', tooLong: 'La recherche doit contenir au plus 80 caractères après suppression des espaces aux extrémités.', corrected: 'Corrigé', net: 'Montant net', historyChanged: 'Le registre a changé. Rechargez ce cas.', allocated: 'Affecté' },
+    publicRead: { fundDonations: 'Dons externes', fundAllocated: 'Montant net affecté aux cas', available: 'Solde disponible', shortfall: 'Déficit de financement', unavailableGiving: 'Ce cas ne reçoit plus de nouveaux dons.', givingNotOpen: 'Les dons ne sont pas encore ouverts.', more: 'Afficher la suite', allLoaded: 'Tout l’historique est affiché', historyLoaded: '{count} éléments supplémentaires chargés. {shown} sur {total} affichés.', retryHistory: 'Impossible de charger la suite. Réessayez.', gallery: 'Photos du cas', tooLong: 'La recherche doit contenir au plus 200 caractères au total et au plus 80 après suppression des espaces aux extrémités.', corrected: 'Corrigé', net: 'Montant net', historyChanged: 'Le registre a changé. Rechargez ce cas.', allocated: 'Affecté' },
     casePage: {
       back: 'Tous les cas actifs',
       supportLabel: 'Une histoire. Un besoin clair.',
