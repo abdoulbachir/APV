@@ -65,6 +65,10 @@ class CsrfTokenHandlerTest {
                     sent[at] = ALPHABET.charAt(random.nextInt(64));
                 }
             }
+            if (anotherMaskOfTheSameToken(new String(sent), genuine)) {
+                // About one altered value in a few thousand changes both halves alike. That is the genuine token again.
+                continue;
+            }
             try {
                 if (stored.getToken().equals(resolve(new String(sent)))) {
                     matched++;
@@ -76,6 +80,26 @@ class CsrfTokenHandlerTest {
         // The values themselves stay out of the failure message.
         assertThat(thrown.get() == null).as("a token of valid shape made the handler throw").isTrue();
         assertThat(matched).isZero();
+    }
+
+    /**
+     * The masked form is a random half followed by the token combined with that half. Changing
+     * both halves in the same way is therefore a different, equally valid mask of the same
+     * token, which only someone holding a genuine token can produce. Such a value is not a
+     * wrong token and is left out of the test.
+     */
+    private static boolean anotherMaskOfTheSameToken(String sent, String genuine) {
+        return java.util.Arrays.equals(unmasked(sent), unmasked(genuine));
+    }
+
+    private static byte[] unmasked(String token) {
+        byte[] bytes = java.util.Base64.getUrlDecoder().decode(token);
+        int half = bytes.length / 2;
+        byte[] out = new byte[half];
+        for (int i = 0; i < half; i++) {
+            out[i] = (byte) (bytes[i] ^ bytes[half + i]);
+        }
+        return out;
     }
 
     @Test

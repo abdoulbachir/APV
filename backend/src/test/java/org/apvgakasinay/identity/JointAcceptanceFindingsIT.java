@@ -83,7 +83,12 @@ class JointAcceptanceFindingsIT extends IdentityIntegration {
             boolean body = POSTS_WITH_BODY.contains(path);
             for (int i = 0; i < TOKENS_PER_OPERATION; i++) {
                 Browser browser = i % 3 == 0 ? donor : anonymous;
-                String token = i % 2 == 0 ? altered(browser.token) : randomOfTheSameShape(browser.token);
+                String token;
+                do {
+                    token = i % 2 == 0 ? altered(browser.token) : randomOfTheSameShape(browser.token);
+                    // Changing both halves of a masked token alike gives another valid mask of the same
+                    // token (about one altered value in a few thousand). That is not a wrong token.
+                } while (unmasked(token).equals(unmasked(browser.token)));
                 Browser.Answer answer = browser.send("POST", path, body ? "{}" : null, body ? "application/json" : null, token);
                 sent++;
                 if (answer.status() != 403 || !"csrf_invalid".equals(answer.code())) {
