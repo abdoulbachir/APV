@@ -1,6 +1,6 @@
 # APV-GAKASINAY — Project context and handoff
 
-**Checkpoint:** 2026-11-25, M0B accepted and merged; M1A contract work initiated.
+**Checkpoint:** 2026-11-25, M0B, M1A and generated fixture cleanup accepted and merged; M1B preparation started.
 **Purpose:** Start a fresh conversation or onboard an agent without replaying the development history.
 **Repository:** https://github.com/abdoulbachir/APV
 
@@ -17,7 +17,8 @@ Future payment methods: Zelle, PayPal, Cash App, Apple Cash (person-to-person, n
 ## 2. Authoritative sources
 
 - [Approved decisions](docs/decisions.md): overrides historical "pending" language for decisions actually approved.
-- [Public API v0.2.0](contract/openapi.yaml): seven accepted public GET endpoints; preserve compatibility.
+- [API v0.3.0](contract/openapi.yaml) on main: seven accepted public GET endpoints and twelve identity operations (contract only); preserve compatibility.
+- [Identity and security contract](contract/identity-and-security.md), [ADR 0002](docs/adr/0002-identity-and-sessions.md), [M1A review](contract/M1A-review.md), [security acceptance matrix](contract/tests/security-acceptance.md): authoritative accepted design and 220 planned M1B tests. These paths refer to the current main tree, not the older base of this documentation branch.
 - [Financial terms](contract/financial-terms.md): ledger, exact money arithmetic, reconciliation, deadlines, lifecycle; read alongside approved decisions.
 - [Privacy and media](contract/media-and-privacy.md): consent, closed public DTOs, public URLs, retention limits and caching.
 - [Backend architecture ADR](docs/adr/0001-backend-architecture.md): approved stack, boundaries, deployment and session direction.
@@ -41,8 +42,8 @@ Design acceptance: responsive down to 360px; 44px targets, WCAG AA contrast, key
 - Modular monolith: site, cases, ledger, media, shared, development-only fixtures implemented; identity, audit, donations and contact planned. Preserve module boundaries; only ledger owns money movements. No Redis, Kafka, microservices or Kubernetes needed.
 - Same-origin static frontend, `/api/*` and `/media/public/*`; backend on loopback port 8080 in dev. Hosting/domain deferred. Future HTTPS reverse proxy, private DB network, persistent volumes, backups and restore rehearsal.
 - Dedicated public DTO allowlists, no serialization of private rows, parameterized SQL, repeatable-read snapshots per public response. PostgreSQL constraints protect critical invariants.
-- Public contract remains v0.2.0 until M1A reviewed. Generated TypeScript DTOs, queries and endpoint paths live in `src/api/generated/public-api.ts`; run `cd contract && npm run generate:types`. Generator supports public GET schema subset today; extend it safely for M1. CI checks drift.
-- Real mode never falls back to mock. Mock reads only sanitized public projection at `src/api/dataset.public.json`, byte-identical to `contract/fixtures/dataset.public.json`. Full private fixture stays server-side. Vite denies contract/backend/docs paths including raw and filesystem access; preserve this in future changes.
+- Contract v0.3.0 accepted. Generated TypeScript DTOs and operation paths live in `src/api/generated/public-api.ts` and `src/api/generated/identity-api.ts`; run `cd contract && npm run generate:types`. Generator supports identity bodies, state metadata and unions. CI checks drift.
+- Real mode never falls back to mock. PR #9 removed the three large generated datasets from Git tracking. `npm run fixtures:generate` writes them locally from deterministic inputs using Node standard-library dependencies. Mock reads only the sanitized generated public copy at `src/api/dataset.public.json`, byte-identical to `contract/fixtures/dataset.public.json`; full private data stays server-side. Vite denies contract/backend/docs paths including raw/filesystem access. Default `npm run build` is real, with no generated fixtures required or bundled; `npm run build:mock` is an explicit fictional preview. Preserve these boundaries.
 
 ## 5. Approved financial and privacy invariants
 
@@ -67,31 +68,39 @@ Final CI: [frontend 8/8 tests, both builds, audits zero](https://github.com/abdo
 
 Full fictional dataset: 205 records (200 current, 2 completed, 2 drafts, FUND), 292 ledger entries, 9 category records (8 public incl inactive transport; retired draft-only excluded), 17 pages of 12 (last 8), bilingual. Golden checks: HELP-014 allocated 567500 delivered 320000; FUND available 164000 delivered 0; HELP-101 allocated 38500 delivered 30000, donor D3 net 3500; HELP-903 available -1000; drafts HELP-902/906 return case_not_found 404. Fixture media variants share original bytes in dev only. No real donation or account data.
 
-## 7. Current work: M1A authentication and security contract
+## 7. Accepted M1A and cleanup; current work M1B
 
-Branch `feature/m1a-identity-contract` was created from accepted main `a7fbab2`. At this handoff the branch still points there, no M1 PR exists and no identity implementation has been committed. Owner authorized M1; backend agent was given the M1A assignment in chat (sending/receipt not independently confirmed). Next action: inspect actual remote head and review backend's M1A report/contract before implementation. If it has not been sent, use this section as the assignment. Do not create conflicting changes on that agent's branch.
+### Accepted checkpoints
 
-**Approved baseline:** same-origin PostgreSQL-backed server-side sessions, HttpOnly/Secure production cookie, SameSite=Lax, CSRF all mutations, default deny. Optional accounts, no self-elevation, guests can give/report in later milestone. The following M1 choices are proposals, not final owner decisions: Spring Security + compatible Spring Session JDBC; Argon2id; passwords min 15 Unicode code points, >=64 supported, bounded, block common/compromised locally, no arbitrary composition/truncation; staff MFA mandatory (prefer TOTP with hashed single-use recovery codes); operator provisioning and verified manual recovery without email initially; donor idle 2h/absolute 24h, staff idle 30m/absolute 12h. Verify dependencies and official security guidance; document tradeoffs before approval. No default staff credentials, no secrets in CLI arguments/logs, no permanent password assigned by admins.
+- M1A: [PR #8](https://github.com/abdoulbachir/APV/pull/8), independent Traycer PASS at `b5ea149fb3e33380dd622ad734117a15051b4bfd`. Owner approved all seven policies and operational advice. Documentation closure `458e87fd9d1aab4dff15c3c76b8582079021ec3c`, all four CI workflows passed; merged to main at `daa1637a703437fcd132fe4323909782b8a95eed`. No identity runtime implemented. All 220 security scenarios are planned, not executed authentication tests.
+- Generated fixture cleanup: [PR #9](https://github.com/abdoulbachir/APV/pull/9), accepted head `46273e9037828b4b6c6e5ffae3f2db63d8ba2482`, independent PASS and all four CI workflows passed; owner authorized merge, main advanced to `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`. See [independent acceptance](https://github.com/abdoulbachir/APV/pull/9#issuecomment-7152910529). All three generated files absent from tracked tree; exact fixture blob digests unchanged on generation. Independent evidence: 8 frontend tests, 38 backend unit + 76 real PostgreSQL integration tests, 1,806 schema-valid responses, 1,838 parity matches, 114 live comparisons, 10 errors, 4 media assets; clean real builds with/without fixtures and explicit mock build, real dist/JAR marker inspection, Chromium at 1440x900 and 390x844; backend outage has no fallback. Linux filesystem only; no production deployment or real data. Post-merge CI was queued at this checkpoint; recheck it.
 
-Roles (visitor is unauthenticated, not DB role): donor/user accesses own private account and future own gifts only; admin creates/edits cases, updates, views donation reports, disbursement only with explicit canDisburse; super admin confirms/rejects, transfers, manages payment methods/staff, contact messages and audit. Future permissions not operational yet. Server checks resource ownership and current permission on every protected operation; frontend visibility is not security.
+### Approved identity policy
 
-M1A deliverables:
-- Extend OpenAPI with exact requests/responses/errors/session effects for proposed GET /api/auth/csrf, POST /api/auth/register, /api/auth/login, /api/auth/logout, GET /api/me, POST /api/auth/change-password, plus only necessary activation/MFA/recovery operations. Preserve seven public GET endpoints. Closed private account DTOs separate from public schemas. 401 unauthenticated, 403 forbidden, 405 unsupported recognized method, 429 Retry-After; no HTML redirects, no-store auth/private responses, no public ETag behavior. Generic auth errors and no enumeration; explain duplicate registration UX.
-- Design email normalization/unique concurrent registration, unverified email state, immutable account identifiers, disabled accounts, safe minimal profiles; never link guest gifts merely by matching email. Public register only donor. No email service assumed. Define verified identity/activation/recovery procedure with short-lived single-use credentials, no staff MFA bypass, no last usable superadmin removal. Define secure session rotation, idle/absolute expiry, revocation on password/MFA/role/disable changes; incomplete MFA cannot access staff privileges.
-- SPA CSRF obtaining/submitting/refreshing token before all mutations including login/logout/register; reject cross-session invalid tokens; same origin, no credentialed permissive CORS; safe JSON/body limits, headers, trusted proxy and loopback HTTP vs HTTPS rules. Rate limiting by identifier and trustworthy IP, avoid permanent lockout abuse, generic responses.
-- Propose DB account/credential/role/session/MFA/activation/reset/rate-limit/audit schema; append-only security events without sensitive material. Keep identity separate from ledger. Dev fixture loader currently destructive: isolate from real DB and identity credentials; explicitly design safe interaction.
-- Extend contract validation and generator for request bodies/new methods/auth; retain all public privacy checks, fixture and financial tests. Review threat model and test matrix: registration races, credential enumeration, session fixation/rotation/expiry/revocation, CSRF, resource ownership, mass assignment/privilege escalation, disable/role changes, MFA replay/recovery, rate limits, last superadmin, cache/cookies/leaks and public regressions. Real PG and real browser tests in M1B.
-- Contract/design only: no backend migrations/controllers, frontend pages, donation/financial/case writes, profile uploads, production deployment or M1B until review. Push branch, draft PR, exact SHA, sources, decisions needing owner approval, limitations and tests. Frontend agent independently reviews contract and can open PR if backend cannot.
+See current main `docs/decisions.md` and contract v0.3.0. Registration closed in production until verified email, open only for intentional dev/test coverage. Guest giving/reporting remains account optional. Donor session 2h idle/24h absolute; staff 30min/12h. Mandatory staff TOTP with ten single-use recovery codes. Operator staff provisioning and recovery until M5; independently established contact channel required, refuse if identity cannot be verified. Minimum 15 NFC-normalized Unicode code points, local blocklist, no composition rules. ASCII-only email initially. Adopted operational advice: two trusted usable super administrators when practical plus secure offline recovery codes, not an enforced two-admin invariant.
 
-Open decisions include email/verification/recovery operating model, MFA enrollment and recovery, exact timeouts, data retention, guest tracking, future hosting/domain, production provider eligibility. Do not silently promote proposals into owner-approved decisions.
+Same-origin PostgreSQL sessions, HttpOnly/Secure production cookies, SameSite=Lax; session-bound CSRF and deterministic request precedence. Never automatically replay a refused mutation. Distinguish secret failures from session loss and pending MFA states. Only own-account read/change-password permissions operational in M1; future staff/financial permissions remain non-operational. No new financial features or identity linking from email alone. Preserve last usable superadmin invariant and explicit disposable-database marker design. No credentials or private identity state in browser storage.
+
+### M1B preparation
+
+Both branches created at exact cleanup merge baseline `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`: `feature/m1b-identity-backend` and `feature/m1b-identity-frontend`. No runtime code yet. Do not start both agents editing shared files. Backend agent first runs four ADR 0002 compatibility probes on its branch:
+1. Custom TOTP factor integration with Spring Security MFA; if unsuitable use the documented centralized session-state fallback, same API contract.
+2. Per-role idle timeout and fixed absolute deadline using Spring Session JDBC, verified against PostgreSQL.
+3. Session-stored CSRF replacement on all custom session-ID transitions, with stale token rejection and fresh-token behavior.
+4. Pin an exact compatible Bouncy Castle version for Argon2id; test encoder and record dependency/security evidence.
+
+Return executable test evidence, actual resolved versions, any fallback and limitations, exact commit; no main merge. No claim of complete authentication. After probes reviewed, implement the twelve identity operations, security and audit modules, Flyway schema, session/cookie/CSRF rules, authorization, rates, operator activation/recovery, concurrent MFA and last-superadmin invariants, disposable database enforcement and tests. Frontend: approved design tokens, EN/FR, mobile, existing public routes preserved; sign-in, conditional registration, account and password management, activation/recovery credential entry, pending MFA/enrollment and one-time recovery-code display/regeneration. Use generated identity contract, memory-only secrets, explicit state reconciliation, no mutation replay, local QR, CSP-compatible external prepaint theme script. Align generated CSRF header comment in M1B; coordinate shared tooling ownership. Independent acceptance and joint actual browser/real PG integration before owner-authorized merge.
+
+Open later decisions: email infrastructure and automated verification/recovery, screenshot retention, guest tracking, hosting/domain, provider eligibility. Do not reopen approved M0/M1A design or introduce later milestone functionality.
 
 ## 8. Roadmap and agent workflow
 
 | Stage | State / intended scope |
 |---|---|
 | Phase 1 / M0A / M0B | Accepted and merged: design, contract, public reads and joint integration |
-| M1A | Current: auth/security contract and owner decision review |
-| M1B | After approval: backend identity/security/audit; frontend login/signup/me/password/MFA/activation/recovery and guards in existing design; independent security and joint integration |
+| M1A | Accepted and merged: identity/security contract and owner policy decisions |
+| Cleanup | Accepted and merged: generated fixture lifecycle and artifact isolation |
+| M1B | Current: compatibility probes first, then parallel backend identity/security/audit and frontend auth/account flows; independent runtime security and joint integration |
 | M2 | Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
 | M3 | Remaining public pages, donor account/profile/history |
 | M4 | Case administration, updates, media/consent |
@@ -106,14 +115,14 @@ Use exact baseline SHAs, clean working trees, separate branches/worktrees, no fo
 
 From local repo (usually `~/apv`), inspect `git status` first; then `git fetch origin --prune`, `git switch main`, `git pull --ff-only origin main` when clean. For separate work use worktrees or a clean branch. Node 24 / Java 21.
 
-- Frontend: `npm ci && npm test && npm run build`; `npm audit`, `npm audit --omit=dev`; `VITE_API_MODE=real npm run build`.
+- Frontend: `npm ci && npm test && npm run build`; `npm audit`, `npm audit --omit=dev`; `npm run test:production-build`. Default build real; explicit `npm run build:mock` for fictional preview.
 - Contract: `cd contract && npm ci && npm run validate`.
-- Backend: `cd backend && ./mvnw test` unit; `./mvnw verify` includes real PostgreSQL Testcontainers (Docker required).
+- Backend: `cd backend && ./mvnw test` unit; `node ../contract/tools/generate-dataset.mjs && ./mvnw verify` includes real PostgreSQL Testcontainers (Docker required).
 - Mock preview: `npm run dev`; real preview: `VITE_API_MODE=real VITE_SAMPLE_DATA=true npm run dev`; production explicitly real and no sample-data flag.
-- Local joint startup: from root only with isolated disposable DB and running Docker, `test -e .env || cp .env.example .env`, `docker compose up -d --wait`. In backend terminal: `cd backend; set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. In root: `node --experimental-strip-types tests/live-api.mjs`, then real preview. See linked docs for details. **Dev profile replaces fixture database contents every start. Never connect to production, overwrite existing .env or delete data volumes casually.** Rootless Docker was used successfully by Traycer; normal Docker Desktop still not confirmed. Flyway/PostgreSQL combination tested, formal vendor support unverified.
+- Local joint startup: from root only with isolated disposable DB and running Docker, `npm run fixtures:generate`, `test -e .env || cp .env.example .env`, `docker compose up -d --wait`. In backend terminal: `cd backend; set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. In root: `node --experimental-strip-types tests/live-api.mjs`, then real preview. See linked docs for details. **Dev profile replaces fixture database contents every start. Never connect to production, overwrite existing .env or delete data volumes casually.** Rootless Docker was used successfully by Traycer; normal Docker Desktop still not confirmed. Flyway/PostgreSQL combination tested, formal vendor support unverified.
 
 ## 10. Resuming in a new chat
 
-Read this handoff and the source documents, verify current main and M1A branch/PR, and review the backend agent's latest M1A report. Do not repeat already settled M0 decisions. The immediate goal is to finish and approve M1A, not implement M1B ahead of the contract.
+Read this handoff and current main source documents, verify main and M1B branches/PRs. Do not repeat accepted M0, M1A or cleanup work. The immediate goal is to verify the four M1B framework probes and then implement the accepted identity contract. Do not claim authentication runtime acceptance until the security matrix and integration pass.
 
 After each milestone, update this file with the new accepted baseline, current checkpoint, important decisions, evidence, open questions and limitations. Archive superseded details in Git history or their appropriate ADR/contract files rather than expanding this summary indefinitely.
