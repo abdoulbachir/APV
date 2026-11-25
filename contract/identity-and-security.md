@@ -143,14 +143,14 @@ Frontend experience: after 202, show "Your account is ready. Sign in." and the s
 
 **Blocked passwords.** Checked locally on the NFC form; no password and no part of a hash leaves the server. Refused with field code `compromised` when either holds:
 
-1. It is, exactly, on the list of known breached passwords shipped with the application.
+1. It is, exactly, on the local list of known breached passwords. **[Approved, M1B corrective follow-up]** A comprehensive local breached-password list is mandatory outside dev/test. Startup is refused if the configured list is missing, unreadable or unsuitable; the small bundled starter list alone is insufficient. The deployment supplies and maintains the comprehensive list locally; document its provenance, integrity, format, sizing and update procedure. Dev/test may use the bundled starter list.
 2. It is built from the context. Take the password, lower-case it and drop everything that is not a letter or digit. It is refused when what is left contains one of these context words and fewer than 8 other characters remain after removing every occurrence of them: the site names `apvgakasinay`, `apv` and `gakasinay`; the part of the email before `@`; the display name. Context words shorter than 4 characters are ignored, except the site names.
 
 The same error code is used for both, so the answer does not say which. A sign-in is never refused for these reasons; they apply only when a password is chosen.
 
 **Protecting the server.** Hashing costs memory. At most 4 hashes run at once. A request that cannot start hashing within 2 seconds gets 503 with `Retry-After: 5`. Rate limits (section 7) are applied before any hashing, so one client cannot hold the four slots.
 
-Passwords, hashes, one-time credentials, authenticator secrets, recovery codes, CSRF tokens and session identifiers never appear in a response (except the two one-time displays in section 5 and the CSRF token itself), a log line, an error message or an audit record. Request bodies of identity endpoints are never logged.
+Passwords, hashes, one-time credentials, authenticator secrets, recovery codes, CSRF tokens and session identifiers never appear in a response (except the two one-time displays in section 5 and the CSRF token itself), a log line, an error message or an audit record. Request bodies of identity endpoints are never logged. This includes retired or expired session identifiers and verbose logging levels; there is no exception for a previously valid identifier.
 
 ## 4. Sessions
 
@@ -411,6 +411,7 @@ Not only sign-in. Each place a password, code or credential is checked draws on 
 | Password, per email and client address together | 5 failures in 15 minutes | 429 until the window ends |
 | Password, per email or account | 20 failures in 1 hour | 429 for 15 minutes |
 | Sign-in attempts, per client address | 30 in 15 minutes | 429 until the window ends |
+| Protected password operations (change-password and recovery-codes), shared per client address and separate from sign-in | 30 requests in 15 minutes | 429 until the window ends |
 | Second factor, per pending sign-in | 5 failures | Pending session ended, 401 `unauthenticated` |
 | Second factor, per account | 10 failures in 1 hour | 429 for 15 minutes |
 | One-time credential, per client address | 10 in 1 hour | 429 for 15 minutes |

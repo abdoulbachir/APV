@@ -5,7 +5,7 @@ import { LanguageSwitch } from './LanguageSwitch';
 import { ThemeSwitch } from './ThemeSwitch';
 
 export function Layout() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <div className="site-shell">
       <a className="skip-link" href="#main" onClick={event => {
@@ -33,6 +33,7 @@ export function Layout() {
           <strong>{SITE_NAME}</strong>
           <p>{t.footer.note}</p>
           <Link className="footer-record-link" to="/#record">{t.redesign.publicRecord}</Link>
+          <p><Link to="/sign-in">{locale==='fr'?'Mon compte / Connexion':'My account / Sign in'}</Link></p>
         </div>
         <p className="tax-line">{t.footer.line}</p>
         <LanguageSwitch />

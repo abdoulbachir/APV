@@ -80,7 +80,7 @@ function generate(spec){
  const csrf=spec.components.parameters.CsrfHeader.name;
  const identity=["// Generated from contract/openapi.yaml (v"+spec.info.version+"). Do not edit.","// Run: cd contract && npm run generate:types","// Private to the signed-in account. Never use these types in a public page's data.","",
   "import type { "+[...imported].sort().join(", ")+" } from './public-api';","",...body,"",
-  "/** Send this header, with the token from getCsrfToken, on every request that is not GET. */","export const csrfHeaderName = "+quote(csrf)+" as const;","",
+  "/** Send this header, with the token from getCsrfToken, on methods other than GET, HEAD and OPTIONS. */","export const csrfHeaderName = "+quote(csrf)+" as const;","",
   "/** The state of this browser's session. Each operation lists the states in which it may be called. */","export type SessionState = \"anonymous\" | \"mfa_required\" | \"mfa_enrollment_required\" | \"authenticated\";","",
   "export interface IdentityOperations {",...operations,"}","","export const identityPaths = {",...paths,"} as const;",""];
  return {publicApi:result.join("\n"),identityApi:identity.join("\n")};
