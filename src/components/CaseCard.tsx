@@ -13,15 +13,15 @@ export function CaseCard({ item }: { item: Case }) {
   const excerpt = paragraph.length > 230 ? paragraph.slice(0, 230).replace(/\s+\S*$/, '') + '…' : paragraph;
   const money = (cents: number) => formatMoney(cents, locale);
   return <article className="case-card" data-motion="funding">
-    <div className="case-card-portrait"><Portrait name={item.publicName} photoUrl={item.photoUrl} artwork={getCaseArtwork(item.code)} variant="small" /><span className="case-code">{item.code}</span></div>
+    <div className="case-card-portrait"><Portrait name={item.publicName} photoUrl={item.photoThumbnailUrl} photoAlt={item.photoAlt} photoAltLanguage={item.photoAltLanguage} artwork={getCaseArtwork(item.code)} variant="small" /><span className="case-code">{item.code}</span></div>
     <div className="case-card-copy">
       <div className="case-card-top"><p className="case-person">{item.publicName}</p>{item.deadline && <p className="case-deadline">{t.home.deadlineLabel} <strong>{formatDate(item.deadline, locale, true)}</strong></p>}</div>
-      <h3>{item.title}</h3>
-      <p className="case-excerpt">{excerpt}</p>
+      <h3 lang={item.titleLanguage}>{item.title}</h3>
+      <p className="case-excerpt" lang={item.storyLanguage}>{excerpt}</p>
       <div className="mini-line">
-        <div className="mini-amounts"><span><b>{money(item.received)}</b>{t.stats.received}</span><span><b>{money(item.delivered)}</b>{t.stats.delivered}</span><span><b>{item.goal === null ? '—' : money(item.goal)}</b>{t.casePage.goal}</span></div>
+        <div className="mini-amounts"><span><b>{money(item.received)}</b>{t.publicRead.allocated}</span><span><b>{money(item.delivered)}</b>{t.stats.delivered}</span><span><b>{item.goal === null ? '—' : money(item.goal)}</b>{t.casePage.goal}</span></div>
         {ratio !== null && delivery !== null && <>
-          <div className="mini-progress-row"><small>{t.stats.received} · {formatPercent(ratio)}</small><div className="funding-track" aria-hidden="true"><span className="funding-received" style={{ width: Math.min(100, ratio) + '%' }} /></div></div>
+          <div className="mini-progress-row"><small>{t.publicRead.allocated} · {formatPercent(ratio)}</small><div className="funding-track" aria-hidden="true"><span className="funding-received" style={{ width: Math.min(100, ratio) + '%' }} /></div></div>
           <div className="mini-progress-row"><small>{t.stats.delivered} · {formatPercent(delivery)}</small><div className="funding-track" aria-hidden="true"><span className="funding-delivered" style={{ width: Math.min(100, delivery) + '%' }} /></div></div>
           <div className="mini-caption"><small>{money(Math.max(0, (item.goal ?? 0) - item.received))} {t.redesign.remaining}</small></div>
         </>}

@@ -1,8 +1,8 @@
 # ADR 0001: Backend architecture
 
-- Status: partly approved. The project owner approved Spring Boot, PostgreSQL and the single repository on 2026-11-24, and the frontend agent accepted the rest of the stack and the modular monolith. Same-origin deployment is still a proposal. The hosting provider and domain are undecided.
+- Status: approved by the project owner and the frontend agent. Implemented for the public read API in milestone 0B. The hosting provider and domain are deferred.
 - Date: 2026-11-24
-- Scope: decides the shape of the backend. No backend code exists yet.
+- Scope: decides the shape of the backend. Updated 2026-11-24 for milestone 0B with the approved decisions and the exact versions in use.
 
 ## Context
 
@@ -14,10 +14,10 @@ APV-GAKASINAY is a small donation site run by a group of friends. It records mon
 
 | Choice | Version | Why |
 |---|---|---|
-| Java | 25 (long-term support release) | Newest long-term support release, supported by current Spring Boot. Java 21 is an acceptable fallback if the chosen host only offers it; nothing in the design needs a Java 25 feature. |
-| Spring Boot | 4.1.x proposed; exact supported version verified on spring.io and pinned when milestone 0B starts | Current major line. Spring supports each minor for at least 12 months and each major for at least 3 years. See "Version verification" below. |
-| PostgreSQL | 18 proposed; exact supported version verified on postgresql.org and pinned when milestone 0B starts | Released September 2025 and supported for five years. Transactions, constraints, row locks and triggers are what the ledger relies on. |
-| Build | Maven with the Maven Wrapper | The wrapper pins Maven itself, so every machine and CI builds the same way. |
+| Java | 21 (long-term support) | Approved by the owner. Nothing in the project needs a newer release. Spring Boot 4.1 requires Java 17 or later and supports up to Java 27. |
+| Spring Boot | 4.1.3 | Stable 4.1 line, open-source support until 2027-07-31. Chosen over 4.2.0, released days before this work, and over 4.0.x, whose open-source support ends 2026-12-31. See "Versions in use". |
+| PostgreSQL | 18.7 | Major version 18 is supported until 2030-11-14 and has a year of minor releases behind it. Chosen over 19.0, released 2026-11-19. Transactions, constraints, row locks and triggers are what the ledger relies on. |
+| Build | Maven 3.9.16 through the Maven Wrapper | The wrapper pins Maven itself, so every machine and CI builds the same way. |
 | Migrations | Flyway, plain SQL files | Schema history is reviewable and repeatable. No schema is ever created by the application at start-up. |
 | Data access | Spring JDBC (`JdbcClient`) with hand-written SQL | Financial totals, row locks and ratio sorting are clearer and safer as explicit SQL than through an object mapper. |
 | Tests | JUnit, MockMvc, Testcontainers with real PostgreSQL | Constraints, locks and ordering must be tested on the real database, not on an in-memory substitute. |
@@ -57,7 +57,7 @@ The frontend stays at the root so the approved build, CI and hosting metadata do
 
 ### Deployment model
 
-Proposed, pending the owner's final approval: frontend, API and public pictures are served from **one origin**.
+Approved by the owner: frontend, API and public pictures are served from **one origin**.
 
 | Path | Served by |
 |---|---|
@@ -132,19 +132,37 @@ Each can be reconsidered when a measured need appears.
 - Local file storage ties the first deployment to one server with a persistent disk and a backup of that disk.
 - Horizontal scaling is not designed for. Nothing here prevents it later, but it is not a goal.
 
-## Version verification
+## Versions in use
 
-The versions below are proposals. Before milestone 0B starts, the exact supported versions of Java, Spring Boot, PostgreSQL, Flyway and Testcontainers are verified against each vendor's own documentation and pinned in the build.
+Verified on 2026-11-24 against the vendors' own published data, then pinned in `backend/pom.xml`, `backend/.mvn/wrapper/maven-wrapper.properties`, `backend/.java-version` and `compose.yaml`.
 
-Checked on 2026-11-24 by web search, not against the vendors' own pages:
+| Component | Version | Pinned by | Source checked |
+|---|---|---|---|
+| Java | 21 | `backend/.java-version`, `java.version` in the build | Spring Boot 4.1 system requirements: https://docs.spring.io/spring-boot/4.1/system-requirements.html |
+| Spring Boot | 4.1.3 | Parent of `backend/pom.xml` | Spring's project data: https://api.spring.io/projects/spring-boot/releases and `/generations` (support dates) |
+| Spring Framework | 7.0.11 | Managed by Spring Boot 4.1.3 | Spring Boot 4.1.3 dependency list on Maven Central |
+| PostgreSQL | 18.7 | `compose.yaml`, `apv.postgres.image` in the build | PostgreSQL's version data: https://www.postgresql.org/versions.json |
+| PostgreSQL JDBC driver | 42.7.14 | Managed by Spring Boot 4.1.3 | Same dependency list |
+| Flyway | 12.4.0 | Managed by Spring Boot 4.1.3 | Same dependency list |
+| Testcontainers | 2.0.5 | Managed by Spring Boot 4.1.3 | Same dependency list |
+| JUnit | 6.0.3 | Managed by Spring Boot 4.1.3 | Same dependency list |
+| Maven | 3.9.16 | Maven Wrapper | Maven release history: https://maven.apache.org/docs/history.html |
+| ArchUnit | 1.5.1 | `backend/pom.xml`, test only | Maven Central |
+| JSON Schema validator (networknt) | 1.5.9 | `backend/pom.xml`, test only | Maven Central |
 
-- Spring Boot 4.1.0 was reported as the latest stable release in mid-2026, and documentation for a 4.2 line exists. I could not confirm today's newest patch. The exact version is pinned from spring.io when milestone 0B starts.
-- Spring Boot 4.x requires Java 17 or later.
-- PostgreSQL 18 was released on 2025-09-25 with five years of support. I could not confirm whether PostgreSQL 19 has been released; 18 is chosen either way because it has a year of minor releases behind it.
-- The development machine currently has Java 21 and Docker installed. Java 25 would need installing, or the build can run in a container.
+Rules followed:
+
+- Libraries that Spring Boot manages are left at the version it manages. That combination is the one Spring tests together, which is the compatibility evidence.
+- Where a newer line existed (Spring Boot 4.2.0, PostgreSQL 19.0, Maven 3.10.x), the mature supported line was preferred.
+- The two libraries Spring Boot does not manage are test-only and pinned to exact versions.
+
+Not verified by running: Flyway 12.4.0 and the JDBC driver against PostgreSQL 18 are exercised by the integration tests in CI, not by a vendor compatibility statement I read.
+
+Next review: before 2027-07-31, when open-source support for Spring Boot 4.1 ends.
 
 ## Alternatives considered
 
+- **Java 25.** Newer long-term support release. Not installed: the owner approved Java 21 and nothing here needs more.
 - **Node.js backend, sharing TypeScript with the frontend.** One language across the project, but the owner already works with Spring Boot and will maintain this.
 - **JPA and Hibernate.** Faster for plain forms, weaker for explicit locking and aggregate queries, and it hides the SQL that matters most here.
 - **A hosted backend service.** Fast to start, but the append-only ledger, row locking and database-level constraints are harder to guarantee, and it conflicts with the same-origin cookie model.

@@ -85,3 +85,9 @@ Nothing that affects a total is removed, so the mock computes the same numbers a
 - Search: titles with French accents, a public name that differs only by accents from another, a query padded with white space, and a query of exactly 80 characters.
 - Pictures: a case with a main picture and a gallery, a case with neither.
 - Private data markers: every case carries a `private` block with obviously fake values.
+
+## M0B full dataset
+
+The full dataset preserves 200 current cases and all original directory case codes. HELP-101 and HELP-102 reuse the contract example's edge scenarios; selected generated cases cover funded, over-goal, paused, no-goal and equal-ratio cases. Two completed and two draft cases are additional. HELP-014 retains its original received and delivered amounts, and the fund retains its available balance with transfers rather than direct disbursements. All records are fictional. The existing approved symbolic WebP artwork is reused as fixture media, not as a photo of a real beneficiary.
+
+Regenerate with `node tools/generate-dataset.mjs` from `contract/`. The checked-in public projection excludes private and unpublished data. `npm run validate` checks both datasets. `golden/acceptance.json` contains initial independent expected values for cross-agent testing; more exhaustive request/response and error tests belong in the integration milestone.
