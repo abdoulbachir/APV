@@ -37,3 +37,7 @@ All twelve operation paths now have UI callers: enrollment start/confirm, local 
 First CSP-browser CI attempt at `8236f41` passed build/unit/fixture checks but stopped at Playwright system dependency installation: ubuntu-latest resolved to Ubuntu 26.04, unsupported by the pinned Playwright 1.56.1. Pin the frontend runner to ubuntu-24.04 and rerun; do not report browser acceptance from the failed attempt.
 
 Verified checkpoint `fed88321fb5a240b08c4953791db2aabe8c26ecb`: all four CI workflows completed successfully. Frontend CI https://github.com/abdoulbachir/APV/actions/runs/45647194117 reports 32 tests, zero failures, eight intercepted Chromium journeys (en/fr, light/dark, 360/1440px), 72 production-CSP page loads, zero npm audit findings. This is not real-backend acceptance. Production cookie/HTTPS, cross-tab and bfcache, QR decoding, accessibility, password manager, all stale-token and lost-response scenarios remain joint verification work.
+
+## Joint acceptance run and proxy correction (2026-11-25)
+
+The first run of the real frontend against the real backend found that the development and preview proxy rewrote the `Host` header, so the backend's origin check refused every identity `POST` with 403 `forbidden`. `vite.config.ts` now forwards the browser's `Host` unchanged. The intercepted browser tests could not have found this; `tests/acceptance/` can. Results, the open backend findings and the assignment for independent review are in `docs/m1b-acceptance-evidence.md`. Milestone 1B is not accepted.
