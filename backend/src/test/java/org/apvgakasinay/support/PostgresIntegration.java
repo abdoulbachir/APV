@@ -18,7 +18,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Base of every integration test: the whole application against a real PostgreSQL started by
@@ -30,18 +29,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @ActiveProfiles("test")
 public abstract class PostgresIntegration {
 
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer(System.getProperty("apv.postgres.image", "postgres:18.7"));
-
-    static {
-        POSTGRES.start();
-    }
-
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        SharedPostgres.register(registry);
     }
 
     @Autowired
