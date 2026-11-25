@@ -71,7 +71,7 @@ class BreachedPasswordsProductionSizeIT {
                     "Synthetic list of production size: %d entries, %d MiB on disk (generated in %d ms; reused if already present).%n"
                             + "Server start-up verification, including SHA-256 of the whole file: %d ms. Operator command verification: %d ms.%n"
                             + "Heap added by opening the list: %d KiB. One lookup: %.1f microseconds on average over %d lookups.%n",
-                    list.entries(), Files.size(file) >> 20, generated, verified, operatorMillis, (heapAfter - heapBefore) >> 10, microsPerLookup, lookups));
+                    list.entries(), Files.size(file) >> 20, generated, verified, operatorMillis, Math.max(0, heapAfter - heapBefore) >> 10, microsPerLookup, lookups));
         }
     }
 }

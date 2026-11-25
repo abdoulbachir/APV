@@ -54,7 +54,8 @@ class ProductionProfileIT {
         try (org.springframework.context.ConfigurableApplicationContext started =
                      new org.springframework.boot.builder.SpringApplicationBuilder(ApvApplication.class)
                              .bannerMode(org.springframework.boot.Banner.Mode.OFF).logStartupInfo(false)
-                             .properties(all.toArray(String[]::new)).run()) {
+                             // As command-line arguments, which take precedence over application.yaml the way environment variables do.
+                             .run(all.stream().map(property -> "--" + property).toArray(String[]::new))) {
             return null;
         } catch (RuntimeException failure) {
             Throwable cause = failure;
