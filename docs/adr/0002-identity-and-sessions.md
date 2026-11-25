@@ -91,6 +91,26 @@ Limits of these numbers: both machines are faster than a small server is likely 
 
 The API contract does not depend on any of these.
 
+## Implementation notes (milestone 1B, phase 2)
+
+What the production implementation does where the contract left room, and what it found.
+
+- **Nothing from the probes is reused.** The probe project stays in `backend/probes`, with its own build; the production classpath has none of its classes. Accounts, replay protection and counters are PostgreSQL tables.
+- **Bouncy Castle is pinned to `bcprov-jdk18on` 1.85**, the version Spring Security 7.1.3 is built and tested against. Reviewed before pinning: the Bouncy Castle release notes for 1.85 and the advisories published for `bcprov` in the GitHub advisory database. Every published advisory is fixed in 1.85 or earlier; none is open against 1.85 at the time of writing. Only Argon2 is used from it. To be re-checked at each dependency update.
+- **Where each rate limit is counted.** Limits keyed by client address (sign-in, sign-up, one-time credential, token and options) are counted in the request filter at step 5, as the order of checks says. Limits keyed by something the body names (the address attempted, the account) cannot be known before the body is read and validated at step 7, so they are counted inside the operation, immediately before the secret is checked and never after. A request refused at steps 1 to 4 counts toward nothing; one refused at step 6 or 7 has counted toward its address limit only.
+- **A wrong code at enrollment confirmation counts among the five** of the pending session, like a wrong code at verification. Section 11 of the contract names both steps; section 6 only words it for verification.
+- **A session is bound to the identifier it was issued under.** Spring Session writes the identifier of a session back when a request ends. A slow request that began before a rotation could in principle restore the old identifier. Each privileged session therefore stores the identifier it was created with, and a session whose current identifier differs is ended at the state check. Found by reasoning about the concurrent confirmation scenario (6.5), not by a failing test.
+- **Who won a simultaneous enrollment confirmation is recorded, not inferred.** The row of the activated factor keeps a hash of the pending session identifier that activated it. A losing request on the same session is answered 409 `already_signed_in`; one on another pending session of the account is answered 401 `mfa_code_invalid`.
+- **Database connections.** Password hashing takes about 50 ms and four may run at once. No request holds a database connection while it hashes, and counters and audit records are written outside the main transaction, so a flood of sign-ins cannot exhaust the connection pool.
+- **Two keys, not three.** `APV_MFA_ENCRYPTION_KEY` encrypts authenticator secrets. `APV_HASH_KEY` is the root of two derived keys (HMAC with a fixed label each): one for recovery-code hashes, one for rate-limit and audit key hashes. The contract speaks of server-side keys without fixing their number.
+- **The disposable marker is a schema**, `apv_disposable_database`, rather than a row: a row would have to live in a table created by a migration, and the rule is that no migration and no application code can produce the marker.
+- **The built-in password blocklist is small** (the most common passwords and site-specific ones). A full breached-password list is supplied as a local file through `APV_PASSWORD_BLOCKLIST_PATH`; nothing is fetched from the network.
+- **Argon2id cost** is the OWASP minimum (19 MiB, 2 iterations, 1 lane) by default and can only be raised. Calibrating it on the production machine is a deployment task.
+- **The framework error page** (`/error`) is not a route of the API: requested directly it answers 404.
+- **An encoded percent sign in a path** is let through the HTTP firewall so that a malformed case code keeps answering 404 as accepted in milestone 0B. All other firewall rules are the defaults.
+
+Not done in this phase, on purpose: scheduled removal of expired rate-limit windows and used one-time credentials; any email; any staff administration over HTTP.
+
 ## Alternatives considered
 
 | Alternative | Why not |

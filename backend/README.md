@@ -93,7 +93,7 @@ Generate a key with `openssl rand -base64 32`. Keep both keys outside source con
 
 ## Accounts and sign-in
 
-Milestone 1B adds the twelve identity operations of `contract/openapi.yaml` 0.3.0 (`/api/auth/*` and `/api/me`). The rules are in `contract/identity-and-security.md`; the decisions in `docs/adr/0002-identity-and-sessions.md`; which acceptance scenario is covered by which test in `docs/m1b-backend-acceptance-coverage.md`.
+Milestone 1B adds the twelve identity operations of `contract/openapi.yaml` 0.3.0 (`/api/auth/*` and `/api/me`). The rules are in `contract/identity-and-security.md`; the decisions, and the notes on how this implementation fills the gaps the contract left, in `docs/adr/0002-identity-and-sessions.md`; which acceptance scenario is covered by which test in `docs/m1b-backend-acceptance-coverage.md`.
 
 ### In development
 
