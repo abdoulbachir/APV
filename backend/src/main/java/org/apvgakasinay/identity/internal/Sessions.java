@@ -44,6 +44,7 @@ public class Sessions {
     static final String SIGNED_IN_AT = "apv.signedInAt";
     public static final String ABSOLUTE_DEADLINE = "apv.absoluteDeadline";
     static final String MFA_FAILURES = "apv.mfaFailures";
+    static final String BOUND_ID = "apv.boundSessionId";
 
     static final Duration ANONYMOUS_IDLE = Duration.ofMinutes(30);
     static final Duration ANONYMOUS_ABSOLUTE = Duration.ofHours(2);
@@ -55,7 +56,8 @@ public class Sessions {
     static final int MAX_MFA_FAILURES = 5;
 
     /** What a session says about who it belongs to. Null fields never occur: an anonymous session has no identity at all. */
-    public record Identity(long accountId, long securityVersion, SessionState state, Instant signedInAt, Instant absoluteDeadline) {
+    public record Identity(long accountId, long securityVersion, SessionState state, Instant signedInAt, Instant absoluteDeadline,
+                           boolean boundToThisIdentifier) {
     }
 
     private final SessionAuthenticationStrategy rotateIdentifierThenToken;
@@ -80,7 +82,8 @@ public class Sessions {
                 (Long) session.getAttribute(SECURITY_VERSION),
                 SessionState.of(session.getAttribute(STATE)),
                 Instant.ofEpochSecond((Long) session.getAttribute(SIGNED_IN_AT)),
-                Instant.ofEpochSecond((Long) session.getAttribute(ABSOLUTE_DEADLINE)));
+                Instant.ofEpochSecond((Long) session.getAttribute(ABSOLUTE_DEADLINE)),
+                session.getId().equals(session.getAttribute(BOUND_ID)));
     }
 
     /** Gives a brand-new session the short life of an anonymous one. It holds only the CSRF token. */
@@ -131,6 +134,11 @@ public class Sessions {
         session.setAttribute(SIGNED_IN_AT, signedInAt.getEpochSecond());
         session.setAttribute(ABSOLUTE_DEADLINE, deadline.getEpochSecond());
         session.removeAttribute(MFA_FAILURES);
+        // The privilege belongs to this identifier and to no other. The session store saves the
+        // identifier on every request, so a slow request that started before the rotation could
+        // write the old identifier back. Such a session no longer matches this value and is
+        // refused and ended at the next request: an old identifier can never carry the privilege.
+        session.setAttribute(BOUND_ID, session.getId());
 
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);

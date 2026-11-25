@@ -86,7 +86,8 @@ class AfterCsrfFilter extends OncePerRequestFilter {
         Account account = null;
         if (identity != null) {
             account = accounts.findById(identity.accountId()).orElse(null);
-            boolean revoked = account == null || !account.enabled() || account.securityVersion() != identity.securityVersion();
+            boolean revoked = account == null || !account.enabled() || account.securityVersion() != identity.securityVersion()
+                    || !identity.boundToThisIdentifier();
             if (revoked) {
                 Sessions.end(request);
                 audit.record(AuditEvent.of("session.revoked", Outcome.REFUSED).account(identity.accountId())
@@ -103,6 +104,11 @@ class AfterCsrfFilter extends OncePerRequestFilter {
             return;
         }
         if (!accepted) {
+            if (identity != null) {
+                audit.record(AuditEvent.of("session.state_conflict", Outcome.REFUSED).account(identity.accountId())
+                        .request(caller.address(), caller.requestId())
+                        .details(java.util.Map.of("operation", route.pattern().getPatternString(), "state", state.code())));
+            }
             refuse(request, response, operation, state);
             return;
         }

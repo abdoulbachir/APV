@@ -30,6 +30,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 class BeforeCsrfFilter extends OncePerRequestFilter {
 
     static final String ROUTE = "apv.identity.route";
+    static final String BODY = "apv.identity.body";
     static final int MAX_BODY_BYTES = 16 * 1024;
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
@@ -88,6 +89,7 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
                     ErrorWriter.write(request, response, 413, "payload_too_large", "Request body too large");
                     return;
                 }
+                request.setAttribute(BODY, body);
                 forwarded = new CachedBodyRequest(request, body);
             }
 

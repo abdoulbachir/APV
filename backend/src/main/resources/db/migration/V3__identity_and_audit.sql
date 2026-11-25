@@ -99,12 +99,14 @@ create table account_totp (
     pending_expires_at  timestamptz,
     last_accepted_step  bigint not null default -1,
     activated_at        timestamptz,
+    activated_by_session bytea,
     constraint account_totp_state_shape check (
         (state = 'pending' and pending_expires_at is not null and activated_at is null)
         or (state = 'active' and pending_expires_at is null and activated_at is not null))
 );
 
 comment on column account_totp.secret_encrypted is 'AES-256-GCM under a key that is not in the database: nonce, then ciphertext and tag.';
+comment on column account_totp.activated_by_session is 'SHA-256 of the identifier the pending session had when it activated the factor. That identifier was replaced at once; the hash only tells a simultaneous request on the same session from one on another.';
 comment on column account_totp.last_accepted_step is 'A code is accepted by moving this forward in one conditional update, so it works once even when sent twice at the same instant.';
 
 create table account_recovery_code (

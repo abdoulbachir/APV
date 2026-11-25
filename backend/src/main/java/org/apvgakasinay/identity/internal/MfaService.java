@@ -11,18 +11,29 @@ import org.apvgakasinay.audit.AuditService.Outcome;
 import org.apvgakasinay.shared.ApiException;
 import org.apvgakasinay.shared.AppClock;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-/** The second factor for staff: verification, enrollment, and recovery codes. */
-@Service
-@Transactional
+/**
+ * The second factor for staff: verification, enrollment, and recovery codes.
+ *
+ * Like {@link IdentityService}, only the statements that must succeed together run in a
+ * transaction. Accepting a code is a single conditional update, atomic by itself.
+ */
+@Component
 public class MfaService {
 
     static final int RECOVERY_CODES = 10;
 
     /** A pending authenticator secret, shown once. */
     public record Enrollment(String secret, String otpauthUri, Instant expiresAt) {
+    }
+
+    /** How a confirmation ended inside its transaction. */
+    private enum Confirmation { ACTIVATED, WRONG_CODE, LOST_RACE, WINDOW_CLOSED }
+
+    private record Confirmed(Confirmation outcome, List<String> codes, boolean bootstrapped) {
     }
 
     private final AccountRepository accounts;
@@ -32,9 +43,10 @@ public class MfaService {
     private final Sessions sessions;
     private final Audit audit;
     private final AppClock clock;
+    private final TransactionTemplate transaction;
 
     public MfaService(AccountRepository accounts, Keys keys, PasswordHasher hasher, Throttle throttle, Sessions sessions,
-                      Audit audit, AppClock clock) {
+                      Audit audit, AppClock clock, PlatformTransactionManager transactions) {
         this.accounts = accounts;
         this.keys = keys;
         this.hasher = hasher;
@@ -42,6 +54,7 @@ public class MfaService {
         this.sessions = sessions;
         this.audit = audit;
         this.clock = clock;
+        this.transaction = new TransactionTemplate(transactions);
     }
 
     static ApiException codeInvalid() {
@@ -62,7 +75,7 @@ public class MfaService {
                 : acceptTotp(account, code, now);
         String method = recoveryCode ? "recovery_code" : "totp";
         if (!accepted) {
-            wrongCode(request, account, "session.second_factor", method, caller);
+            throw wrongCode(request, account, "session.second_factor", method, caller);
         }
         throttle.forgive(Throttle.SECOND_FACTOR_BY_ACCOUNT, counter(account));
         Instant signedInAt = Sessions.identity(request.getSession(false)).signedInAt();
@@ -74,8 +87,8 @@ public class MfaService {
     /** Starts enrollment: stores a pending secret, replacing an earlier pending one, and returns it once. */
     public Enrollment enroll(Account current, HttpServletRequest request, Caller caller) {
         Instant now = clock.now();
-        Account account = accounts.findByIdForUpdate(current.id()).orElseThrow(IdentityService::unauthenticated);
-        if (!account.enrollmentWindowOpen(now)) {
+        Account account = accounts.findById(current.id()).orElseThrow(IdentityService::unauthenticated);
+        if (!accounts.hasActiveTotp(account.id()) && !account.enrollmentWindowOpen(now)) {
             Sessions.end(request);
             audit.event("mfa.enroll", Outcome.REFUSED, account.id(), caller, Map.of("reason", "window_closed"));
             throw IdentityService.unauthenticated();
@@ -94,44 +107,60 @@ public class MfaService {
     /**
      * Finishes enrollment. Exactly one of several simultaneous confirmations succeeds; the
      * others get no codes, and their answer depends only on what they presented.
-     *
-     * Kept on refusal: the count of wrong codes lives in the session, not in this transaction.
      */
-    @Transactional(noRollbackFor = ApiException.class)
     public List<String> confirm(Account current, String code, HttpServletRequest request, HttpServletResponse response, Caller caller) {
+        refuseIfThrottled(current, caller);
         Instant now = clock.now();
-        // Completing the first enrollment can bootstrap the site, so the guard comes first.
-        AccountRepository.Guard guard = accounts.lockGuard();
-        Account account = accounts.findByIdForUpdate(current.id()).orElseThrow(IdentityService::unauthenticated);
-        AccountRepository.TotpRow row = accounts.totp(account.id()).orElse(null);
-        if (row != null && row.active()) {
-            throw lostRace(request);
-        }
-        if (!account.enrollmentWindowOpen(now)) {
-            Sessions.end(request);
-            audit.event("mfa.enroll_confirm", Outcome.REFUSED, account.id(), caller, Map.of("reason", "window_closed"));
-            throw IdentityService.unauthenticated();
-        }
-        refuseIfThrottled(account, caller);
-        long step = row == null || !now.isBefore(row.pendingExpiresAt()) ? -1 : Totp.matchingStep(keys.decrypt(row.secretEncrypted()), code, now);
-        if (step < 0) {
-            wrongCode(request, account, "mfa.enroll_confirm", "totp", caller);
-        }
-        if (!accounts.activatePendingTotp(account.id(), row.secretEncrypted(), step, now)) {
-            throw lostRace(request);
-        }
-        throttle.forgive(Throttle.SECOND_FACTOR_BY_ACCOUNT, counter(account));
+        HttpSession pendingSession = request.getSession(false);
+        byte[] sessionHash = Keys.sha256(pendingSession.getId());
+        Confirmed result = transaction.execute(status -> {
+            // Completing the first enrollment can bootstrap the site, so the guard comes first.
+            AccountRepository.Guard guard = accounts.lockGuard();
+            Account account = accounts.findByIdForUpdate(current.id()).orElse(null);
+            AccountRepository.TotpRow row = account == null ? null : accounts.totp(account.id()).orElse(null);
+            if (row != null && row.active()) {
+                return new Confirmed(Confirmation.LOST_RACE, null, false);
+            }
+            if (account == null || !account.enabled() || !account.enrollmentWindowOpen(now)) {
+                return new Confirmed(Confirmation.WINDOW_CLOSED, null, false);
+            }
+            long step = row == null || !now.isBefore(row.pendingExpiresAt())
+                    ? -1 : Totp.matchingStep(keys.decrypt(row.secretEncrypted()), code, now);
+            if (step < 0) {
+                return new Confirmed(Confirmation.WRONG_CODE, null, false);
+            }
+            if (!accounts.activatePendingTotp(account.id(), row.secretEncrypted(), step, now, sessionHash)) {
+                return new Confirmed(Confirmation.LOST_RACE, null, false);
+            }
+            List<String> codes = newRecoveryCodes(account);
+            accounts.setActivation(account.id(), true, null);
+            boolean bootstrapped = !guard.bootstrapped() && accounts.usableSuperAdministrators() > 0;
+            if (bootstrapped) {
+                accounts.markBootstrapped();
+            }
+            return new Confirmed(Confirmation.ACTIVATED, codes, bootstrapped);
+        });
 
-        List<String> codes = newRecoveryCodes(account);
-        accounts.setActivation(account.id(), true, null);
-        if (!guard.bootstrapped() && accounts.usableSuperAdministrators() > 0) {
-            accounts.markBootstrapped();
-            audit.event("site.bootstrapped", Outcome.SUCCESS, account.id(), caller);
+        switch (result.outcome()) {
+            case LOST_RACE -> throw lostRace(current, sessionHash);
+            case WINDOW_CLOSED -> {
+                Sessions.end(request);
+                audit.event("mfa.enroll_confirm", Outcome.REFUSED, current.id(), caller, Map.of("reason", "window_closed"));
+                throw IdentityService.unauthenticated();
+            }
+            case WRONG_CODE -> throw wrongCode(request, current, "mfa.enroll_confirm", "totp", caller);
+            default -> {
+            }
         }
+        throttle.forgive(Throttle.SECOND_FACTOR_BY_ACCOUNT, counter(current));
+        Account account = accounts.findById(current.id()).orElseThrow();
         Instant signedInAt = Sessions.identity(request.getSession(false)).signedInAt();
         sessions.establish(request, response, account, SessionState.AUTHENTICATED, signedInAt);
+        if (result.bootstrapped()) {
+            audit.event("site.bootstrapped", Outcome.SUCCESS, account.id(), caller);
+        }
         audit.event("mfa.enroll_confirm", Outcome.SUCCESS, account.id(), caller);
-        return codes;
+        return result.codes();
     }
 
     /** Replaces all recovery codes. Needs the password and a fresh authenticator code, although the session is signed in. */
@@ -153,7 +182,7 @@ public class MfaService {
             throw codeInvalid();
         }
         throttle.forgive(Throttle.SECOND_FACTOR_BY_ACCOUNT, counter(account));
-        List<String> codes = newRecoveryCodes(account);
+        List<String> codes = transaction.execute(status -> newRecoveryCodes(account));
         audit.event("mfa.recovery_codes", Outcome.SUCCESS, account.id(), caller);
         return codes;
     }
@@ -180,28 +209,25 @@ public class MfaService {
         return codes;
     }
 
-    /** A wrong code keeps the pending session, except the fifth, which ends it. Always throws. */
-    private void wrongCode(HttpServletRequest request, Account account, String event, String method, Caller caller) {
+    /** A wrong code keeps the pending session, except the fifth, which ends it. */
+    private ApiException wrongCode(HttpServletRequest request, Account account, String event, String method, Caller caller) {
         HttpSession session = request.getSession(false);
         if (session != null && Sessions.countMfaFailure(session)) {
             Sessions.end(request);
             audit.event(event, Outcome.REFUSED, account.id(), caller, Map.of("method", method, "reason", "attempts_exhausted"));
-            throw IdentityService.unauthenticated();
+            return IdentityService.unauthenticated();
         }
         audit.event(event, Outcome.FAILURE, account.id(), caller, Map.of("method", method));
-        throw codeInvalid();
+        return codeInvalid();
     }
 
     /**
-     * Another request activated the factor first. If this request's own session was the one
-     * that got signed in (its identifier has been replaced), it is told so; a different
-     * pending session of the same account is told its code is no good.
+     * Another request activated the factor first. If it was this same pending session that got
+     * signed in, the request is told so; a different pending session of the account is told
+     * its code is no good. Decided from what was recorded at activation, not from timing.
      */
-    private ApiException lostRace(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        boolean sameSessionWasSignedIn = session == null || !sessions.exists(session.getId())
-                || Sessions.identity(session) == null || Sessions.identity(session).state() == SessionState.AUTHENTICATED;
-        return sameSessionWasSignedIn
+    private ApiException lostRace(Account account, byte[] sessionHash) {
+        return accounts.wasActivatedBy(account.id(), sessionHash)
                 ? ApiException.of(HttpStatus.CONFLICT, "already_signed_in", "Already signed in")
                 : codeInvalid();
     }

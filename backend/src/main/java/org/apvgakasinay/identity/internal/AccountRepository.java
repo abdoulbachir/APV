@@ -180,14 +180,21 @@ public class AccountRepository {
      * Turns the pending secret into the active factor, once, and only if it is still the
      * secret the caller verified a code against.
      */
-    public boolean activatePendingTotp(long accountId, byte[] expectedSecretEncrypted, long step, Instant now) {
+    public boolean activatePendingTotp(long accountId, byte[] expectedSecretEncrypted, long step, Instant now, byte[] sessionHash) {
         return jdbc.sql("""
                         update account_totp
-                           set state = 'active', pending_expires_at = null, activated_at = :now, last_accepted_step = :step
+                           set state = 'active', pending_expires_at = null, activated_at = :now, last_accepted_step = :step,
+                               activated_by_session = :session
                          where account_id = :id and state = 'pending' and secret_encrypted = :secret and pending_expires_at > :now
                         """)
                 .param("now", Timestamp.from(now)).param("step", step).param("id", accountId)
-                .param("secret", expectedSecretEncrypted).update() == 1;
+                .param("secret", expectedSecretEncrypted).param("session", sessionHash).update() == 1;
+    }
+
+    /** True when the factor of this account was activated by the session with this hash. */
+    public boolean wasActivatedBy(long accountId, byte[] sessionHash) {
+        return jdbc.sql("select exists (select 1 from account_totp where account_id = :id and activated_by_session = :session)")
+                .param("id", accountId).param("session", sessionHash).query(Boolean.class).single();
     }
 
     public void removeSecondFactor(long accountId) {

@@ -64,7 +64,7 @@ class DevAccountSeeder implements ApplicationRunner {
             byte[] secret = Keys.totpSecret();
             accounts.removeSecondFactor(id);
             accounts.storePendingTotp(id, keys.encrypt(secret), now.plusSeconds(600));
-            accounts.activatePendingTotp(id, accounts.totp(id).orElseThrow().secretEncrypted(), -1, now);
+            accounts.activatePendingTotp(id, accounts.totp(id).orElseThrow().secretEncrypted(), -1, now, null);
             line += "  authenticator secret: " + Keys.base32(secret);
         }
         System.out.println(line);

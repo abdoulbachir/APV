@@ -95,18 +95,31 @@ jobs:
             grep -h "Tests run:" target/surefire-reports/*.txt target/failsafe-reports/*.txt 2>/dev/null || echo "no reports"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          for report in target/surefire-reports/*.txt target/failsafe-reports/*.txt; do
-            [ -f "$report" ] || continue
-            line=$(grep -h "Tests run:" "$report" | head -1)
-            echo "::notice title=$(basename "$report" .txt)::$line"
-          done
+          # One annotation with every class and the totals: annotations are capped at ten per step.
+          python3 - <<'PY'
+          import glob, re
+          lines, totals = [], [0, 0, 0, 0]
+          for kind in ('surefire', 'failsafe'):
+              for path in sorted(glob.glob(f'target/{kind}-reports/*.txt')):
+                  text = open(path, encoding='utf-8', errors='replace').read()
+                  found = re.search(r'Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)', text)
+                  if not found:
+                      continue
+                  numbers = [int(n) for n in found.groups()]
+                  totals = [a + b for a, b in zip(totals, numbers)]
+                  name = path.split('/')[-1][:-4].replace('org.apvgakasinay.', '')
+                  lines.append(f'{kind[0]} {name}: {numbers[0]} run, {numbers[1]} failed, {numbers[2]} errors, {numbers[3]} skipped')
+          head = f'TOTAL {totals[0]} run, {totals[1]} failed, {totals[2]} errors, {totals[3]} skipped'
+          print('::notice title=Backend test totals::' + '%0A'.join([head] + lines))
+          PY
       - name: Report failed tests
         if: failure()
         run: |
           for report in target/surefire-reports/*.txt target/failsafe-reports/*.txt; do
             [ -f "$report" ] || continue
             if grep -qE "FAILURE|ERROR" "$report"; then
-              message=$(head -c 6000 "$report" | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+              # The failures and their messages, without stack frames.
+              message=$(grep -vE "^\s+at |^\s+\.\.\. [0-9]+ more" "$report" | head -c 14000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
               echo "::error title=$(basename "$report" .txt)::$message"
             fi
           done

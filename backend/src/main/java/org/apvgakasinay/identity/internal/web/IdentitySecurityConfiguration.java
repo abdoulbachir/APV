@@ -24,6 +24,8 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.StrictHttpFirewall;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
@@ -68,6 +70,19 @@ class IdentitySecurityConfiguration {
         cookie.setCookiePath("/");
         // No Domain, and no Max-Age: a session cookie whose lifetime the server decides.
         return cookie;
+    }
+
+    /**
+     * Spring Security's strict firewall, with one allowance: a percent-encoded percent sign in
+     * the path. The accepted public behavior is that any malformed case code answers 404
+     * case_not_found; refusing that one encoding with a bare 400 would change it. Encoded
+     * slashes, path traversal sequences and everything else stay refused.
+     */
+    @Bean
+    HttpFirewall httpFirewall() {
+        StrictHttpFirewall firewall = new StrictHttpFirewall();
+        firewall.setAllowUrlEncodedPercent(true);
+        return firewall;
     }
 
     @Bean

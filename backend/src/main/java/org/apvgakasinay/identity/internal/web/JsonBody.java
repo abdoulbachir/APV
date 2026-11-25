@@ -27,7 +27,8 @@ final class JsonBody {
 
     @SuppressWarnings("unchecked")
     static JsonBody read(HttpServletRequest request, JsonMapper json, Set<String> allowed) {
-        byte[] bytes = request instanceof CachedBodyRequest cached ? cached.body() : new byte[0];
+        // Later filters wrap the request again, so the bytes are handed over as a request attribute.
+        byte[] bytes = request.getAttribute(BeforeCsrfFilter.BODY) instanceof byte[] cached ? cached : new byte[0];
         Map<String, Object> parsed;
         try {
             Object value = json.readValue(bytes, Object.class);
