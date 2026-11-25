@@ -52,11 +52,12 @@ function useOptions(){
 }
 function FormError({error}:{error:IdentityError|null}){
  const t=useCopy();
- return error?<p className="identity-error" role="alert">{t.errors[error.code]}</p>:null;
+ return error?<p className="identity-error" role="alert" tabIndex={-1}>{t.errors[error.code]}</p>:null;
 }
 function Field({name,label,type='text',autoComplete,hint,inputMode,error}:{name:string;label:string;type?:string;autoComplete?:string;hint?:string;inputMode?:'numeric'|'email';error:IdentityError|null}){
  const t=useCopy();const field=error?.fields.find(x=>x.name===name);
- const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):null;
+ const secretError=(name==='password'&&error?.code==='invalid_credentials')||(name==='code'&&error?.code==='mfa_code_invalid');
+ const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):secretError&&error?t.errors[error.code]:null;
  const desc=[hint?name+'-hint':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
  return <div className="identity-field"><label htmlFor={name}>{label}</label><input id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{message&&<p className="identity-field-error" id={name+'-error'}>{message}</p>}</div>;
 }
@@ -85,7 +86,7 @@ function useSubmission(lease:FormLease){
  const inFlight=useRef(false);const alive=useRef(true);
  useEffect(()=>{alive.current=true;return ()=>{alive.current=false;};},[]);
  async function submit<K extends IdentityMutation>(operation:K,body:PostRequest<K>,onSuccess:(value:IdentityOperations[K]['response'])=>void|Promise<void>){
-  if(inFlight.current||!store.isCurrent(lease.generation))return;
+  if(inFlight.current||!store.beginSubmission(lease.generation))return;
   inFlight.current=true;setBusy(true);setError(null);
   try{
    const result:IdentitySubmission<K>=await submitIdentityOnce(client,operation,body,locale,lease);
@@ -104,7 +105,7 @@ function useSubmission(lease:FormLease){
     else store.reconcile(lease.generation,{status:'unavailable',error:r.error});
     announce();
    }else setError(result.error);
-  }finally{inFlight.current=false;if(alive.current)setBusy(false);}
+  }finally{store.endSubmission();inFlight.current=false;if(alive.current)setBusy(false);}
  }
  return {busy,error,submit};
 }
@@ -115,7 +116,7 @@ function clearSecret(form:HTMLFormElement,name:string){
 }
 function focusError(form:HTMLFormElement,error:IdentityError|null){
  if(!error)return;
- const name=error.fields[0]?.name;
+ const name=error.fields[0]?.name??(error.code==='invalid_credentials'?'password':error.code==='mfa_code_invalid'?'code':undefined);
  const field=name?form.elements.namedItem(name):null;
  if(field instanceof HTMLElement)field.focus();
  else form.querySelector<HTMLElement>('[role="alert"]')?.focus();

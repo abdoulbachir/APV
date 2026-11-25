@@ -35,7 +35,15 @@ export function SessionProvider({children,client}:{children:ReactNode;client?:Id
   document.documentElement.dataset.identitySuspended='true';
   store.suspend();
  },[store]);
- const announce=useCallback(()=>{channel.current?.postMessage(changeSignal);},[]);
+ const announce=useCallback(()=>{
+  try {
+   if(channel.current)channel.current.postMessage(changeSignal);
+   else if(typeof BroadcastChannel!=='undefined'){
+    const temporary=new BroadcastChannel(channelName);
+    temporary.postMessage(changeSignal);temporary.close();
+   }
+  }catch{/* Visibility revalidation remains the fallback. */}
+ },[]);
  const refresh=useCallback(async(notify=false)=>{
   document.documentElement.dataset.identitySuspended='true';
   if(notify)announce();

@@ -94,3 +94,23 @@ test('no form token is acquired when state is not verified',async()=>{
  await assert.rejects(store.prepare('en'),{code:'session_refresh_required'});
  assert.equal(calls.length,0);
 });
+
+test('stale reconciliation adopts the fresh token without another network request even across remounts',async()=>{
+ const {store,calls}=harness([json(account()),csrf(),json(account())]);
+ await store.refresh('en');const prior=await store.prepare('en');
+ const next={csrf:{headerName:'X-CSRF-TOKEN',token:'new-token-000000001'},session:{status:'authenticated',account:account('Y')}};
+ assert.equal(store.reconcile(prior.generation,next.session,next),true);
+ assert.equal(store.isCurrent(prior.generation),false);
+ const [first,second]=await Promise.all([store.prepare('en'),store.prepare('en')]);
+ assert.equal(first.csrf.token,next.csrf.token);assert.equal(second.generation,first.generation);
+ assert.equal(first.session.account.id,'Y');assert.equal(calls.length,3);
+});
+
+test('one mutation at a time across all controls and generations',async()=>{
+ const {store}=harness([refused('unauthenticated'),refused('mfa_required')]);
+ await store.refresh('en');const first=store.getSnapshot().generation;
+ assert.equal(store.beginSubmission(first),true);assert.equal(store.beginSubmission(first),false);
+ await store.refresh('en');const second=store.getSnapshot().generation;
+ assert.equal(store.beginSubmission(first),false);assert.equal(store.beginSubmission(second),false);
+ store.endSubmission();assert.equal(store.beginSubmission(second),true);store.endSubmission();
+});

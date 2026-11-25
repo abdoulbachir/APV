@@ -27,6 +27,7 @@ export function createSessionStore(client:IdentityClient) {
  let snapshot:SessionSnapshot={generation:0,reading:{status:'checking'}};
  const listeners=new Set<()=>void>();
  let prepared:FormLease|undefined;
+ let activeSubmission=false;
  let preparing:{generation:number;promise:Promise<FormLease>}|undefined;
  function publish(reading:SessionSnapshot['reading'],generation=snapshot.generation) {
   snapshot={generation,reading};
@@ -53,7 +54,7 @@ export function createSessionStore(client:IdentityClient) {
  function prepare(locale:Locale):Promise<FormLease> {
   const generation=snapshot.generation;
   if(prepared && isCurrent(prepared.generation)) {
-   const lease=prepared; prepared=undefined; return Promise.resolve(lease);
+   return Promise.resolve(prepared);
   }
   if(preparing?.generation===generation)return preparing.promise;
   const promise=prepareNew(locale);
@@ -80,11 +81,12 @@ export function createSessionStore(client:IdentityClient) {
    throw new IdentityError('session_refresh_required',0);
   }
   publish(form.session,generation);
-  return {...form,generation};
+  prepared={...form,generation};
+  return prepared;
  }
  // Reconciliation has already read /me. Publish exactly that result instead of
- // sending a duplicate request. A newly issued CSRF token can seed the next
- // screen's empty form once; never carry any submitted body across generations.
+ // sending a duplicate request. A newly issued CSRF token seeds empty forms
+ // in that generation, including a StrictMode remount. Never carry a body.
  function reconcile(generation:number,reading:SessionReading,form?:PreparedIdentityForm) {
   if(!isCurrent(generation))return false;
   prepared=undefined;preparing=undefined;
@@ -97,6 +99,11 @@ export function createSessionStore(client:IdentityClient) {
   subscribe(listener:()=>void){listeners.add(listener);return ()=>{listeners.delete(listener);};},
   getSnapshot:()=>snapshot,
   suspend,refresh,prepare,isCurrent,reconcile,
+  beginSubmission(generation:number){
+   if(activeSubmission||!isCurrent(generation))return false;
+   activeSubmission=true;return true;
+  },
+  endSubmission(){activeSubmission=false;},
  };
 }
 export type SessionStore=ReturnType<typeof createSessionStore>;
