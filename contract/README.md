@@ -11,6 +11,7 @@
 | `fixtures/` | The shared bilingual test dataset: format, example, expected values, public projection. |
 | `tools/`, `tests/` | The validation scripts and the deliberately wrong inputs they must reject. |
 | `tests/security-acceptance.md` | The security tests milestone 1B must pass. |
+| `tests/negative-contracts.json` | Deliberately damaged copies of the contract that the checker must reject. |
 | `M1A-review.md` | Review status and decisions for the identity contract (version 0.3.0). |
 | `M0A-review.md` | Review status, decisions and the acceptance checklist for this version. |
 
@@ -60,7 +61,7 @@ Public read endpoints, unchanged since 0.2.0:
 - `GET /api/cases/{code}/donors`
 - `GET /api/cases/{code}/ledger`
 
-Identity endpoints, added in 0.3.0 and not implemented yet: `GET /api/auth/csrf`, `POST /api/auth/register`, `/login`, `/logout`, `/change-password`, `/set-password`, four under `/api/auth/mfa/`, and `GET /api/me`. Their rules are in `identity-and-security.md`.
+Identity endpoints, added in 0.3.0 and not implemented yet: `GET /api/auth/csrf`, `GET /api/auth/options`, `POST /api/auth/register`, `/login`, `/logout`, `/change-password`, `/set-password`, four under `/api/auth/mfa/`, and `GET /api/me`. Their rules are in `identity-and-security.md`.
 
 Every schema declares an `x-audience` (`public`, `shared`, `account`, `request` or `credential`), and `npm run validate` fails if private data could reach a public response.
 

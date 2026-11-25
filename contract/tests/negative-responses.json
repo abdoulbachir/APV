@@ -39,5 +39,12 @@
   {"name": "sign-up answer that says the address exists", "operationId": "register", "patch": [{"op": "replace", "path": "/status", "value": "already_registered"}]},
   {"name": "nine recovery codes", "operationId": "confirmMfaEnrollment", "patch": [{"op": "remove", "path": "/codes/0"}]},
   {"name": "recovery codes with their hashes", "operationId": "confirmMfaEnrollment", "patch": [{"op": "add", "path": "/hashes", "value": []}]},
-  {"name": "CSRF answer with another header name", "operationId": "getCsrfToken", "patch": [{"op": "replace", "path": "/headerName", "value": "X-CSRF"}]}
+  {"name": "CSRF answer with another header name", "operationId": "getCsrfToken", "patch": [{"op": "replace", "path": "/headerName", "value": "X-CSRF"}]},
+  {"name": "pending sign-in carrying an account", "operationId": "login", "patch": [{"op": "replace", "path": "/status", "value": "mfa_required"}]},
+  {"name": "signed-in result with no account", "operationId": "login", "patch": [{"op": "replace", "path": "/account", "value": null}]},
+  {"name": "signed-in result with a pending deadline", "operationId": "login", "patch": [{"op": "add", "path": "/pendingExpiresAt", "value": "2026-11-24T12:10:00Z"}]},
+  {"name": "second-factor success that is still pending", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/status", "value": "mfa_required"}, {"op": "remove", "path": "/account"}, {"op": "add", "path": "/pendingExpiresAt", "value": "2026-11-24T12:10:00Z"}]},
+  {"name": "permission that is not operational yet", "operationId": "getMyAccount", "patch": [{"op": "replace", "path": "/permissions", "value": ["cases.manage"]}]},
+  {"name": "sign-up switch with extra detail", "operationId": "getAuthOptions", "patch": [{"op": "add", "path": "/reason", "value": "no email"}]},
+  {"name": "CSRF answer with the old header name", "operationId": "getCsrfToken", "patch": [{"op": "replace", "path": "/headerName", "value": "X-XSRF-TOKEN"}]}
 ]

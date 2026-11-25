@@ -1,6 +1,6 @@
 # ADR 0002: Identity, sessions and request security
 
-- Status: proposed for milestone 1B. Awaiting review by the frontend agent and the project owner.
+- Status: proposed for milestone 1B. Revised after the independent review of pull request 8. Awaiting the project owner's decisions.
 - Date: 2026-11-24
 - Scope: how sign-in, sessions, the second factor and request protection are built on the architecture approved in ADR 0001. It changes none of ADR 0001.
 
@@ -14,7 +14,9 @@ The rules themselves are in `contract/identity-and-security.md`. This record hol
 | Sessions | Spring Session JDBC on the existing PostgreSQL |
 | Session schema | The tables Spring Session documents for PostgreSQL, created by a Flyway migration. Automatic schema initialization is switched off. |
 | Password hashing | Argon2id through `Argon2PasswordEncoder`, wrapped in `DelegatingPasswordEncoder` so hashes can be upgraded |
-| CSRF | Spring Security's single-page-application support, `csrf.spa()` |
+| CSRF | Spring Security's CSRF protection with the token stored in the server-side session (its default `HttpSessionCsrfTokenRepository`), served to the page by `GET /api/auth/csrf`. Not the cookie-based variant. |
+| Anonymous sessions | Created only by `GET /api/auth/csrf`, to hold the token; short-lived and rate-limited |
+| Super administrator invariant | One guard row locked by every transaction that can change the set of usable super administrators, plus a commit-time constraint trigger as a backstop |
 | Second factor | Spring Security's multi-factor support for the rules, with a small RFC 6238 verifier written on the JDK's `javax.crypto` |
 | Secret encryption | AES-256-GCM from the JDK, key supplied by the environment |
 | Rate limiting | A table in PostgreSQL, updated with `insert … on conflict do update` |
@@ -35,7 +37,7 @@ No dependency version changes. Everything is what Spring Boot 4.1.3, already in 
 
 Checked on 2026-11-24 in the official documentation:
 
-- CSRF for single-page applications, `csrf.spa()`, and the session and cookie token repositories: https://docs.spring.io/spring-security/reference/7.1/servlet/exploits/csrf.html
+- CSRF protection, the session-stored token repository (the default) and the cookie-based alternative: https://docs.spring.io/spring-security/reference/7.1/servlet/exploits/csrf.html
 - Argon2 support and its Bouncy Castle requirement; `DelegatingPasswordEncoder`: https://docs.spring.io/spring-security/reference/7.1/features/authentication/password-storage.html
 - Multi-factor support (`@EnableMultiFactorAuthentication`, factor authorities): https://docs.spring.io/spring-security/reference/7.1/servlet/authentication/mfa.html
 - Spring Session JDBC tables for PostgreSQL: https://docs.spring.io/spring-session/reference/configuration/jdbc.html
@@ -48,16 +50,20 @@ Not verified by running, to be confirmed at the start of milestone 1B before any
 
 - That Spring Security's multi-factor support can hold a custom time-based-code factor the way this design assumes. The documentation I read describes passwords and one-time tokens; I found no built-in time-based-code verifier. If the fit is poor, the fallback is a session attribute for the state, enforced by one authorization rule, with the same contract.
 - That a per-session idle timeout by role and a fixed absolute deadline work as intended with Spring Session JDBC 4.1.2.
+- That the session-stored CSRF token is replaced at each session-identifier change in the way section 9.1 of the contract requires, including for the two second-factor transitions that are custom code.
 - The exact Bouncy Castle version to pin.
 
-The API contract does not depend on any of the three.
+The API contract does not depend on any of these.
 
 ## Alternatives considered
 
 | Alternative | Why not |
 |---|---|
 | JWT in browser storage | Readable by any injected script, hard to revoke. Rejected in the assignment and in ADR 0001. |
-| CSRF token stored in the session | Would create a database session for every anonymous visitor who opens a form. The cookie-based single-page pattern needs no server state before sign-in. |
+| CSRF token in a script-readable cookie (double submit, `csrf.spa()`) | First proposed, then dropped after review. A cookie-held token is not bound to the session: anything able to set a cookie for the site could supply its own pair. The session-bound token costs one short-lived session row per visitor who opens a form, which is bounded by expiry and rate limits. |
+| A commit-time trigger alone for the last super administrator | Two transactions removing different administrators each see the other still present. A shared lock taken first is required. |
+| Serializable isolation with retries for those writes | Correct, but every such write path would need retry logic. One guard row is simpler and these writes are rare. |
+| NFKC password normalization | Makes visibly different characters equal. NFC is what the cited NIST revision asks for stability across devices. |
 | A roles-and-permissions schema | Three fixed roles and one flag do not need it. The API exposes `role` and `permissions`, so it can be introduced later without a contract change. |
 | An external identity provider | Not required, adds an account and a dependency for a site run by one person. |
 | SMS or email codes as second factor | SMS is weak and costs money; the site sends no email yet. |
@@ -71,4 +77,6 @@ The API contract does not depend on any of the three.
 - Every authenticated request costs one extra primary-key read of the account, which is what makes revocation immediate.
 - Password hashing is deliberately slow and memory-hungry; concurrency is capped and sign-in is rate-limited.
 - The key that encrypts authenticator secrets, and the keys for hashing recovery codes and rate-limit counters, are new secrets to manage and back up separately from the database. Losing the encryption key means every staff member must enroll again.
-- Until the site can send email, password recovery and staff activation depend on the owner, and sign-up cannot fully hide whether an address is registered.
+- Until the site can send email, password recovery and staff activation depend on the owner, and public sign-up is proposed to stay closed in production.
+- Every visitor who opens a form that posts gets a short-lived session row. Expiry, cleanup and the rate limit on the token endpoint bound this.
+- All changes to who the super administrators are run one at a time. They are rare, so this costs nothing in practice.

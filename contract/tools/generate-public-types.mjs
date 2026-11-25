@@ -71,8 +71,9 @@ function generate(spec){
    if(success.length!==1)throw Error("Exactly one success response expected: "+id);
    const [status,ok]=success[0],content=ok.content?.["application/json"];
    const response=content?type(content.schema,id+".response"):"null";
-   const needsSession=(op.security??spec.security).some(requirement=>"sessionCookie" in requirement);
-   operations.push("  "+id+": { method: "+quote(method.toUpperCase())+"; request: "+request+"; response: "+response+"; status: "+status+"; needsSession: "+needsSession+"; };");
+   const states=op["x-session-state"];
+   if(!Array.isArray(states)||!states.length)throw Error("Missing x-session-state: "+id);
+   operations.push("  "+id+": { method: "+quote(method.toUpperCase())+"; request: "+request+"; response: "+response+"; status: "+status+"; allowedStates: "+states.map(quote).join(" | ")+"; };");
    paths.push("  "+id+": "+quote(route)+",");
   }
  }
@@ -80,6 +81,7 @@ function generate(spec){
  const identity=["// Generated from contract/openapi.yaml (v"+spec.info.version+"). Do not edit.","// Run: cd contract && npm run generate:types","// Private to the signed-in account. Never use these types in a public page's data.","",
   "import type { "+[...imported].sort().join(", ")+" } from './public-api';","",...body,"",
   "/** Send this header, with the token from getCsrfToken, on every request that is not GET. */","export const csrfHeaderName = "+quote(csrf)+" as const;","",
+  "/** The state of this browser's session. Each operation lists the states in which it may be called. */","export type SessionState = \"anonymous\" | \"mfa_required\" | \"mfa_enrollment_required\" | \"authenticated\";","",
   "export interface IdentityOperations {",...operations,"}","","export const identityPaths = {",...paths,"} as const;",""];
  return {publicApi:result.join("\n"),identityApi:identity.join("\n")};
 }

@@ -3,62 +3,137 @@
 Contract and security design for identity. Nothing here is implemented: no Spring Security configuration, no controller, no migration, no page.
 
 - Baseline: `main` at `a7fbab22f837bdadc495d307b7fafdf1e83554ad` (milestone 0B accepted).
+- First revision: `bd162cdeb3b98d38aa92f8a71162cab48abc0943`. Reviewed in pull request 8: changes required.
+- This revision answers that review, finding by finding (section 2).
 - Contract version: 0.3.0. The seven public read endpoints are unchanged, apart from documenting 405.
 
-## 1. What this pull request contains
+File names below are in `contract/` unless they start with another folder. "I&S" is `identity-and-security.md`; "tests" is `tests/security-acceptance.md`.
 
-| File | Content |
-|---|---|
-| `contract/openapi.yaml` | Eleven identity operations, their schemas, the session security scheme, new error codes, audiences on every schema |
-| `contract/identity-and-security.md` | Permission matrix, accounts, passwords, sessions, second factor, revocation, rate limits, operator procedures, CSRF and request rules, data design, audit events, threat model |
-| `contract/tests/security-acceptance.md` | The security test matrix milestone 1B must pass |
-| `contract/tests/negative-responses.json` | 20 more wrong responses that must be rejected |
-| `contract/tests/negative-requests.json` | 21 wrong requests that must be rejected |
-| `contract/tools/check-openapi.mjs` | Audience boundaries and rules for identity operations |
-| `contract/tools/generate-public-types.mjs` | Also generates `identity-api.ts` |
-| `contract/tools/lib.mjs` | Finds the success example of operations that do not answer 200 |
-| `src/api/generated/public-api.ts`, `identity-api.ts` | Regenerated output. See section 5. |
-| `docs/adr/0002-identity-and-sessions.md` | Technical choices, compatibility evidence, alternatives |
-| `backend/…/ExampleFixtureIT.java` | One line: the contract version it expects. See section 5. |
+## 1. Operations
 
-## 2. Operations
-
-| Method | Path | Needs | Answers |
+| Method | Path | Accepted session states | Answers |
 |---|---|---|---|
-| GET | `/api/auth/csrf` | Nothing | 200 token |
-| POST | `/api/auth/register` | CSRF | 202, always the same |
-| POST | `/api/auth/login` | CSRF | 200 with a status, or 401 |
-| POST | `/api/auth/logout` | CSRF | 204 |
-| GET | `/api/me` | Full session | 200 account, or 401 naming the state |
-| POST | `/api/auth/change-password` | Full session, CSRF | 204 |
-| POST | `/api/auth/set-password` | CSRF, one-time credential | 204 |
-| POST | `/api/auth/mfa/verify` | Session awaiting second factor, CSRF | 200 |
-| POST | `/api/auth/mfa/enroll` | Staff session awaiting enrollment, CSRF | 200 secret, once |
-| POST | `/api/auth/mfa/confirm` | Same, CSRF | 200 recovery codes, once |
-| POST | `/api/auth/mfa/recovery-codes` | Full staff session, CSRF, password and code | 200 recovery codes, once |
+| GET | `/api/auth/csrf` | Any | 200 token; creates an anonymous session if there is none |
+| GET | `/api/auth/options` | Any | 200 `registrationOpen` |
+| POST | `/api/auth/register` | Not fully signed in | 202, always the same; 403 when closed |
+| POST | `/api/auth/login` | Not fully signed in | 200 signed-in or pending form; 401 |
+| POST | `/api/auth/logout` | Any | 204 |
+| GET | `/api/me` | Fully signed in | 200 account; 401 naming the state |
+| POST | `/api/auth/change-password` | Fully signed in | 204 |
+| POST | `/api/auth/set-password` | Not fully signed in | 204 |
+| POST | `/api/auth/mfa/verify` | Awaiting second factor | 200 signed-in form only |
+| POST | `/api/auth/mfa/enroll` | Awaiting enrollment | 200 secret, once |
+| POST | `/api/auth/mfa/confirm` | Awaiting enrollment | 200 recovery codes, once |
+| POST | `/api/auth/mfa/recovery-codes` | Fully signed in, staff | 200 recovery codes, once |
 
-The six operations the assignment proposed are all kept. The other five are the minimum for the two things milestone 1 cannot work without: staff cannot get a password without a shared one (`set-password`), and staff cannot be required to use a second factor without enrolling and verifying it.
+Twelve operations: the eleven of the first revision and `GET /api/auth/options`, added so the frontend can know that sign-up is closed (finding 2).
 
-Not added: email verification, self-service password reset, session listing, profile editing. None is needed for the agreed scope.
+## 2. Findings of the review and their resolution
+
+### Finding 1: the last super administrator
+
+| Point | Resolution | Where |
+|---|---|---|
+| A deferred trigger alone does not serialize competing removals | Every transaction that can change the set of usable super administrators first locks one guard row. The commit-time trigger stays as a backstop for a write that forgot the guard. Serializable isolation with retries was considered and not chosen. | I&S 8.6; `docs/adr/0002-identity-and-sessions.md` |
+| Which writes | Disable, demote, delete, any role change, staff recovery, and the enrollment that performs the bootstrap; additions take it too | I&S 8.6 |
+| Bootstrap exception | Zero is allowed only until a super administrator first becomes usable; that moment is recorded once and never unset | I&S 8.6 |
+| "Usable" | Enabled, activated, with an active second factor | I&S 8.6 |
+| Recovery path | Adding is always allowed: create a new super administrator, make it usable, then recover or disable the old one. No override flag. | I&S 8.6 |
+| Tests | Concurrent removal of two administrators (three variants), concurrent first activation, unenrolled administrator not counted, write without the guard, recovery path | tests 7.3, 7.4, 7.13 to 7.18 |
+
+### Finding 2: sign-up, preclaimed addresses and recovery
+
+| Point | Resolution | Where |
+|---|---|---|
+| Keep public sign-up disabled in production until address proof | Proposed as owner decision 1. A server setting, closed by default; production refuses to start with it open. The contract, development path and tests remain. | I&S 2.2; `openapi.yaml` `POST /auth/register`, `GET /auth/options`, `registration_closed` |
+| Preclaimed addresses | An unverified address proves and grants nothing; staff never come from sign-up; proof of the address detaches a preclaimed account and never merges it | I&S 2.2; tests 1.12 |
+| Donor manual recovery only with established independent proof | A channel the operator already had before the request; facts supplied by the requester prove nothing; with no such channel, recovery is refused and the person makes a new account | I&S 8.4; tests 7.20 |
+| Staff second-factor reset must not let a stolen old password enroll | `reset-mfa` is removed. `recover-staff-access` removes the factor, invalidates the old password, ends sessions, cancels credentials and issues one fresh credential bound to the account. Enrollment is possible only within 60 minutes of redeeming a credential. | I&S 5.3, 8.1, 8.5; tests 6.20 to 6.22 |
+| A password reset alone must not bypass the second factor | Unchanged and restated | I&S 8.5; tests 6.19 |
+
+### Finding 3: CSRF and the session lifecycle
+
+| Point | Resolution | Where |
+|---|---|---|
+| Session-bound CSRF, anonymous bootstrap, cookie and header details, invalidation | The token lives in the server-side session, not in a cookie. `GET /auth/csrf` creates a short anonymous session for a browser that has none. Header `X-CSRF-TOKEN`. One cookie only. Replaced at every identifier change, destroyed at sign-out and expiry. | I&S 4.1, 4.2, 9.1; `openapi.yaml` `getCsrfToken`, `CsrfHeader`, `CsrfToken` |
+| `csrf_invalid` guarantees rejection before any change | Checked before rate limits and before the body is read; an explicit order of checks | I&S 4.3, 9.1; tests 4.9 |
+| Never replay account-sensitive mutations after an identity change in another tab | After `csrf_invalid` the frontend reads `GET /me` and compares identities. Changed: resend nothing. Unchanged: only sign-in, sign-up, sign-out and reads are resent once; password and second-factor operations never are. | I&S 9.1; tests 4.13 to 4.15 |
+| Sign-in, sign-up, set-password when already signed in | 409 `already_signed_in`; nothing changes | I&S 4.3; `openapi.yaml` `AlreadySignedIn`; tests 3.14 |
+| Expiry during a pending second factor | 401 `unauthenticated`; `pendingExpiresAt` in the pending result | I&S 4.4; tests 3.16 |
+| Pending enrollment concurrency | One pending secret per account, the latest wins; simultaneous confirmations: one succeeds, the other 409 | I&S 5.3; tests 6.3 to 6.5 |
+| Refresh after a lost success response | A table for every state-changing call; never resend a secret, read `GET /me` | I&S 4.6; tests 3.17 |
+| Concurrent code and recovery-code consumption; security-version race | Single-use things are consumed by conditional updates. Privileged writes re-read and lock the account row. | I&S 5.2, 5.4, 6.3, 10; tests 5.12, 5.13, 6.7, 6.12, 7.9 |
+
+### Finding 4: OpenAPI
+
+| Point | Resolution | Where |
+|---|---|---|
+| `LoginResult` allowed pending with an account, and authenticated with none | Now `oneOf` two closed forms: `SignedIn` (constant status, account required) and `SecondFactorPending` (no account property, `pendingExpiresAt`) | `openapi.yaml` |
+| Generated TypeScript | `LoginResult = SignedIn \| SecondFactorPending`, a discriminated union | `src/api/generated/identity-api.ts` |
+| `verifyMfa` success authenticated only | Its 200 is `SignedIn` | `openapi.yaml`; checker rule |
+| Method-specific code shapes | `MfaVerifyRequest` is `oneOf` `TotpVerification` (six digits) and `RecoveryCodeVerification` (recovery pattern) | `openapi.yaml` |
+| Negative cases | 7 responses and 8 requests added; 41 contract mutations | `tests/negative-responses.json`, `negative-requests.json`, `negative-contracts.json` |
+| Deterministic 401 and 403, pending and full state rules | `x-session-state` on every identity operation; one table of answers per state; an order of checks | `openapi.yaml`; I&S 4.3; tests 3.18 |
+| Generator exposes the state requirement | `allowedStates` replaces `needsSession`; `SessionState` type exported | `tools/generate-public-types.mjs` |
+| Bodyless POST against the JSON-only rule | The rule applies where a body is defined. Bodyless operations send none; a non-empty body is 400. | `openapi.yaml` conventions; I&S 9.3; tests 9.7 |
+| Email trimming against the pattern | The server does not trim; surrounding white space is `invalid_format`; the frontend trims | `openapi.yaml` `EmailAddress`; I&S 2.1; tests 1.4 |
+| Malformed credential error | The credential schema has no pattern, so any text reaches the server and gets the same `credential_invalid` | `openapi.yaml` `OneTimeCredential`, `SetPasswordRejected`; tests 7.6, 7.7 |
+| Status after the fifth second-factor failure | 401 `unauthenticated`; the pending session is ended | `openapi.yaml` `verifyMfa`; I&S 5.2; tests 6.10 |
+| Stale pending enrollment | 401 `mfa_code_invalid`; start enrollment again | `openapi.yaml` `confirmMfaEnrollment`; I&S 5.3; tests 6.3 |
+
+### Finding 5: test matrix, rate limits, headers
+
+| Point | Resolution | Where |
+|---|---|---|
+| 1.4: twenty sign-ups against five per address | The twenty come from twenty client addresses | tests 1.5 |
+| 5.9: revocation should give 401 first | Rewritten: the next request is 401 | tests 5.9 |
+| 5.3: operational permissions only | `Permission` now lists only the two operational ones; every role gets exactly those in M1; planned names stay in the document, outside the schema | `openapi.yaml` `Permission`; I&S 1.2; tests 5.3, 5.4 |
+| 9.9: approved storage | Language and theme may be stored; nothing private | I&S 11; tests 10.3 |
+| Atomic rate limits | One statement counts the attempt and returns the count, before the secret is checked | I&S 7.3; tests 8.5 |
+| Bounded cooldown | `Retry-After` at most 15 minutes, 60 for sign-up; no escalation, no lockout | I&S 7.2, 7.3; tests 8.3, 8.6 |
+| Hash saturation | Four at once, 2-second wait, then 503 with `Retry-After: 5`; limits applied before hashing | I&S 3, 7.3; tests 8.11, 8.12 |
+| Limits across all password and second-factor checks | A table naming every operation that checks a secret and the counters it draws on | I&S 7.1; tests 8.9 |
+| Headers on authentication errors | Every identity answer at every status is `no-store`; every 405 has `Allow`; every 429 and identity 503 has `Retry-After` | I&S 9.4; tests 9.1, 9.3 |
+| **Shared responses lacked `no-store` although the checker passed** | Confirmed, and it was a real gap: the checker only looked at 2xx, 401 and 403. Identity operations now use their own error responses, each declaring `no-store`; the checker examines every status; 13 regression mutations cover it. | `openapi.yaml` `Identity…` responses; `tools/check-openapi.mjs`; `tests/negative-contracts.json` |
+| Preserve public successes; document the deliberate 404 to 405 | Stated in the contract and the document; public operations keep the shared responses and the checker forbids them a `no-store` one | `openapi.yaml` conventions; I&S 9.5; tests 11.1, 13.1 |
+
+### Finding 6: passwords and recovery codes
+
+| Point | Resolution | Where |
+|---|---|---|
+| NFC, not NFKC | Changed, with the reason | I&S 3; tests 2.4, 2.5 |
+| Lengths before and after normalization | At most 128 as sent; 15 to 128 after NFC | I&S 3; `openapi.yaml` `NewPassword`; tests 2.6, 2.7 |
+| Context-specific blocklist behavior | An exact rule: site names, email first part, display name, refused when fewer than 8 other characters remain | I&S 3; tests 2.10, 2.11 |
+| Recovery codes are substitutes, not phishing-resistant | Stated for both recovery and authenticator codes | I&S 5.2, 5.4; threat model |
+
+### Finding 7: browser, and the real-database guard
+
+| Point | Resolution | Where |
+|---|---|---|
+| No secret in URL, storage or logging; local QR only | Rules and tests | I&S 11; tests 10.1 to 10.4, 6.23 |
+| Clear private state on sign-out, expiry, identity switch in another tab, back-forward cache | Rules and tests | I&S 11; tests 10.5 to 10.8 |
+| Page-level content policy with real production assets | Required and tested against the production build; the policy text is the frontend agent's | I&S 11; tests 10.9 |
+| English and French, both themes, mobile, accessible errors, keyboard, autofill | Tests | tests 10.12 to 10.16 |
+| No real-to-mock fallback | Rule and tests | I&S 11; tests 10.10, 10.11 |
+| The real-database guard must be explicit | Fictional data can only enter a database explicitly marked disposable when it was created. An unmarked database is refused, empty or not. A real database can never be marked disposable. | I&S 10.2; tests 13.3 to 13.6 |
 
 ## 3. Contract tooling
 
 | Requirement | How |
 |---|---|
-| Public privacy protections preserved | The original rules still apply to every `public` and `shared` schema, and now also forbid `role`, `permission`, `mfa` and `credential` there |
-| Public and private schemas distinguished | Every schema declares `x-audience`; a missing one fails |
-| Private properties cannot enter public responses | The checker follows references from every public read response and fails if it reaches an `account`, `request` or `credential` schema |
-| What the client sends is never echoed | No response may reach a `request` schema, so a password type cannot appear in an answer |
-| Secrets returned only on purpose | A `credential` schema may be returned only by the four operations named in the checker |
-| Even the account's own view is limited | `account` schemas may not contain properties named like hashes, secrets, tokens, counters or lock state |
-| Objects stay closed | Unchanged, for all audiences |
-| Identity responses never cached | Each must declare `Cache-Control: no-store` |
-| CSRF on every non-GET | Each must declare the header and a 403 |
-| Sign-up cannot elevate | The checker fails if the sign-up schema gains `role`, `permissions`, `canDisburse`, `emailVerified`, `id` or `mfa` |
-| TypeScript generation extended | Request bodies, `POST`, non-200 success; identity types in their own file |
-| Existing public exports preserved | `PublicReadOperations` and `publicReadPaths` are byte-for-byte the same |
-| Drift checks | `npm run check:types` now covers both generated files |
-| Earlier tests kept | Fixtures, dataset, frontend parity: unchanged and passing |
+| Public privacy protections preserved | The original rules apply to every `public` and `shared` schema, and also forbid `role`, `permission`, `mfa` and `credential` there |
+| Public and private schemas distinguished | Every schema declares `x-audience` |
+| Private properties cannot enter public responses | The checker follows references from every public read response |
+| What the client sends is never echoed | No response may reach a `request` schema |
+| Secrets returned only on purpose | `credential` schemas only from four named operations |
+| Identity answers never cached, at any status | Checked for every response of every identity operation |
+| Public answers never borrow an identity response | Checked |
+| `Allow` and `Retry-After` | Checked |
+| Session states | `x-session-state` checked against the security requirement and the documented 401 and 409 |
+| Discriminated sign-in result | Checked |
+| The rules themselves are tested | `tests/negative-contracts.json`: 41 damaged contracts, each must be rejected for the stated reason |
+| TypeScript generation | Request bodies, `POST`, non-200 success, unions, `allowedStates` |
+| Existing public exports preserved | `PublicReadOperations` and `publicReadPaths` unchanged |
 
 ## 4. Validation results
 
@@ -67,71 +142,65 @@ Not added: email verification, self-service password reset, session listing, pro
 | Check | Result |
 |---|---|
 | Redocly lint | Pass, no errors or warnings |
-| References, examples | 302 references, 37 examples including request bodies |
-| Closed object schemas | 35 |
-| Operations | 7 public, 11 identity |
-| Wrong responses and requests rejected | 62 of 62 |
+| References, examples | 340 references, 45 examples including request bodies |
+| Closed object schemas | 38 |
+| Operations | 7 public, 12 identity |
+| Wrong responses and requests rejected | 76 of 76 |
+| Wrong contracts rejected | 41 of 41 |
 | Example fixture | Pass, unchanged |
 | Full dataset | Pass, 1,806 responses |
 | Frontend mock parity | Pass, 1,838 responses |
-| Generated types match | Pass |
+| Generated types match | Pass, both files |
 | Frontend build (`npm run build`) | Pass |
+| Backend unit tests | Pass, 38 |
 
-The checker was also run against damaged copies (a private property on a public schema, a public schema referring to the account, a role field on sign-up, a missing CSRF header, a request schema returned in a response); each failed as intended.
+## 5. Changes to shared files, for the frontend agent
 
-## 5. Changes beyond the assignment, and to shared files
-
-For the frontend agent to accept or counter.
-
-1. **`src/api/generated/public-api.ts` regenerated.** Three lines differ: the version comment, `ErrorCode` (new codes) and the field error codes. Nothing else.
-2. **`src/api/generated/identity-api.ts` is new.** Generated; it lives beside the public file because the drift check needs a committed copy. No frontend code imports it yet.
-3. **One backend test line** now expects contract version 0.3.0. Without it the backend workflow would fail on this branch. No backend behavior changed.
-4. **405 documented on the seven public endpoints.** Additive: their success responses are untouched.
-5. **Five field error codes added:** `too_short`, `invalid_format`, `unknown_field`, `compromised`, `same_as_current`.
-6. **`Account.permissions`.** Not asked for; added so the frontend never derives permissions from the role itself.
-7. **`Account.session`** with both deadlines, so the frontend can warn before a session ends.
-8. **An origin check** on non-GET requests, in addition to the CSRF token.
-9. **A cap on simultaneous password hashes**, to keep sign-in from exhausting memory.
+1. `src/api/generated/public-api.ts`: compared with `main`, three lines differ (version comment, `ErrorCode`, field error codes). Compared with the first revision, one line: two more error codes (`already_signed_in`, `registration_closed`).
+2. `src/api/generated/identity-api.ts`: regenerated. `needsSession` is replaced by `allowedStates`; `LoginResult` and `MfaVerifyRequest` are unions; `Permission` has two members; `AuthOptions` and `getAuthOptions` are new; the CSRF header name is `X-CSRF-TOKEN`.
+3. One backend test line expects contract version 0.3.0 (unchanged from the first revision).
 
 ## 6. Owner decisions needed
 
-These are new. No milestone 0 decision is re-opened.
+All are proposals. None is treated as approved anywhere in this pull request.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 1 | Sign-up cannot fully hide whether an address is registered until the site sends email (see `identity-and-security.md` 2.2). Accept this for now, or keep sign-up closed until email exists? | Accept, with the rate limits. Accounts are optional for giving, so little depends on them yet. |
-| 2 | Session lifetimes: donors 2 hours idle and 24 hours at most; staff 30 minutes idle and 12 hours at most. | Accept as proposed. |
+| 1 | Keep public sign-up closed in production until the site can verify an email address? While closed, only staff have accounts; donors give and report without one, as today. | Yes, keep it closed. This follows the independent review and replaces my earlier recommendation to open it. |
+| 2 | Session lifetimes: donors 2 hours idle and 24 hours at most; staff 30 minutes idle and 12 hours at most. | Accept. |
 | 3 | Mandatory second factor for administrators and super administrators, by authenticator application with ten recovery codes. | Accept. |
-| 4 | Staff accounts, password resets and second-factor resets are done by you with a command on the server until milestone 5. | Accept. It means only someone with server access can create staff. |
-| 5 | Password recovery is manual: you verify the person, then issue a 30-minute single-use credential. | Accept until email exists. |
-| 6 | Password rules: at least 15 characters, no composition rules, a local blocked-password list. | Accept. Which blocked list to ship is a milestone 1B detail. |
+| 4 | Staff accounts and recoveries are done by you with a command on the server until milestone 5. | Accept. |
+| 5 | Recovery only after you confirm the person through a way of reaching them you already had. Otherwise refuse; a donor makes a new account. | Accept. |
+| 6 | Password rules: at least 15 characters, no composition rules, a local blocked list. | Accept. |
 | 7 | Email addresses are ASCII only for now. | Accept; revisit if a real person is refused. |
+| 8 | Keep at least two usable super administrators, or store recovery codes offline. With one, losing its second factor needs server access to repair. | Advice, not a system rule. |
 
 ## 7. Limits and risks
 
-- The second-factor design assumes a fit with Spring Security's multi-factor support that I have read about but not run. `docs/adr/0002-identity-and-sessions.md` lists this and two other points to confirm first in milestone 1B. The API contract does not depend on them.
-- The threat model was written by the same author as the design. It needs the frontend agent's independent review, especially the script-injection row, whose defence is mostly in the frontend.
-- Rate-limit numbers are starting values, not measured ones.
-- The operator's identity check during recovery is a human procedure. The system can record it, not enforce it.
-- Three new secrets will need safe storage and backup in production: the authenticator encryption key and two hashing keys.
+- Three points of fit with Spring Security and Spring Session are read from documentation, not run; a fourth was added for the session-stored CSRF token. They are listed in `docs/adr/0002-identity-and-sessions.md` and are the first task of milestone 1B. The API contract does not depend on them.
+- Authenticator and recovery codes are not phishing-resistant.
+- The operator's identity check is a human procedure. The system records it and cannot enforce it.
+- Rate-limit and hashing numbers are starting values, not measured ones.
+- Session-bound CSRF creates a short-lived session row for each visitor who opens a posting form. Bounded by expiry and rate limits, not eliminated.
+- Three new production secrets need safe storage and separate backup.
+- The disposable-database marker changes how the existing fixture loader decides (today it accepts an empty database). That is milestone 1B work and will touch milestone 0B code and tests.
 
 ## 8. Acceptance checklist
 
 Frontend agent:
 
-- [ ] The sign-up, sign-in, second-factor and account screens can be built from these operations.
-- [ ] The CSRF rules (when to fetch, when to refetch, the single retry) are implementable.
-- [ ] The nine items in section 5 are accepted or countered.
-- [ ] `identity-api.ts` has the shape the frontend wants, or a change is requested.
-- [ ] The browser-marked tests in `tests/security-acceptance.md` are feasible.
+- [ ] Each of the seven findings is resolved, or countered.
+- [ ] The CSRF rule after `csrf_invalid` (I&S 9.1) is implementable as written.
+- [ ] `identity-api.ts` has the shape the frontend wants.
+- [ ] The browser tests (section 10 of the test matrix) are feasible.
 
 Backend agent:
 
 - [x] Every rule can be enforced on the approved stack with no dependency upgrade.
-- [x] Every identity response and request is covered by a closed schema and by negative cases.
-- [ ] The three points in ADR 0002 are confirmed at the start of milestone 1B.
+- [x] Every identity response and request is covered by a closed schema and negative cases, and the checker's rules by contract mutations.
+- [ ] The four points in ADR 0002 are confirmed at the start of milestone 1B.
 
 Project owner:
 
-- [ ] The seven decisions in section 6.
+- [ ] The decisions in section 6.
 - [ ] Authorization to merge this contract and to start milestone 1B.

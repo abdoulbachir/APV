@@ -49,19 +49,33 @@ info:
     - **Sessions.** Authentication is a server-side session named by a cookie the browser
       sends by itself. There is no token for the frontend to store. The cookie is `HttpOnly`,
       so scripts cannot read it.
-    - **CSRF.** Every request that is not `GET` needs the header `X-XSRF-TOKEN`, whose value
-      comes from `GET /auth/csrf`. This includes sign-up and sign-in. Fetch a new token after
-      any response that changes the session: sign-in, second-factor verification, sign-out,
-      and after any 403 `csrf_invalid`.
-    - **Request bodies.** JSON only, `Content-Type: application/json`, at most 16 KiB. A body
-      with a property that is not in the schema is refused with field code `unknown_field`;
-      it is never silently ignored.
+    - **CSRF.** Every request that is not `GET` needs the header `X-CSRF-TOKEN`, whose value
+      comes from `GET /auth/csrf`. This includes sign-up and sign-in. The token is tied to
+      the server-side session and dies with it. A 403 `csrf_invalid` is decided before the
+      operation runs, so nothing was changed. Fetch a new token after any response that
+      changes the session.
+    - **Request bodies.** Where an operation defines a body: JSON only,
+      `Content-Type: application/json`, at most 16 KiB, and a property that is not in the
+      schema is refused with field code `unknown_field`, never silently ignored. Where an
+      operation defines no body (`POST /auth/logout`, `POST /auth/mfa/enroll`): send none,
+      with no `Content-Type` needed; a non-empty body is refused with 400.
+    - **Session states.** Each identity operation lists the states it accepts in
+      `x-session-state`: `anonymous`, `mfa_required`, `mfa_enrollment_required`,
+      `authenticated`. Called in another state it answers, always the same way: 401 with
+      the state's code when more sign-in is owed, 409 `already_signed_in` when the session is
+      fully signed in and the operation is for one that is not, 403 `forbidden` when a pending
+      session calls the other pending state's operation.
+    - **Identity headers.** Every answer of an identity operation, errors included, is
+      `Cache-Control: no-store`. Every 405 has `Allow`. Every 429 and every identity 503 has
+      `Retry-After`.
     - **Caching.** Public read responses are `Cache-Control: no-cache` with an `ETag` and never
       depend on who is asking. Every identity response is `Cache-Control: no-store` and has no
       `ETag`.
     - **401 and 403.** A request that needs a session and has none gets 401, never a redirect
       and never HTML. A signed-in request that is not permitted gets 403. A known path with
-      an unsupported method gets 405 with an `Allow` header. An unknown path gets 404.
+      an unsupported method gets 405 with an `Allow` header; this deliberately replaces the
+      404 that milestone 0B answered in that case. An unknown path still gets 404. Successful
+      public read responses are unchanged.
     - **Audiences.** Every schema declares `x-audience`. `public` and `shared` schemas may
       appear in public read responses. `account` schemas hold the signed-in person's own data.
       `request` schemas are sent by the client and never returned. `credential` schemas carry
@@ -519,14 +533,21 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCsrfToken
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
       summary: Obtain the CSRF token to send with every request that is not GET.
       description: |
-        Returns the token and sets the matching cookie. Send the token in the header named by
-        `headerName` on every `POST`. Works with or without a session.
+        Returns the token for this browser's session. Send it in the header named by
+        `headerName` on every `POST`.
 
-        The token stops being valid whenever the session changes. Call this again after
-        sign-in, after second-factor verification, after sign-out, and after any 403
-        `csrf_invalid`; then repeat the refused request once.
+        The token belongs to the server-side session. A browser with no session gets an
+        anonymous one here (the session cookie is set), which holds nothing but the token and
+        expires after 30 idle minutes. There is no separate CSRF cookie.
+
+        The token stops being valid whenever the session identifier changes or the session
+        ends: sign-in, second-factor verification, completed enrollment, password change,
+        sign-out, expiry. Call this again after each of those. After a 403 `csrf_invalid`,
+        follow the rule in `contract/identity-and-security.md` section 9.1: read `GET /me`
+        first, and never resend an account-sensitive request automatically.
       x-returns-credential: true
       responses:
         '200':
@@ -537,25 +558,57 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/CsrfToken' }
               example:
-                headerName: X-XSRF-TOKEN
+                headerName: X-CSRF-TOKEN
                 token: 5pZbJ3mQ0cR8sT1uV4wX7yZ9aB2dE6fG
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /auth/options:
+    get:
+      tags: [Authentication]
+      operationId: getAuthOptions
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
+      summary: What the sign-in screens should offer.
+      description: |
+        Says whether public sign-up is open on this server. It is closed in production until
+        the site can prove who owns an email address. The frontend hides the sign-up form when
+        it is closed; the server refuses sign-up either way.
+      responses:
+        '200':
+          description: The options. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthOptions' }
+              example:
+                registrationOpen: false
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/register:
     post:
       tags: [Authentication]
       operationId: register
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required]
       summary: Create an ordinary donor account.
       description: |
         Always creates a donor. The request has no role or permission property, and sending
         one is refused as an unknown field.
 
-        The answer is the same whether or not the address was already registered, and takes
-        the same time: 202 with no account data. No session is created. The person then
-        signs in. If an account already existed, it is untouched and its password is not
-        changed.
+        When sign-up is closed (`GET /auth/options` says so, and it is closed in production
+        until the site can prove who owns an address) the answer is 403 `registration_closed`
+        and nothing is created.
+
+        When it is open, the answer is the same whether or not the address was already
+        registered, and takes the same time: 202 with no account data. No session is created.
+        The person then signs in. If an account already existed, it is untouched and its
+        password is not changed.
+
+        The address must be sent without surrounding white space; the server does not trim.
+        A fully signed-in session gets 409 `already_signed_in`.
 
         The email address is not verified in this milestone, because the site does not send
         email yet. `emailVerified` stays false.
@@ -581,18 +634,20 @@ paths:
               schema: { $ref: '#/components/schemas/RegistrationAccepted' }
               example:
                 status: accepted
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/login:
     post:
       tags: [Authentication]
       operationId: login
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required]
       summary: Sign in with email and password.
       description: |
         A wrong password, an unknown address and a disabled account all give the same 401
@@ -607,6 +662,13 @@ paths:
         - `mfa_enrollment_required`: a staff account that has not set up its second factor.
           It must do so with `POST /auth/mfa/enroll` and `POST /auth/mfa/confirm`. The session
           has no permission until then.
+
+        A session that is already fully signed in gets 409 `already_signed_in` and is left
+        untouched: the frontend reads `GET /me` and offers to sign out. A session that was
+        waiting for a second factor is discarded and replaced by this sign-in.
+
+        If the answer is lost on the way, do not send the password again blindly: read
+        `GET /me`, whose answer says which state the browser is in.
 
         Fetch a new CSRF token after this call.
       parameters:
@@ -640,19 +702,21 @@ paths:
                   locale: en
                   createdAt: '2026-11-24T12:00:00Z'
                   session: { idleExpiresAt: '2026-11-24T14:00:00Z', absoluteExpiresAt: '2026-11-25T12:00:00Z' }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '401': { $ref: '#/components/responses/InvalidCredentials' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/logout:
     post:
       tags: [Authentication]
       operationId: logout
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
       summary: End the current session.
       description: |
         Deletes the session on the server and clears the cookie. Succeeds also when there was
@@ -665,14 +729,15 @@ paths:
           headers:
             Cache-Control: { $ref: '#/components/headers/NoStore' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/change-password:
     post:
       tags: [Authentication]
       operationId: changePassword
+      x-session-state: [authenticated]
       summary: Change the signed-in person's own password.
       description: |
         Needs the current password. On success every other session of the account is ended,
@@ -695,19 +760,20 @@ paths:
           description: The password was changed.
           headers:
             Cache-Control: { $ref: '#/components/headers/NoStore' }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/set-password:
     post:
       tags: [Authentication]
       operationId: setPasswordWithCredential
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required]
       summary: Set a password with a one-time credential (staff activation or password reset).
       description: |
         The credential is issued by the operator, expires quickly and works once. It only lets
@@ -715,7 +781,10 @@ paths:
         second factor. After success every session of the account is ended and the person
         signs in normally.
 
-        A wrong, expired or already used credential gives the same 400 `credential_invalid`.
+        A wrong, malformed, expired or already used credential gives the same 400
+        `credential_invalid`: any text is accepted by the schema so that its shape reveals
+        nothing. A fully signed-in session gets 409 `already_signed_in` and must sign out
+        first.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -731,24 +800,30 @@ paths:
           description: The password was set. Sign in next.
           headers:
             Cache-Control: { $ref: '#/components/headers/NoStore' }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/SetPasswordRejected' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/mfa/verify:
     post:
       tags: [Authentication]
       operationId: verifyMfa
+      x-session-state: [mfa_required]
       summary: Complete sign-in with the second factor.
       description: |
         Only for a session whose sign-in answered `mfa_required`. Accepts a six-digit code from
-        the authenticator application, or one recovery code. A code works once. After five
-        wrong codes the pending sign-in is cancelled and the person starts again with the
-        password.
+        the authenticator application, or one recovery code. A code works once, also when two
+        requests send it at the same instant.
+
+        The first four wrong codes answer 401 `mfa_code_invalid`. The fifth ends the pending
+        session and answers 401 `unauthenticated`, as does every later call: the person starts
+        again with the password. A pending session that has expired (10 minutes) answers 401
+        `unauthenticated` too.
 
         On success the session identifier is replaced again and the session becomes
         `authenticated`. Fetch a new CSRF token afterwards.
@@ -771,7 +846,7 @@ paths:
             Cache-Control: { $ref: '#/components/headers/NoStore' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LoginResult' }
+              schema: { $ref: '#/components/schemas/SignedIn' }
               example:
                 status: authenticated
                 account:
@@ -785,24 +860,28 @@ paths:
                   locale: fr
                   createdAt: '2026-11-24T12:00:00Z'
                   session: { idleExpiresAt: '2026-11-24T12:30:00Z', absoluteExpiresAt: '2026-11-25T00:00:00Z' }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '401': { $ref: '#/components/responses/MfaCodeInvalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/mfa/enroll:
     post:
       tags: [Authentication]
       operationId: beginMfaEnrollment
+      x-session-state: [mfa_enrollment_required]
       summary: Start setting up the authenticator application.
       description: |
         Only for a session whose sign-in answered `mfa_enrollment_required`. Returns the secret
-        to add to an authenticator application, once. Calling it again replaces the pending
-        secret. Nothing is active until `POST /auth/mfa/confirm` succeeds.
+        to add to an authenticator application, once. An account has at most one pending
+        secret: calling this again, from this tab or another, replaces it, and a code from the
+        replaced secret is then refused. Nothing is active until `POST /auth/mfa/confirm`
+        succeeds. If the answer is lost on the way, call it again.
       x-returns-credential: true
       security:
         - sessionCookie: []
@@ -822,20 +901,28 @@ paths:
                 expiresAt: '2026-11-24T12:10:00Z'
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/mfa/confirm:
     post:
       tags: [Authentication]
       operationId: confirmMfaEnrollment
+      x-session-state: [mfa_enrollment_required]
       summary: Finish setting up the authenticator application.
       description: |
         Proves the authenticator application works by sending one code from it. On success the
         second factor is active, the session becomes `authenticated` with a new identifier,
         and ten recovery codes are returned, once. Read `GET /me` next, and fetch a new CSRF
         token.
+
+        A wrong code, or a code for a pending secret that expired or was replaced, answers 401
+        `mfa_code_invalid`; start again with `POST /auth/mfa/enroll`. When two requests
+        confirm at the same instant, one succeeds and the other gets 409 `already_signed_in`.
+        If the answer is lost on the way, the codes are gone: sign in and replace them with
+        `POST /auth/mfa/recovery-codes`.
       x-returns-credential: true
       security:
         - sessionCookie: []
@@ -869,19 +956,21 @@ paths:
                   - JKLM-NPQR-STUV-WXYZ
                   - 2345-67AB-CDEF-GHJK
                 generatedAt: '2026-11-24T12:05:00Z'
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '401': { $ref: '#/components/responses/MfaCodeInvalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '409': { $ref: '#/components/responses/AlreadySignedIn' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /auth/mfa/recovery-codes:
     post:
       tags: [Authentication]
       operationId: regenerateRecoveryCodes
+      x-session-state: [authenticated]
       summary: Replace all recovery codes.
       description: |
         For a fully signed-in staff account. Needs the current password and a fresh code from
@@ -921,19 +1010,20 @@ paths:
                   - JKLM-NPQR-STUV-WXYZ
                   - 2345-67AB-CDEF-GHJK
                 generatedAt: '2026-11-24T12:05:00Z'
-        '400': { $ref: '#/components/responses/ValidationError' }
+        '400': { $ref: '#/components/responses/IdentityValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
   /me:
     get:
       tags: [Account]
       operationId: getMyAccount
+      x-session-state: [authenticated]
       summary: The signed-in person's own account.
       description: |
         The frontend calls this when it loads, to learn whether someone is signed in. The 401
@@ -943,8 +1033,9 @@ paths:
         - `mfa_required`: the password was accepted and the second factor is still owed.
         - `mfa_enrollment_required`: a staff account must set up its second factor first.
 
-        `permissions` is what the server will allow this account to do. Use it to decide what
-        to show. It is not a security boundary: the server checks every request itself.
+        `permissions` lists what this account can do with the endpoints that exist today. Use
+        it to decide what to show. It is not a security boundary: the server checks every
+        request itself.
       security:
         - sessionCookie: []
       responses:
@@ -967,10 +1058,10 @@ paths:
                 createdAt: '2026-11-24T12:00:00Z'
                 session: { idleExpiresAt: '2026-11-24T14:00:00Z', absoluteExpiresAt: '2026-11-25T12:00:00Z' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '405': { $ref: '#/components/responses/MethodNotAllowed' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/InternalError' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/IdentityRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
 components:
   securitySchemes:
     sessionCookie:
@@ -978,13 +1069,14 @@ components:
       in: cookie
       name: __Host-apv_session
       description: |
-        The server-side session. Set by `POST /auth/login`. `HttpOnly`, `Secure`,
+        The server-side session. Set by `POST /auth/login`, or earlier by `GET /auth/csrf` as an
+        anonymous session that only holds the CSRF token. `HttpOnly`, `Secure`,
         `SameSite=Lax`, `Path=/`, no `Domain`. On a developer's machine over plain HTTP the
         cookie is named `apv_session` and is not `Secure`; that form is refused outside the
         development profile.
   parameters:
     CsrfHeader:
-      name: X-XSRF-TOKEN
+      name: X-CSRF-TOKEN
       in: header
       required: true
       description: The token from `GET /auth/csrf`. Required on every request that is not `GET`.
@@ -1048,8 +1140,9 @@ components:
   responses:
     Unauthenticated:
       description: |
-        No fully signed-in session. The code is `unauthenticated`, `mfa_required` or
-        `mfa_enrollment_required`. On `POST /auth/change-password` and
+        No session in the state this operation needs. The code is `unauthenticated` when
+        there is no sign-in at all, or `mfa_required` / `mfa_enrollment_required` when a
+        second factor is still owed. On `POST /auth/change-password` and
         `POST /auth/mfa/recovery-codes` it can also be `invalid_credentials` or
         `mfa_code_invalid`, when the password or code sent to confirm the action is wrong.
       headers:
@@ -1070,8 +1163,9 @@ components:
             error: { code: invalid_credentials, message: Invalid credentials, requestId: 5f0c1c9e2b7a4d1f }
     MfaCodeInvalid:
       description: |
-        The code is wrong, expired or already used: `mfa_code_invalid`. Also `unauthenticated`
-        when the session is not waiting for a second factor.
+        `mfa_code_invalid`: the code is wrong, expired, already used, or belongs to a replaced
+        pending secret. `unauthenticated`: there is no pending session, it expired, or this
+        was the fifth wrong code and the pending session has been ended.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
@@ -1081,8 +1175,9 @@ components:
             error: { code: mfa_code_invalid, message: Invalid code, requestId: 5f0c1c9e2b7a4d1f }
     Forbidden:
       description: |
-        `csrf_invalid` when the CSRF header is missing or does not match: fetch a new token and
-        repeat once. `forbidden` when the signed-in account is not allowed to do this.
+        `csrf_invalid` when the CSRF header is missing or does not belong to this session;
+        decided before the operation runs, so nothing was changed. `forbidden` when the
+        session is not allowed to do this. `registration_closed` on sign-up when it is closed.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
@@ -1090,6 +1185,81 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
           example:
             error: { code: csrf_invalid, message: Missing or invalid CSRF token, requestId: 5f0c1c9e2b7a4d1f }
+    AlreadySignedIn:
+      description: |
+        The session is fully signed in, and this operation is only for one that is not.
+        Nothing was changed. Read `GET /me`, and sign out first if another account is meant.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: already_signed_in, message: Already signed in, requestId: 5f0c1c9e2b7a4d1f }
+    SetPasswordRejected:
+      description: |
+        `credential_invalid`: the one-time credential is wrong, malformed, expired or already
+        used; all four look the same. `validation_error`: the body or the new password breaks
+        the rules.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: credential_invalid, message: Invalid or expired credential, requestId: 5f0c1c9e2b7a4d1f }
+    IdentityValidationError:
+      description: The request body is invalid. Never cached.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: validation_error
+              message: password is too short
+              fields: [{ name: password, code: too_short }]
+              requestId: 5f0c1c9e2b7a4d1f
+    IdentityRateLimited:
+      description: Too many attempts. Wait `Retry-After` seconds; never more than 15 minutes, 60 for sign-up.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: rate_limited, message: Too many requests, requestId: 5f0c1c9e2b7a4d1f }
+    IdentityInternalError:
+      description: Unexpected server error. Says nothing else.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: internal_error, message: Unexpected error, requestId: 5f0c1c9e2b7a4d1f }
+    IdentityUnavailable:
+      description: Temporarily unavailable, including when too many passwords are being checked at once.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: unavailable, message: Service unavailable, requestId: 5f0c1c9e2b7a4d1f }
+    IdentityMethodNotAllowed:
+      description: The path exists and does not support this method.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        Allow: { $ref: '#/components/headers/Allow' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: method_not_allowed, message: Method not allowed, requestId: 5f0c1c9e2b7a4d1f }
     MethodNotAllowed:
       description: The path exists and does not support this method.
       headers:
@@ -1101,6 +1271,8 @@ components:
             error: { code: method_not_allowed, message: Method not allowed, requestId: 5f0c1c9e2b7a4d1f }
     UnsupportedMediaType:
       description: The request body is not `application/json`.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1108,6 +1280,8 @@ components:
             error: { code: unsupported_media_type, message: Content-Type must be application/json, requestId: 5f0c1c9e2b7a4d1f }
     PayloadTooLarge:
       description: The request body is larger than 16 KiB.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1279,6 +1453,8 @@ components:
         - method_not_allowed
         - unsupported_media_type
         - payload_too_large
+        - already_signed_in
+        - registration_closed
     Error:
       x-audience: shared
       type: object
@@ -1821,9 +1997,10 @@ components:
     EmailAddress:
       x-audience: account
       description: |
-        An email address, at most 254 characters, ASCII only in this version. The server
-        trims it and lower-cases it; two addresses that are equal after that are the same
-        account. Nothing else is folded: dots and "+tags" are kept as written.
+        An email address, at most 254 characters, ASCII only in this version. It must be sent
+        without surrounding white space: the server does not trim, and refuses it with
+        `invalid_format`. The server lower-cases it; two addresses that are equal after that
+        are the same account. Nothing else is folded: dots and "+tags" are kept as written.
       type: string
       minLength: 6
       maxLength: 254
@@ -1844,30 +2021,22 @@ components:
     Permission:
       x-audience: account
       description: |
-        What the server will allow. Only the two `account.` permissions are operational in
-        milestone 1; the others are listed so their names are fixed before the features exist.
-        See the permission matrix in `contract/identity-and-security.md`.
+        A permission that works with the endpoints of this contract version. Only these two
+        exist in milestone 1. Staff permissions are added to this list in the milestone that
+        adds their endpoints; their planned names are in `contract/identity-and-security.md`
+        and are never returned before then.
       type: string
       enum:
         - account.read_own
         - account.change_password
-        - donations.read_own
-        - cases.manage
-        - case_updates.post
-        - donation_reports.read
-        - disbursements.record
-        - donations.confirm
-        - funds.transfer
-        - payment_methods.manage
-        - staff.manage
-        - contact_messages.read
-        - audit.read
     NewPassword:
       x-audience: request
       description: |
-        A password being chosen. 15 to 128 Unicode code points. Any characters, including
-        spaces. Never trimmed and never cut: a longer value is refused. Refused with field
-        code `compromised` when it is on the list of known breached or obvious passwords.
+        A password being chosen. Any characters, including spaces. Never trimmed and never
+        cut. Length is counted in Unicode code points, twice: as sent it is at most 128, and
+        after NFC normalization it is 15 to 128. Outside that it is refused (`too_short`,
+        `too_long`). Refused with field code `compromised` when it is on the list of known
+        breached passwords or is built from the site name, the address or the display name.
       type: string
       minLength: 15
       maxLength: 128
@@ -1884,9 +2053,18 @@ components:
       pattern: '^[0-9]{6}$'
     OneTimeCredential:
       x-audience: request
-      description: A single-use credential issued by the operator for activation or password reset.
+      description: |
+        A single-use credential issued by the operator for activation, password reset or
+        staff recovery. Deliberately has no pattern: any text is accepted here and a wrong one
+        is answered with `credential_invalid`, so its shape reveals nothing.
       type: string
-      pattern: '^[A-Za-z0-9_-]{43}$'
+      minLength: 1
+      maxLength: 128
+    RecoveryCode:
+      x-audience: request
+      description: One recovery code as shown, upper case, with or without the dashes.
+      type: string
+      pattern: '^[A-Z2-7]{4}(-?[A-Z2-7]{4}){3}$'
     RegisterRequest:
       x-audience: request
       type: object
@@ -1925,18 +2103,26 @@ components:
         newPassword: { $ref: '#/components/schemas/NewPassword' }
     MfaVerifyRequest:
       x-audience: request
+      description: Exactly one of the two forms. The code must have the shape of its method.
+      oneOf:
+        - $ref: '#/components/schemas/TotpVerification'
+        - $ref: '#/components/schemas/RecoveryCodeVerification'
+    TotpVerification:
+      x-audience: request
       type: object
       additionalProperties: false
       required: [method, code]
       properties:
-        method:
-          type: string
-          enum: [totp, recovery_code]
-        code:
-          description: Six digits for `totp`. For `recovery_code`, the code as shown, with or without dashes.
-          type: string
-          minLength: 6
-          maxLength: 19
+        method: { type: string, const: totp }
+        code: { $ref: '#/components/schemas/TotpCode' }
+    RecoveryCodeVerification:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [method, code]
+      properties:
+        method: { type: string, const: recovery_code }
+        code: { $ref: '#/components/schemas/RecoveryCode' }
     MfaConfirmRequest:
       x-audience: request
       type: object
@@ -1980,7 +2166,7 @@ components:
         displayName: { $ref: '#/components/schemas/DisplayName' }
         role: { $ref: '#/components/schemas/Role' }
         permissions:
-          description: Computed by the server from the role and the disbursement permission. For display decisions only.
+          description: Computed by the server. Only permissions that work today. For display decisions only.
           type: array
           items: { $ref: '#/components/schemas/Permission' }
         mfa:
@@ -2010,25 +2196,50 @@ components:
             absoluteExpiresAt: { $ref: '#/components/schemas/Timestamp' }
     LoginResult:
       x-audience: account
+      description: |
+        Exactly one of the two forms, told apart by `status`. A pending result never carries an
+        account, and a signed-in result always does.
+      oneOf:
+        - $ref: '#/components/schemas/SignedIn'
+        - $ref: '#/components/schemas/SecondFactorPending'
+    SignedIn:
+      x-audience: account
       type: object
       additionalProperties: false
       required: [status, account]
       properties:
+        status: { type: string, const: authenticated }
+        account: { $ref: '#/components/schemas/Account' }
+    SecondFactorPending:
+      x-audience: account
+      description: The password was accepted and a second factor is owed. The session has no permission.
+      type: object
+      additionalProperties: false
+      required: [status, pendingExpiresAt]
+      properties:
         status:
           type: string
-          enum: [authenticated, mfa_required, mfa_enrollment_required]
-        account:
-          description: Present only when `status` is `authenticated`.
-          oneOf:
-            - $ref: '#/components/schemas/Account'
-            - type: 'null'
+          enum: [mfa_required, mfa_enrollment_required]
+        pendingExpiresAt:
+          description: After this instant the pending sign-in is gone and the password is needed again.
+          $ref: '#/components/schemas/Timestamp'
+    AuthOptions:
+      x-audience: account
+      description: Not private, but only meaningful to the sign-in screens.
+      type: object
+      additionalProperties: false
+      required: [registrationOpen]
+      properties:
+        registrationOpen:
+          description: False when public sign-up is closed on this server.
+          type: boolean
     CsrfToken:
       x-audience: credential
       type: object
       additionalProperties: false
       required: [headerName, token]
       properties:
-        headerName: { type: string, const: X-XSRF-TOKEN }
+        headerName: { type: string, const: X-CSRF-TOKEN }
         token: { type: string, minLength: 16, maxLength: 512 }
     MfaEnrollment:
       x-audience: credential

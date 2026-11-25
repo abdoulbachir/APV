@@ -14,10 +14,17 @@
   {"name": "password as a number", "operationId": "login", "patch": [{"op": "replace", "path": "/password", "value": 123456789012345}]},
   {"name": "password change without the current password", "operationId": "changePassword", "patch": [{"op": "remove", "path": "/currentPassword"}]},
   {"name": "password change naming another account", "operationId": "changePassword", "patch": [{"op": "add", "path": "/accountId", "value": "acc_2Bd5fH8jK1mN4pQ7sT0vW3"}]},
-  {"name": "one-time credential that is too short", "operationId": "setPasswordWithCredential", "patch": [{"op": "replace", "path": "/credential", "value": "short"}]},
   {"name": "one-time credential used to set a role", "operationId": "setPasswordWithCredential", "patch": [{"op": "add", "path": "/role", "value": "admin"}]},
   {"name": "second-factor method that does not exist", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/method", "value": "sms"}]},
   {"name": "second factor skipped by a flag", "operationId": "verifyMfa", "patch": [{"op": "add", "path": "/trustThisDevice", "value": true}]},
   {"name": "confirmation code with letters", "operationId": "confirmMfaEnrollment", "patch": [{"op": "replace", "path": "/code", "value": "12a456"}]},
-  {"name": "new recovery codes without the password", "operationId": "regenerateRecoveryCodes", "patch": [{"op": "remove", "path": "/currentPassword"}]}
+  {"name": "new recovery codes without the password", "operationId": "regenerateRecoveryCodes", "patch": [{"op": "remove", "path": "/currentPassword"}]},
+  {"name": "one-time credential as a number", "operationId": "setPasswordWithCredential", "patch": [{"op": "replace", "path": "/credential", "value": 12345}]},
+  {"name": "empty one-time credential", "operationId": "setPasswordWithCredential", "patch": [{"op": "replace", "path": "/credential", "value": ""}]},
+  {"name": "authenticator method with a recovery-shaped code", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/code", "value": "ABCD-EFGH-JKLM-NPQR"}]},
+  {"name": "recovery method with six digits", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/method", "value": "recovery_code"}]},
+  {"name": "recovery code in lower case", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/method", "value": "recovery_code"}, {"op": "replace", "path": "/code", "value": "abcd-efgh-jklm-npqr"}]},
+  {"name": "second factor with both a code and a password", "operationId": "verifyMfa", "patch": [{"op": "add", "path": "/password", "value": "correct horse battery staple 42"}]},
+  {"name": "address with surrounding spaces", "operationId": "register", "patch": [{"op": "replace", "path": "/email", "value": " sample.donor@example.org "}]},
+  {"name": "address with a trailing tab", "operationId": "login", "patch": [{"op": "replace", "path": "/email", "value": "sample.donor@example.org\t"}]}
 ]
