@@ -34,6 +34,7 @@ public class IdentityProperties {
     private final int hashConcurrency;
     private final long hashWaitMillis;
     private final String blocklistPath;
+    private final String blocklistSha256;
 
     public IdentityProperties(Environment environment) {
         Set<String> profiles = Set.of(environment.getActiveProfiles());
@@ -48,6 +49,7 @@ public class IdentityProperties {
         this.hashConcurrency = environment.getProperty("apv.identity.hash-concurrency", Integer.class, 4);
         this.hashWaitMillis = environment.getProperty("apv.identity.hash-wait-millis", Long.class, 2000L);
         this.blocklistPath = environment.getProperty("apv.identity.password-blocklist-path", "");
+        this.blocklistSha256 = environment.getProperty("apv.identity.password-blocklist-sha256", "");
 
         String encryption = environment.getProperty("apv.identity.mfa-encryption-key", "");
         String hashing = environment.getProperty("apv.identity.hash-key", "");
@@ -154,5 +156,10 @@ public class IdentityProperties {
 
     String blocklistPath() {
         return blocklistPath;
+    }
+
+    /** Optional: the SHA-256 recorded when the list was built. Empty means not pinned. */
+    String blocklistSha256() {
+        return blocklistSha256;
     }
 }

@@ -6,8 +6,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
 /**
- * The application's notion of "now". It is the system clock, unless the development-only
- * fixture importer pins it to the clock written in a fixture file so responses are repeatable.
+ * "Now" for the public read responses (deadlines, "as of"). It is the system clock, unless the
+ * development-only fixture importer pins it to the clock written in a fixture file so those
+ * responses are repeatable.
+ *
+ * Identity never uses this clock: sign-in, authenticator codes, sessions and rate limits run
+ * on real time in every profile (identity's own IdentityClock).
  */
 @Component
 public class AppClock {

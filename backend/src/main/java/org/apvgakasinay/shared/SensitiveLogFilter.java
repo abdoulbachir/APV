@@ -6,11 +6,16 @@ import ch.qos.logback.classic.turbo.TurboFilter;
 import ch.qos.logback.core.spi.FilterReply;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;
+import org.slf4j.helpers.FormattingTuple;
 import org.slf4j.helpers.MessageFormatter;
 
 /**
@@ -18,7 +23,7 @@ import org.slf4j.helpers.MessageFormatter;
  * and whatever the logging configuration says. Installed by logback-spring.xml, so it applies
  * to the server and to the operator command alike, before any appender or layout.
  *
- * Two mechanisms, because neither is enough alone:
+ * Three mechanisms, because none is enough alone:
  *
  * 1. Some loggers print raw input and output when turned up: the HTTP connector prints
  *    request bytes (cookies, tokens, bodies with passwords), the database driver and the SQL
@@ -30,6 +35,11 @@ import org.slf4j.helpers.MessageFormatter;
  *    have, and they are replaced before the message is logged: a UUID (the form the session
  *    store uses), the Base64 of a UUID (the form the cookie carries), and an Argon2 hash. A
  *    retired or expired identifier has the same shape as a live one, so it is covered equally.
+ *
+ * 3. The exception attached to a log line is treated like the message: its own message and
+ *    those of its causes and suppressed exceptions are searched for the same shapes. A
+ *    database error quotes the row it failed on, and that row can be a session's. When
+ *    anything is replaced the exception is printed as a redacted copy with the same stack trace.
  *
  * What this cannot do: recognise a password, a code or a one-time credential in free text;
  * they have no shape. Those are kept out of the log by never being handed to a logger: request
@@ -67,18 +77,101 @@ public final class SensitiveLogFilter extends TurboFilter {
         if (level.toInt() < Level.INFO_INT && neverBelowInfo(logger.getName())) {
             return FilterReply.DENY;
         }
-        // Calls that only ask "is this level enabled" carry no message, and nothing is formatted for a level that is off.
-        if (format == null || marker == REDACTED || !level.isGreaterOrEqual(logger.getEffectiveLevel())) {
+        // Calls that only ask "is this level enabled" carry nothing, and nothing is formatted for a level that is off.
+        if ((format == null && t == null) || marker == REDACTED || !level.isGreaterOrEqual(logger.getEffectiveLevel())) {
             return FilterReply.NEUTRAL;
         }
-        String message = params == null || params.length == 0 ? format : MessageFormatter.arrayFormat(format, params).getMessage();
+        String message = format;
+        Throwable thrown = t;
+        if (format != null && params != null && params.length > 0) {
+            FormattingTuple formatted = MessageFormatter.arrayFormat(format, params);
+            message = formatted.getMessage();
+            if (thrown == null) {
+                // The convention of the logging interface: a last argument that is an exception is the exception.
+                thrown = formatted.getThrowable();
+            }
+        }
         String safe = redact(message);
-        if (safe == null || safe.equals(message)) {
+        Throwable safeThrown = redactThrown(thrown);
+        if (safeThrown == thrown && (safe == null || safe.equals(message))) {
             return FilterReply.NEUTRAL;
         }
         // Logged again, redacted and already formatted; the original is dropped.
-        logger.log(REDACTED, SELF, Level.toLocationAwareLoggerInteger(level), safe, null, t);
+        logger.log(REDACTED, SELF, Level.toLocationAwareLoggerInteger(level), safe, null, safeThrown);
         return FilterReply.DENY;
+    }
+
+    /**
+     * The exception as it may be logged. An exception is printed with its message and the
+     * messages of its causes and suppressed exceptions; a database error, for one, quotes the
+     * values of the row it failed on. When none of those messages holds anything to replace,
+     * the exception itself is returned. Otherwise a copy of the whole chain is returned in
+     * which every message is redacted; each copy keeps the original's stack trace and names
+     * the original's class at the start of its message.
+     */
+    static Throwable redactThrown(Throwable thrown) {
+        if (thrown == null || !anyMessageChanges(thrown, newIdentitySet())) {
+            return thrown;
+        }
+        return copy(thrown, new IdentityHashMap<>());
+    }
+
+    private static Set<Throwable> newIdentitySet() {
+        return Collections.newSetFromMap(new IdentityHashMap<>());
+    }
+
+    private static boolean anyMessageChanges(Throwable thrown, Set<Throwable> seen) {
+        if (thrown == null || !seen.add(thrown)) {
+            return false;
+        }
+        String message = thrown.getMessage();
+        if (message != null && !message.equals(redact(message))) {
+            return true;
+        }
+        if (anyMessageChanges(thrown.getCause(), seen)) {
+            return true;
+        }
+        for (Throwable suppressed : thrown.getSuppressed()) {
+            if (anyMessageChanges(suppressed, seen)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Throwable copy(Throwable thrown, Map<Throwable, Throwable> copies) {
+        if (thrown == null) {
+            return null;
+        }
+        Throwable known = copies.get(thrown);
+        if (known != null) {
+            return known;
+        }
+        String message = thrown.getMessage();
+        Redacted copy = new Redacted(thrown.getClass().getName() + (message == null ? "" : ": " + redact(message)));
+        copies.put(thrown, copy);
+        copy.setStackTrace(thrown.getStackTrace());
+        Throwable cause = copy(thrown.getCause(), copies);
+        if (cause != null && cause != copy) {
+            copy.initCause(cause);
+        }
+        for (Throwable suppressed : thrown.getSuppressed()) {
+            Throwable safe = copy(suppressed, copies);
+            if (safe != copy) {
+                copy.addSuppressed(safe);
+            }
+        }
+        return copy;
+    }
+
+    /** Stands in the log for an exception whose message held an identifier or a hash. */
+    static final class Redacted extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        Redacted(String message) {
+            super(message);
+        }
     }
 
     static boolean neverBelowInfo(String logger) {

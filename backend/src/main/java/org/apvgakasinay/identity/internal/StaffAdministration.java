@@ -7,7 +7,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.apvgakasinay.audit.AuditService.Outcome;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,9 +38,9 @@ public class StaffAdministration {
     private final AccountRepository accounts;
     private final SessionStore sessions;
     private final Audit audit;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    public StaffAdministration(AccountRepository accounts, SessionStore sessions, Audit audit, AppClock clock) {
+    public StaffAdministration(AccountRepository accounts, SessionStore sessions, Audit audit, IdentityClock clock) {
         this.accounts = accounts;
         this.sessions = sessions;
         this.audit = audit;

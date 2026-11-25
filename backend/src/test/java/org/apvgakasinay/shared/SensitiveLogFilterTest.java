@@ -97,4 +97,70 @@ class SensitiveLogFilterTest {
         assertThat(log).doesNotContain("marker-raw-request").doesNotContain("marker-raw-bind")
                 .doesNotContain("marker-raw-parameter").doesNotContain("marker-raw-rotation");
     }
+
+    /** Finding 4 of the joint acceptance run: the exception attached to a log line is redacted like its message. */
+    @Test
+    void a9_8_exceptionMessagesAndTheirCausesAreRedacted() {
+        String id = UUID.randomUUID().toString();
+        String cookie = Base64.getEncoder().encodeToString(id.getBytes(StandardCharsets.US_ASCII));
+        IllegalStateException cause = new IllegalStateException("ERROR: duplicate key value. Detail: Key (session_id)=(" + id + ") already exists; cookie " + cookie);
+        RuntimeException suppressed = new RuntimeException("while closing session " + id);
+        RuntimeException thrown = new RuntimeException("PreparedStatementCallback; Key (session_primary_id, attribute_name)=(" + id + ", NAME) and " + cookie, cause);
+        thrown.addSuppressed(suppressed);
+
+        Throwable safe = SensitiveLogFilter.redactThrown(thrown);
+        assertThat(safe).isNotSameAs(thrown);
+        assertThat(safe.getMessage()).isEqualTo("java.lang.RuntimeException: PreparedStatementCallback; Key (session_primary_id, attribute_name)=([redacted-id], NAME) and [redacted-id]");
+        assertThat(safe.getCause().getMessage())
+                .isEqualTo("java.lang.IllegalStateException: ERROR: duplicate key value. Detail: Key (session_id)=([redacted-id]) already exists; cookie [redacted-id]");
+        assertThat(safe.getSuppressed()).hasSize(1);
+        assertThat(safe.getSuppressed()[0].getMessage()).isEqualTo("java.lang.RuntimeException: while closing session [redacted-id]");
+        assertThat(safe.getStackTrace()).isEqualTo(thrown.getStackTrace());
+        assertThat(safe.getCause().getStackTrace()).isEqualTo(cause.getStackTrace());
+
+        // Only a cause, deep down, holds something: the whole chain is still copied.
+        Throwable deep = new RuntimeException("outer", new RuntimeException("middle", new IllegalArgumentException("inner " + cookie)));
+        Throwable safeDeep = SensitiveLogFilter.redactThrown(deep);
+        assertThat(safeDeep).isNotSameAs(deep);
+        assertThat(safeDeep.getMessage()).isEqualTo("java.lang.RuntimeException: outer");
+        assertThat(safeDeep.getCause().getCause().getMessage()).isEqualTo("java.lang.IllegalArgumentException: inner [redacted-id]");
+
+        // Nothing to replace: the exception itself, untouched. No message, and a cause that is its own cause, are handled.
+        RuntimeException plain = new RuntimeException("nothing here", new IllegalStateException());
+        assertThat(SensitiveLogFilter.redactThrown(plain)).isSameAs(plain);
+        assertThat(SensitiveLogFilter.redactThrown(null)).isNull();
+        RuntimeException first = new RuntimeException("first " + id);
+        RuntimeException second = new RuntimeException("second", first);
+        first.initCause(second);
+        Throwable loop = SensitiveLogFilter.redactThrown(first);
+        assertThat(loop.getMessage()).isEqualTo("java.lang.RuntimeException: first [redacted-id]");
+        assertThat(loop.getCause().getCause()).isSameAs(loop);
+    }
+
+    /** The same through the installed configuration, as printed: every way an exception can reach a log line. */
+    @Test
+    void a9_8_noIdentifierInAPrintedStackTrace(CapturedOutput output) {
+        String id = UUID.randomUUID().toString();
+        String cookie = Base64.getEncoder().encodeToString(id.getBytes(StandardCharsets.US_ASCII));
+        try (ConfigurableApplicationContext context = new SpringApplicationBuilder(Nothing.class)
+                .web(WebApplicationType.NONE).bannerMode(org.springframework.boot.Banner.Mode.OFF)
+                .properties("logging.level.org.apvgakasinay.test=TRACE").run()) {
+            Logger application = LoggerFactory.getLogger("org.apvgakasinay.test.Application");
+            Throwable databaseError = new IllegalStateException("marker-outer Key (session_primary_id, attribute_name)=(" + id + ", NAME)",
+                    new IllegalArgumentException("marker-cause Key (session_id)=(" + id + ") for cookie " + cookie));
+            application.error("marker-plain-message", databaseError);
+            application.warn("marker-with-arguments {} and {}", "one", "two", databaseError);
+            application.debug("marker-message-too " + id, databaseError);
+            application.error(null, databaseError);
+            application.error("marker-harmless", new IllegalStateException("marker-kept-as-it-is"));
+        }
+        String log = output.getAll();
+        assertThat(log.contains(id) || log.contains(cookie)).as("an identifier reached the log inside an exception").isFalse();
+        assertThat(log).contains("marker-plain-message").contains("marker-with-arguments one and two").contains("marker-message-too [redacted-id]")
+                .contains("java.lang.IllegalStateException: marker-outer Key (session_primary_id, attribute_name)=([redacted-id], NAME)")
+                .contains("java.lang.IllegalArgumentException: marker-cause Key (session_id)=([redacted-id]) for cookie [redacted-id]")
+                .contains("java.lang.IllegalStateException: marker-kept-as-it-is")
+                // The stack trace is still there to debug with.
+                .contains("at org.apvgakasinay.shared.SensitiveLogFilterTest.a9_8_noIdentifierInAPrintedStackTrace");
+    }
 }
