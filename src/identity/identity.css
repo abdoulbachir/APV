@@ -17,3 +17,8 @@
 .identity-account { display:grid; gap:var(--space-2); margin:0; }
 .identity-account dt { font-weight:700; }
 .identity-account dd { margin:0 0 var(--space-3); color:var(--text-muted); }
+
+.identity-qr { display:block; width:min(100%, 18rem); height:auto; margin-inline:auto; background:#fff; border-radius:var(--radius-xs); }
+.identity-secret { display:block; overflow-wrap:anywhere; padding:var(--space-3); background:var(--surface-soft); border:1px solid var(--border-soft); }
+.identity-codes { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%, 12rem),1fr)); gap:var(--space-3); padding-inline-start:var(--space-5); margin:0; }
+.identity-codes li { overflow-wrap:anywhere; }

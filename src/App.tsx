@@ -4,7 +4,7 @@ import { MissingState, RouteErrorState } from './components/States';
 import { CasePage } from './pages/CasePage';
 import { CaseDirectoryPage } from './pages/CaseDirectoryPage';
 import { HomePage } from './pages/HomePage';
-import { IdentityRoutes, SignInPage, SignUpPage, ChallengePage, AccountPage, EnrollmentPreparationPage } from './identity/IdentityPages';
+import { IdentityRoutes, SignInPage, SignUpPage, ChallengePage, AccountPage, EnrollmentPreparationPage, SetPasswordPage, ChangePasswordPage, RecoveryCodesPage } from './identity/IdentityPages';
 
 const router = createBrowserRouter([
   { element: <Layout />, errorElement: <RouteErrorState />, children: [
@@ -17,6 +17,9 @@ const router = createBrowserRouter([
       { path: '/auth/mfa', element: <ChallengePage /> },
       { path: '/auth/enroll', element: <EnrollmentPreparationPage /> },
       { path: '/account', element: <AccountPage /> },
+      { path: '/auth/set-password', element: <SetPasswordPage /> },
+      { path: '/account/password', element: <ChangePasswordPage /> },
+      { path: '/account/recovery-codes', element: <RecoveryCodesPage /> },
     ] },
     { path: '*', element: <MissingState /> },
   ] },
