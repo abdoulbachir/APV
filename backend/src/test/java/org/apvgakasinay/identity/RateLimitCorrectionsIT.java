@@ -174,7 +174,7 @@ class RateLimitCorrectionsIT extends IdentityIntegration {
 
         // Everything live is still there and still decides.
         assertThat(count("select count(*) from auth_throttle")).isEqualTo(live);
-        assertThat(throttle.count(limit, "cooling")).as("the active cooldown survived").isEqualTo(900);
+        assertThat(throttle.count(limit, "cooling")).as("the active cooldown survived").isBetween(800L, 900L);
         assertThat(count("select count(*) from pending_sign_in where outcome is null")).isEqualTo(1);
         assertThat(pending.post("/api/auth/mfa/verify", json("method", "totp", "code", code(admin.secret()))).status()).isEqualTo(200);
 

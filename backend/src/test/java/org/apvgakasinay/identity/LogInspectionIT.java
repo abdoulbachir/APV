@@ -25,31 +25,38 @@ import org.springframework.test.context.TestPropertySource;
         "logging.level.org.springframework.jdbc.core=DEBUG"})
 class LogInspectionIT extends IdentityIntegration {
 
+    private static void add(List<String[]> secrets, String kind, String value) {
+        secrets.add(new String[] {kind, value});
+    }
+
     @Test
     void a9_8_noSecretIsWrittenToTheApplicationLog(CapturedOutput output) {
-        List<String> secrets = new ArrayList<>(List.of(PASSWORD, OTHER_PASSWORD, "not the right one at all"));
+        List<String[]> secrets = new ArrayList<>();
+        add(secrets, "password", PASSWORD);
+        add(secrets, "password", OTHER_PASSWORD);
+        add(secrets, "wrong password", "not the right one at all");
         // Identifiers that a rotation replaced during the journey. They stopped working the moment
         // they were replaced, so they are reported separately and not counted as leaked secrets.
         List<String> replaced = new ArrayList<>();
 
         Browser donor = browser();
         register(donor, "sample.donor@example.org", PASSWORD);
-        secrets.add(donor.token);
+        add(secrets, "CSRF token", donor.token);
         donor.login("sample.donor@example.org", "not the right one at all");
         replaced.add(donor.storedSessionId());
         donor.login("sample.donor@example.org", PASSWORD);
-        secrets.add(donor.token);
+        add(secrets, "CSRF token", donor.token);
         replaced.add(donor.storedSessionId());
         donor.post("/api/auth/change-password", json("currentPassword", "not the right one at all", "newPassword", OTHER_PASSWORD));
         donor.post("/api/auth/change-password", "this is not json but it holds " + PASSWORD);
         assertThat(donor.post("/api/auth/change-password", json("currentPassword", PASSWORD, "newPassword", OTHER_PASSWORD)).status()).isEqualTo(204);
-        secrets.add(donor.sessionId);
-        secrets.add(donor.storedSessionId());
+        add(secrets, "session cookie value", donor.sessionId);
+        add(secrets, "live session identifier", donor.storedSessionId());
         donor.csrf();
-        secrets.add(donor.token);
+        add(secrets, "CSRF token", donor.token);
 
         String activation = createStaff("sample.owner@example.org", "super_admin");
-        secrets.add(activation);
+        add(secrets, "one-time credential", activation);
         Browser owner = browser();
         owner.csrf();
         owner.post("/api/auth/set-password", json("credential", activation, "newPassword", PASSWORD));
@@ -57,27 +64,27 @@ class LogInspectionIT extends IdentityIntegration {
         owner.login("sample.owner@example.org", PASSWORD);
         replaced.add(owner.storedSessionId());
         String shown = owner.postEmpty("/api/auth/mfa/enroll").json().get("secret").asText();
-        secrets.add(shown);
+        add(secrets, "authenticator secret", shown);
         byte[] secret = base32Decode(shown);
         Browser.Answer confirmed = owner.post("/api/auth/mfa/confirm", json("code", code(secret)));
         assertThat(confirmed.status()).isEqualTo(200);
-        confirmed.json().get("codes").forEach(node -> secrets.add(node.asText()));
-        secrets.add(owner.sessionId);
-        secrets.add(owner.storedSessionId());
+        confirmed.json().get("codes").forEach(node -> add(secrets, "recovery code", node.asText()));
+        add(secrets, "session cookie value", owner.sessionId);
+        add(secrets, "live session identifier", owner.storedSessionId());
         nextCode();
         Browser second = pending(new Staff("sample.owner@example.org", owner, secret, List.of()));
         replaced.add(second.storedSessionId());
         second.post("/api/auth/mfa/verify", json("method", "recovery_code", "code", "AAAA-BBBB-CCCC-DDDD"));
         assertThat(second.post("/api/auth/mfa/verify", json("method", "recovery_code", "code", confirmed.json().get("codes").get(0).asText())).status()).isEqualTo(200);
-        secrets.add(second.sessionId);
-        secrets.add(second.storedSessionId());
+        add(secrets, "session cookie value", second.sessionId);
+        add(secrets, "live session identifier", second.storedSessionId());
         second.csrf();
-        secrets.add(second.token);
+        add(secrets, "CSRF token", second.token);
         Browser.Answer regenerated = second.post("/api/auth/mfa/recovery-codes", json("currentPassword", PASSWORD, "code", code(secret)));
         assertThat(regenerated.status()).as(regenerated.body()).isEqualTo(200);
-        regenerated.json().get("codes").forEach(node -> secrets.add(node.asText()));
+        regenerated.json().get("codes").forEach(node -> add(secrets, "recovery code", node.asText()));
         String reset = staffAdministration.issuePasswordReset("sample.donor@example.org", "test-operator", "in person");
-        secrets.add(reset);
+        add(secrets, "one-time credential", reset);
         // A forced server error, which is where a careless log would print a request.
         jdbc.sql("alter table account_password rename to account_password_hidden").update();
         try {
@@ -91,15 +98,15 @@ class LogInspectionIT extends IdentityIntegration {
 
         String log = output.getAll();
         assertThat(log).as("the capture is working and the log is verbose").contains("/api/auth/login").contains("DEBUG");
-        int found = 0;
-        for (String value : secrets) {
-            // The value itself is never put in a failure message: only its position in the list.
-            if (value != null && log.contains(value)) {
-                found++;
+        // Never the value in a failure message: only what kind of value it was.
+        List<String> found = new ArrayList<>();
+        for (String[] secret : secrets) {
+            if (secret[1] != null && log.contains(secret[1])) {
+                found.add(secret[0]);
             }
         }
         long replacedLogged = replaced.stream().filter(log::contains).count();
-        assertThat(found).as("secrets found in %d characters of log, out of %d searched for", log.length(), secrets.size()).isZero();
+        assertThat(found).as("kinds of secret found in %d characters of log, out of %d values searched for", log.length(), secrets.size()).isEmpty();
         Evidence.write("log-inspection", String.format(
                 "Captured %d characters of application log at DEBUG (application, Spring Security, Spring Web, Spring Session, JDBC).%n"
                         + "Searched for %d values used in the journey: passwords, CSRF tokens, session identifiers (cookie and stored form),%n"
