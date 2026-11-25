@@ -29,18 +29,24 @@ export function CaseDirectoryPage() {
   const requestedPage = Number(params.get('page') ?? 1);
   const validQuery = searchValid(query);
   const requested = Number.isSafeInteger(requestedPage) ? Math.min(100000, Math.max(1, requestedPage)) : 1;
-  const result = useAsync(() => api.getCases({status:'active', q:validQuery?query:'', category:category==='all'?undefined:category, sort, page:requested, pageSize:PAGE_SIZE},locale), [locale,query,category,sort,requested], true);
+  const requestKey=JSON.stringify([locale,query,category,sort,requested]);
+  const result = useAsync(async () => ({
+    key: requestKey,
+    response: await api.getCases({status:'active', q:validQuery?query:'', category:category==='all'?undefined:category, sort, page:requested, pageSize:PAGE_SIZE},locale)
+  }), [requestKey], true);
+  const current = result.data?.key===requestKey ? result.data.response : null;
+  const fetching = result.loading || !current;
   const root = usePageMotion<HTMLElement>(!!result.data && !result.error, result.data);
-  const pages = result.data?.totalPages ?? 1;
+  const pages = current?.totalPages ?? 1;
   const page = Math.min(pages,requested);
   const start = (page - 1) * PAGE_SIZE;
-  const visible = validQuery ? result.data?.items ?? [] : [];
-  const total = validQuery ? result.data?.totalItems ?? 0 : 0;
+  const visible = validQuery ? current?.items ?? [] : [];
+  const total = validQuery ? current?.totalItems ?? 0 : 0;
   const pageButtons = [...new Set([1, page - 1, page, page + 1, pages])].filter(n => n >= 1 && n <= pages).sort((a,b) => a-b);
 
   useEffect(() => { document.title = t.directory.title + ' — ' + SITE_NAME; }, [t.directory.title]);
   useEffect(() => {
-    if (result.data && !initialFocus.current) {
+    if (siteResult.data && current && !initialFocus.current) {
       initialFocus.current = true;
       // A fresh document or history traversal should not steal focus.
       // A new SPA navigation may focus the title if the visitor has not moved elsewhere.
@@ -51,9 +57,9 @@ export function CaseDirectoryPage() {
         }
       }
     }
-  }, [result.data]);
+  }, [siteResult.data,current]);
   useEffect(() => {
-    if (!siteResult.data || !result.data || result.loading || result.error) return;
+    if (!siteResult.data || !current || result.loading || result.error) return;
     const next = new URLSearchParams(params);
     // Preserve unrelated parameters such as lang and dev-only test scenarios.
     const canonical: Record<string, string | null> = {
@@ -67,7 +73,7 @@ export function CaseDirectoryPage() {
       if (value === null) next.delete(key); else next.set(key, value);
     }
     if (next.toString() !== params.toString()) setParams(next, { replace: true });
-  }, [page, query, category, sort, view, params, siteResult.data, result.data, result.loading, result.error, setParams]);
+  }, [page, query, category, sort, view, params, siteResult.data, current, result.loading, result.error, setParams]);
 
   function change(key: string, value: string, reset = true, replace = false) {
     const next = new URLSearchParams(params);
@@ -91,7 +97,7 @@ export function CaseDirectoryPage() {
   if (siteResult.error || result.error || !result.data || !siteResult.data) return <ErrorState onRetry={()=>{siteResult.retry();result.retry();}} />;
 
   return (
-    <section className="directory section-wrap" ref={root} aria-busy={result.loading}>
+    <section className="directory section-wrap" ref={root} aria-busy={fetching}>
       <header className="directory-head">
         <Link className="back-link" to="/">← {t.nav.home}</Link>
         {APP_CONFIG.sampleData && <p className="preview-label">{t.redesign.preview}</p>}
@@ -112,7 +118,7 @@ export function CaseDirectoryPage() {
           <button type="button" aria-pressed={view === 'list'} onClick={() => change('view', 'list', false)}>{t.directory.list}</button>
         </div>
       </div>
-      {visible.length ? <>
+      {fetching ? <p role="status">{t.common.loading}</p> : visible.length ? <>
         <div className={'directory-grid directory-view-' + view}>{visible.map(item => <CompactCaseCard key={item.code} item={item} categoryLabel={categories.find(c=>c.id===item.category)?.labels[locale]} from={location.pathname + location.search}/>)}</div>
         <p className="directory-range">{fill(t.directory.range, { start: String(start + 1), end: String(start + visible.length), total: String(total) })}</p>
         {pages > 1 && <nav className="directory-pagination" aria-label={t.directory.pagination}>

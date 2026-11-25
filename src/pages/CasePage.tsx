@@ -27,7 +27,9 @@ export function CasePage() {
   const { t, locale } = useI18n();
   const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
-  const result = useAsync(() => api.getCase(code, locale), [code, locale]);
+  const requestKey=JSON.stringify([code,locale]);
+  const response = useAsync(async()=>({key:requestKey,detail:await api.getCase(code,locale)}),[requestKey]);
+  const result={...response,data:response.data?.key===requestKey?response.data.detail:null,loading:response.loading||!!(response.data&&response.data.key!==requestKey)};
   const updateHistory=useHistory<CaseUpdate>(result.data?.updates,result.data?.counts.updates,code,locale,api.getUpdates);
   const donorHistory=useHistory<PublicDonor>(result.data?.donors,result.data?.counts.donors,code,locale,api.getDonors);
   const ledgerHistory=useHistory<LedgerEntry>(result.data?.ledger,result.data?.counts.ledger,code,locale,api.getLedger);
@@ -42,7 +44,7 @@ export function CasePage() {
     window.addEventListener('scroll', updateStickyAction, { passive: true });
     return () => window.removeEventListener('scroll', updateStickyAction);
   }, []);
-  if (result.loading) return <LoadingState />;
+  if (result.loading || (result.data && result.data.case.code.toLowerCase()!==code.toLowerCase())) return <LoadingState />;
   if (result.error || !result.data) return <ErrorState onRetry={result.retry} error={result.error} missingCase returnTo={returnTo ?? '/cases'} />;
 
   const { case: item, financials, photos } = result.data;
@@ -64,10 +66,10 @@ export function CasePage() {
           <div className="case-portrait-wrap"><Portrait name={item.publicName} photoUrl={item.photoUrl} photoAlt={item.photoAlt} photoAltLanguage={item.photoAltLanguage} artwork={getCaseArtwork(item.code)} /><span className="case-code">{item.code}</span></div>
           <div className="case-identity">
             <p className="eyebrow"><span />{t.casePage.supportLabel}</p>
-            <h1>{item.publicName}</h1>
+            <h1>{item.publicName || item.title}</h1>
             <p className="case-title" lang={item.titleLanguage}>{item.title}</p>
             {item.deadline && <p className="deadline-pill">{fill(t.casePage.deadline, { date: formatDate(item.deadline, locale, true) })}</p>}
-            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{fill(t.casePage.give, { name: item.publicName })}<span aria-hidden="true">↗</span></button>
+            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{fill(t.casePage.give, { name: item.publicName || item.title })}<span aria-hidden="true">↗</span></button>
             {(sampleNote || !item.acceptingDonations) && !showStickyAction && <p className="sample-note" role="status">{actionNote}</p>}
           </div>
         </div>
@@ -96,10 +98,10 @@ export function CasePage() {
         </div>
       </section>
 
-      {photos.length>0 && <section className="section-wrap"><h2>{t.publicRead.gallery}</h2><div className="featured-grid">{photos.map(photo=><img key={photo.id} src={imageSource(photo.thumbnailUrl)} alt={photo.alt} lang={photo.altLanguage} loading="lazy" style={{width:'100%',height:'auto'}} />)}</div></section>}
+      {photos.length>0 && <section className="section-wrap"><h2>{t.publicRead.gallery}</h2><div className="featured-grid">{photos.map(photo=><img key={photo.id} src={imageSource(photo.thumbnailUrl)} alt={photo.alt} lang={photo.altLanguage} loading="lazy" style={{width:'100%',height:'auto'}} />)}</div>{APP_CONFIG.sampleData && <p>{t.redesign.illustration}</p>}</section>}
       <section className="updates-section section-wrap">
         <div className="content-heading" data-motion="reveal"><p className="section-number">03 /</p><h2>{t.casePage.updates}</h2></div>
-        {updates.length ? <div className="timeline" data-motion="timeline">{updates.map((update) => <article key={update.id}><time dateTime={update.date}>{formatDate(update.date, locale, true)}</time><span className="timeline-node" aria-hidden="true" /><div><p lang={update.textLanguage}>{update.text}</p>{update.photoUrl && <img src={imageSource(update.photoUrl)} alt={update.photoAlt??''} lang={update.photoAltLanguage??undefined} loading="lazy" style={{maxWidth:'100%'}} /> }<small>{fill(t.casePage.updateBy, { author: update.author })}</small></div></article>)}</div> : <p className="empty-note">{t.casePage.noUpdates}</p>}{historyButton(updateHistory)}
+        {updates.length ? <div className="timeline" data-motion="timeline">{updates.map((update) => <article key={update.id}><time dateTime={update.date}>{formatDate(update.date, locale, true)}</time><span className="timeline-node" aria-hidden="true" /><div><p lang={update.textLanguage}>{update.text}</p>{update.photoUrl && <img src={imageSource(update.photoUrl)} alt={update.photoAlt??''} lang={update.photoAltLanguage??undefined} loading="lazy" style={{maxWidth:'100%'}} /> }<small>{update.authorAvatarUrl && <img src={imageSource(update.authorAvatarUrl)} alt="" width={24} height={24} loading="lazy" />}{fill(t.casePage.updateBy, { author: update.author })}</small></div></article>)}</div> : <p className="empty-note">{t.casePage.noUpdates}</p>}{historyButton(updateHistory)}
       </section>
 
       <section className="trust-grid section-wrap">
@@ -121,7 +123,7 @@ export function CasePage() {
 
       {showStickyAction && <div className="give-dock">
           <button className="action action-orange give-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{fill(t.casePage.give, { name: item.publicName })}<span aria-hidden="true">↗</span></button>
-          {sampleNote && <p role="status">{actionNote}</p>}
+          {(sampleNote || !item.acceptingDonations) && <p role="status">{actionNote}</p>}
         </div>}
     </article>
   );

@@ -1,0 +1,61 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createMockModel, cutoff, normalize } from '../src/api/mock-model.ts';
+const dataset=JSON.parse(readFileSync(new URL('../contract/fixtures/dataset.public.json',import.meta.url),'utf8'));
+const model=createMockModel(dataset);
+test('directory preserves 200 cases, pagination and featured order',()=>{
+ const first=model.list({sort:'featured'},'en');
+ assert.equal(first.totalItems,200);assert.equal(first.totalPages,17);
+ assert.deepEqual(first.items.slice(0,3).map(x=>x.code),['HELP-014','HELP-101','HELP-103']);
+ assert.equal(model.list({page:17},'fr').items.length,8);
+ assert.equal(model.list({page:18},'fr').items.length,0);
+ assert.ok(model.list({},'en').items.every(x=>x.kind==='case'&&x.status!=='draft'));
+});
+test('bilingual independent search, dynamic category, inactive filter',()=>{
+ assert.deepEqual(model.list({q:'  ÉLODIE  '},'fr').items.map(x=>x.code),['HELP-106','HELP-107']);
+ assert.equal(model.list({category:'food'},'en').items[0].code,'HELP-102');
+ assert.equal(model.list({status:'completed',category:'transport'},'en').items[0].code,'HELP-903');
+ assert.equal(model.site().categories.find(x=>x.id==='transport').active,false);
+ assert.ok(!model.site().categories.some(x=>x.id==='retired'));
+ assert.equal(normalize('Œ'), 'œ');
+ assert.throws(()=>model.list({category:'unknown'},'en'),{status:400});
+ assert.throws(()=>model.list({q:'💚'.repeat(81)},'en'),{status:400});
+ assert.equal(model.list({q:'💚'.repeat(80)},'en').totalItems,0);
+ assert.throws(()=>model.list({q:' '.repeat(201)},'en'),{status:400});
+ assert.equal(model.list({q:' '.repeat(200)},'en').totalItems,200);
+ assert.throws(()=>model.list({page:0},'en'),{status:400});
+});
+test('financial reconciliation, partial refund, hidden identity and shortfall',()=>{
+ const main=model.detail('help-014','en');
+ assert.equal(main.case.received,567500);assert.equal(main.case.delivered,320000);
+ assert.equal(model.detail('FUND','en').financials.available,164000);
+ assert.equal(model.detail('FUND','en').financials.delivered,0);
+ const corrected=model.detail('HELP-101','fr');
+ assert.equal(corrected.ledger.find(x=>x.id==='L03').netAmount,3500);
+ assert.equal(corrected.donors.find(x=>x.id==='D3').amount,3500);
+ assert.equal(corrected.donors.find(x=>x.id==='D3').name,null);
+ assert.equal(corrected.donors.find(x=>x.id==='D3').avatarUrl,null);
+ assert.ok(!corrected.donors.some(x=>x.id==='D4'));
+ assert.equal(model.detail('HELP-903','en').financials.available,-1000);
+ assert.equal(model.detail('HELP-903','en').financials.hasShortfall,true);
+ assert.throws(()=>model.detail('HELP-902','en'),{status:404});
+ assert.throws(()=>model.ledger('HELP-902','en',{}),{status:404});
+ const all=dataset.cases.map(c=>model.detail(c.code,'en').financials);
+ assert.equal(all.reduce((s,x)=>s+x.allocated,0),model.stats().received);
+ assert.equal(all.reduce((s,x)=>s+x.delivered,0),model.stats().delivered);
+});
+test('calendar day cutoffs and localization fallback',()=>{
+ assert.equal(cutoff('2027-01-18','America/Chicago'),'2027-01-19T06:00:00Z');
+ assert.equal(cutoff('2027-03-14','America/Chicago'),'2027-03-15T05:00:00Z');
+ assert.equal(model.detail('HELP-101','fr').updates[0].textLanguage,'en');
+ assert.equal(model.detail('HELP-101','fr').photos[0].altLanguage,'en');
+ assert.equal(model.detail('HELP-108','en').case.acceptingDonations,false);
+});
+test('history preview and subsequent page boundaries',()=>{
+ const fixture=structuredClone(dataset);
+ for(let i=0;i<13;i++)fixture.updates.push({id:'EXTRA-'+String(i).padStart(2,'0'),caseCode:'HELP-014',text:{en:'sample'},date:'2026-11-20T12:00:00Z',author:'Sample',authorAvatarFile:null,photo:null});
+ const m=createMockModel(fixture),detail=m.detail('HELP-014','en'),p=m.updates('HELP-014','en',{page:2,pageSize:10});
+ assert.equal(detail.counts.updates,14);assert.equal(detail.updates.length,10);assert.equal(p.items.length,4);
+ assert.equal(new Set([...detail.updates,...p.items].map(x=>x.id)).size,14);
+});

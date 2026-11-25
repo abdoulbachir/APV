@@ -126,7 +126,7 @@ const fr = {
       goal: 'Objectif',
       received: 'Reçu',
       delivered: 'Remis',
-      progressNote: 'Seuls les dons confirmés entrent dans le total. Chaque remise reste visible.',
+      progressNote: 'Les dons confirmés et les transferts nets composent le montant affecté. Chaque remise reste visible.',
       deadline: 'Soutenir avant le {date}',
       give: 'Soutenir {name}',
       sampleNotice: 'Les dons ouvriront après l’approbation de cet échantillon.',

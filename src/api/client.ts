@@ -23,14 +23,8 @@ const realClient:ApiClient={
  getSite:l=>request('/site',l),getStats:l=>request('/stats',l),getCases:(q,l)=>request('/cases'+params(q),l),getCase:(c,l)=>request(casePath(c),l),
  getUpdates:(c,q,l)=>request(casePath(c)+'/updates'+params(q),l),getDonors:(c,q,l)=>request(casePath(c)+'/donors'+params(q),l),getLedger:(c,q,l)=>request(casePath(c)+'/ledger'+params(q),l),
 };
-const mockModule=APP_CONFIG.apiMode==='mock'?()=>import('./mock-client'):null;
-async function mock<K extends keyof ApiClient>(method:K,...args:Parameters<ApiClient[K]>):Promise<Awaited<ReturnType<ApiClient[K]>>>{
- if(!mockModule)throw new Error('Mock mode disabled');
- const client=(await mockModule()).mockClient;
- const call=client[method] as (...a:Parameters<ApiClient[K]>)=>ReturnType<ApiClient[K]>;
- return await call(...args) as Awaited<ReturnType<ApiClient[K]>>;
-}
+async function loadMock(){return (await import('./mock-client')).mockClient;}
 export const api:ApiClient=APP_CONFIG.apiMode==='real'?realClient:{
- getSite:l=>mock('getSite',l),getStats:l=>mock('getStats',l),getCases:(q,l)=>mock('getCases',q,l),getCase:(c,l)=>mock('getCase',c,l),
- getUpdates:(c,q,l)=>mock('getUpdates',c,q,l),getDonors:(c,q,l)=>mock('getDonors',c,q,l),getLedger:(c,q,l)=>mock('getLedger',c,q,l)
+ getSite:async l=>(await loadMock()).getSite(l),getStats:async l=>(await loadMock()).getStats(l),getCases:async(q,l)=>(await loadMock()).getCases(q,l),getCase:async(c,l)=>(await loadMock()).getCase(c,l),
+ getUpdates:async(c,q,l)=>(await loadMock()).getUpdates(c,q,l),getDonors:async(c,q,l)=>(await loadMock()).getDonors(c,q,l),getLedger:async(c,q,l)=>(await loadMock()).getLedger(c,q,l)
 };
