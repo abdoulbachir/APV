@@ -49,7 +49,8 @@ info:
     - **Sessions.** Authentication is a server-side session named by a cookie the browser
       sends by itself. There is no token for the frontend to store. The cookie is `HttpOnly`,
       so scripts cannot read it.
-    - **CSRF.** Every request that is not `GET` needs the header `X-CSRF-TOKEN`, whose value
+    - **CSRF.** Every request using a method other than `GET`, `HEAD` and `OPTIONS` (in this
+      contract, every `POST`) needs the header `X-CSRF-TOKEN`, whose value
       comes from `GET /auth/csrf`. This includes sign-up and sign-in. The token is tied to
       the server-side session and dies with it. A 403 `csrf_invalid` is decided before the
       operation runs, so nothing was changed. Fetch a new token after any response that
@@ -74,16 +75,20 @@ info:
       is never reported with one of the first three, except that the fifth wrong code of a
       pending sign-in ends it and is `unauthenticated`.
     - **Order of checks.** A request is refused at the first of these it fails: path and
-      method (404, 405); origin and fetch metadata on non-`GET` requests (403 `forbidden`);
-      body size and declared type (413, 415); CSRF token (403 `csrf_invalid`); rate limits
+      method (404, 405; an unsupported method is refused here); origin and fetch metadata on
+      methods other than `GET`, `HEAD` and `OPTIONS` (403 `forbidden`); body size and declared
+      type (413, 415); CSRF token on the same methods (403 `csrf_invalid`); rate limits
       (429); session state (401, 409, 403 `forbidden`); body validation (400); then the
       operation's own check of a password, code or credential. A secret is examined only in
       that last step.
     - **A lost session on a `POST`.** A session that was deleted, rotated or has passed a
       deadline no longer exists, so the token the page still holds for it is refused first:
       403 `csrf_invalid`. `GET /me` then answers 401 `unauthenticated`. A `POST` answers 401
-      `unauthenticated` directly only when its token is valid: a fresh token of an anonymous
-      session, or an identity that was revoked while its session row survived.
+      `unauthenticated` directly only when its token is valid and the operation is a
+      protected one, that is, one that does not accept `anonymous`: with a fresh token of an
+      anonymous session, or on an identity that was revoked while its session row survived.
+      An operation that accepts `anonymous` (sign-in, sign-up, set-password, sign-out) is not
+      refused for this: a revoked session is ended and the request proceeds as anonymous.
     - **After `csrf_invalid`.** Fetch a new token and read `GET /me`. Never send a refused
       `POST` again by itself: the person submits again. A `GET` may be repeated.
     - **Identity headers.** Every answer of an identity operation, errors included, is
@@ -555,7 +560,7 @@ paths:
       tags: [Authentication]
       operationId: getCsrfToken
       x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
-      summary: Obtain the CSRF token to send with every request that is not GET.
+      summary: Obtain the CSRF token to send with every request using a method other than GET, HEAD and OPTIONS.
       description: |
         Returns the token for this browser's session. Send it in the header named by
         `headerName` on every `POST`.
@@ -1118,7 +1123,7 @@ components:
       name: X-CSRF-TOKEN
       in: header
       required: true
-      description: The token from `GET /auth/csrf`. Required on every request that is not `GET`.
+      description: The token from `GET /auth/csrf`. Required on every request using a method other than `GET`, `HEAD` and `OPTIONS`.
       schema: { type: string, minLength: 16, maxLength: 512 }
       example: 5pZbJ3mQ0cR8sT1uV4wX7yZ9aB2dE6fG
     AcceptLanguage:

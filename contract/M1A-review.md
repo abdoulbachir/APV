@@ -160,6 +160,18 @@ Two edge cases became explicit while writing the scenarios: a revoked identity c
 
 No schema, operation, generated type or tooling changed: both generated files are identical to `022b576`. Only description text in `openapi.yaml`, the design document, the test matrix and this file changed. Successful public responses and the fixture storage strategy are untouched.
 
+## 2c. Wording corrections, after the review of `1b1ae5b`
+
+Both precedence mechanisms were confirmed resolved. Three wording defects are corrected here; no behavior, test, operation or schema is added.
+
+| # | Correction | Where |
+|---|---|---|
+| 1 | Test 6.10a is limited to protected operations (those not accepting `anonymous`), assuming earlier checks other than the stated CSRF condition pass. Public operations stay governed by 14.9, 14.17 and the state table. The surviving-revoked-session 401 is qualified the same way in the prose, its table and the OpenAPI description. | tests 6.10a; I&S 4.3; `openapi.yaml` conventions |
+| 2 | The section 14 preface uses the reviewer's wording. The broad "changes nothing" sentence of I&S 4.3 is replaced: a request refused before step 8 does not execute the operation or check or count its secret, while session cleanup, rate-limit bookkeeping and audit effects follow the step that refused it. | tests section 14; I&S 4.3 |
+| 3 | "Methods other than `GET`, `HEAD` and `OPTIONS`" is used for the origin and CSRF checks throughout; an unsupported method is refused at step 1. Supported methods are unchanged. | I&S 4.3, 9.1, 9.2; `openapi.yaml` conventions, `getCsrfToken` summary, `CsrfHeader` |
+
+One place is deliberately left as it was: the comment above `csrfHeaderName` in the generated `identity-api.ts` still says "every request that is not GET". Changing it means changing the generator and the generated file, which this wording-only revision keeps byte-for-byte identical. It can be aligned in milestone 1B when that file is next regenerated.
+
 ## 3. Contract tooling
 
 | Requirement | How |

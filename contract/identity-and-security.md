@@ -210,22 +210,22 @@ A pending session that calls `/auth/login`, `/auth/register` or `/auth/set-passw
 
 | Step | Check | Refusal |
 |---|---|---|
-| 1 | Path and method | 404 `not_found`; 405 `method_not_allowed` |
-| 2 | Origin and fetch metadata, on requests that are not `GET` (9.2) | 403 `forbidden` |
+| 1 | Path and method. A method the path does not support is refused here, before any other check. | 404 `not_found`; 405 `method_not_allowed` |
+| 2 | Origin and fetch metadata, on methods other than `GET`, `HEAD` and `OPTIONS` (9.2) | 403 `forbidden` |
 | 3 | Body size and declared type, before anything is parsed | 413; 415 |
-| 4 | CSRF token, on requests that are not `GET` (9.1) | 403 `csrf_invalid` |
+| 4 | CSRF token, on methods other than `GET`, `HEAD` and `OPTIONS` (9.1) | 403 `csrf_invalid` |
 | 5 | Rate limits | 429 |
 | 6 | Session state: is there a live session, is its identity still valid, is it in a state this operation accepts | 401; 409 `already_signed_in`; 403 `forbidden` |
 | 7 | Body validation | 400 |
 | 8 | The operation's own checks: password, code, credential | 401 `invalid_credentials`, `mfa_code_invalid`; 400 `credential_invalid` |
 
-Everything up to and including step 7 changes nothing. A secret (password, code, credential) is looked at only in step 8, so a request refused earlier never has its secret checked and never counts as a failed attempt.
+The first failing check determines the refusal. A request refused before step 8 does not execute the operation, and its password, code or credential is neither checked nor counted as a failed attempt. That is not the same as having no effect at all: session cleanup, rate-limit bookkeeping and audit records follow the step that refused the request. Step 5 advances the rate-limit counters it documents (section 7), step 6 deletes a session it finds revoked or expired, and refusals are audited as section 10.1 lists. `GET`, `HEAD` and `OPTIONS` skip steps 2 and 4. No supported method changes: the contract's operations use `GET` and `POST` only, and any other method on a known path is refused at step 1.
 
 **Which session exists at steps 4 and 6.** This is what makes the answers for lost sessions deterministic.
 
 - A session **does not exist** once it has been deleted (sign-out, a revocation that deletes rows, the fifth wrong code), once its identifier has been replaced by a rotation, or once it has passed its idle or absolute deadline. A deadline takes effect at the instant it passes, at every step, whether or not the row has been cleaned up yet.
 - A request whose cookie names a session that does not exist is handled exactly as a request with no cookie. It has no CSRF token on the server, so a `POST` from it fails **step 4** with 403 `csrf_invalid`, whatever token it sends. A `GET` from it reaches step 6 and is `anonymous`.
-- A session whose row still exists and is within its deadlines, but whose identity has been revoked (the account was disabled, or its security version changed, and the row was not deleted), still has its token. A `POST` with that token passes step 4 and is refused at **step 6** with 401 `unauthenticated`; the session is then deleted. Its secret is never checked.
+- A session whose row still exists and is within its deadlines, but whose identity has been revoked (the account was disabled, or its security version changed, and the row was not deleted), still has its token. A `POST` with that token passes step 4. At **step 6** the session is deleted. For a **protected** operation (one that does not accept `anonymous`) the request is then refused with 401 `unauthenticated`, and its secret is never checked. For an operation that accepts `anonymous` the request proceeds as from `anonymous`, under the explicit exception below.
 
 Two more things are decided at step 6, so their place in the order is fixed too:
 
@@ -240,7 +240,8 @@ So, for a signed-in or pending session that has been lost:
 | A `POST` still carrying the lost session's token (the usual case in a browser) | 403 `csrf_invalid`. Then, as always after `csrf_invalid`: new token, `GET /me` (401 `unauthenticated`), clear private state, sign-in screen, nothing resent. |
 | A `POST` to a protected operation with a **fresh, valid** token of an anonymous session | 401 `unauthenticated` |
 | A `POST` to a public operation (sign-in, sign-up, set-password, sign-out) with a fresh, valid anonymous token | Proceeds normally: these accept `anonymous` |
-| A `POST` on a revoked identity whose row and token survived | 401 `unauthenticated`, session deleted, secret not checked |
+| A `POST` to a **protected** operation on a revoked identity whose row and token survived | 401 `unauthenticated`, session deleted, secret not checked |
+| A `POST` to an operation that accepts `anonymous`, on a revoked identity whose row and token survived | Session deleted; proceeds as from `anonymous` (the exception above) |
 
 ### 4.4 Lifetimes
 
@@ -523,7 +524,7 @@ Operations that only add to the set (creating an account, enabling one, completi
 - The token is stored in the session on the server. It is not stored in a cookie, so there is nothing for a sibling site to overwrite.
 - `GET /auth/csrf` returns `{ headerName: "X-CSRF-TOKEN", token }`. For a browser with no session it first creates the anonymous session of 4.1; that is the bootstrap, and it is why a visitor can submit sign-in or, later, a gift report.
 - The frontend keeps the token in memory only. Never in storage, never in a URL.
-- Every request that is not `GET`, `HEAD` or `OPTIONS` must carry `X-CSRF-TOKEN`. This includes sign-up, sign-in and sign-out, and will include every later public form.
+- Every request using methods other than `GET`, `HEAD` and `OPTIONS` must carry `X-CSRF-TOKEN`. This includes sign-up, sign-in and sign-out, and will include every later public form.
 - The value returned is masked differently on each call, so it does not repeat across responses; any value issued for the current session is accepted until that session's token is replaced.
 
 **Invalidation.** The token dies with the session identifier it belongs to. It is replaced at sign-in, second-factor verification, completed enrollment and password change, and destroyed at sign-out and expiry. A token from another session, from before a rotation, or from another browser never matches.
@@ -534,7 +535,7 @@ Operations that only add to the set (creating an account, enabling one, completi
 
 1. Fetch a new token.
 2. Read `GET /me` and show the state it reports. If that is not the state the page was showing, clear the page's private state (section 11). In particular, 401 `unauthenticated` here means the session was lost: clear, and show the sign-in screen.
-3. **Never send the refused request again automatically.** This holds for every `POST`, sign-in, sign-up and sign-out included, so a password is never resubmitted without the person asking. Say that the page was out of date and let the person submit again. Text they typed may be kept where that is safe; passwords, codes and credentials are cleared.
+3. **Never send the refused request again automatically.** This holds for every request using a method other than `GET`, `HEAD` and `OPTIONS`, which in this contract means every `POST`, sign-in, sign-up and sign-out included, so a password is never resubmitted without the person asking. Say that the page was out of date and let the person submit again. Text they typed may be kept where that is safe; passwords, codes and credentials are cleared.
 4. A `GET` that failed for this reason may be repeated; `GET` requests do not need the token in the first place.
 
 `SameSite=Lax` on the session cookie is a second, independent barrier, not a replacement.
@@ -542,12 +543,12 @@ Operations that only add to the set (creating an account, enabling one, completi
 ### 9.2 Origin and fetch metadata
 
 - **[Approved]** One origin. No CORS headers are sent at all, so no other site can read a response or send credentials with a scripted request.
-- **[Proposal]** Every request that is not `GET`, `HEAD` or `OPTIONS` is checked at step 2 of the order in 4.3, before its body, its token and its session are looked at. It is refused with 403 `forbidden` when either of these holds:
+- **[Proposal]** Every request using methods other than `GET`, `HEAD` and `OPTIONS` is checked at step 2 of the order in 4.3, before its body, its token and its session are looked at. It is refused with 403 `forbidden` when either of these holds:
   1. An `Origin` header is present and is not exactly the site's own origin (scheme, host and port). `Origin: null` is not the site's origin.
   2. A `Sec-Fetch-Site` header is present and its value is anything other than `same-origin`. This refuses `cross-site`, `same-site` and `none`.
 - Both headers are evaluated; one failing is enough. Neither header present is allowed through to the later steps: older browsers and non-browser tools send neither, and the CSRF token still stands in their way.
 - The refusal is `forbidden`, not `csrf_invalid`, so the frontend can tell "this request did not come from our own page" from "the token is stale". It changes nothing and counts against nothing.
-- `GET` requests are not subject to this check: they change nothing, and public pages must stay linkable from anywhere.
+- `GET`, `HEAD` and `OPTIONS` requests are not subject to this check: they change nothing, and public pages must stay linkable from anywhere.
 
 ### 9.3 Bodies
 

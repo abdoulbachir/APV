@@ -135,7 +135,7 @@ Sign-up is open in these tests unless a row says otherwise.
 | 6.8 | The same code again within its 30 seconds, in a new sign-in | Refused | |
 | 6.9 | Codes for the previous and next step; a code two steps away | Accepted; refused | |
 | 6.10 | Four wrong codes, then a fifth, then a correct one | 401 `mfa_code_invalid` four times, the session still pending after each (`GET /me` answers 401 `mfa_required`); the fifth is 401 `unauthenticated` and the session is gone. The correct code sent next with the token the page still holds is 403 `csrf_invalid`; sent with a fresh anonymous token it is 401 `unauthenticated`. It is never accepted and never checked. | |
-| 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change, rotation), then every operation that checks a password or code | Never `invalid_credentials` or `mfa_code_invalid`, and the secret is never checked or counted. The answer is fixed by what the request carries: 403 `csrf_invalid` with the lost session's token; 401 `unauthenticated` with a fresh anonymous token, or with the surviving token of a revoked identity. | |
+| 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change, rotation), then every protected operation that checks a password or code (excluding operations accepting anonymous), assuming earlier checks other than the specified CSRF condition pass | Never `invalid_credentials` or `mfa_code_invalid`, and the secret is never checked or counted. The answer is fixed by what the request carries: 403 `csrf_invalid` with the lost session's token; 401 `unauthenticated` with a fresh anonymous token, or with the surviving token of a revoked identity. Public operations remain governed by 14.9, 14.17 and the state table. | |
 | 6.10b | Every wrong password or code on a live session, except the fifth code | Always `invalid_credentials` or `mfa_code_invalid`, and the session is unchanged afterwards | |
 | 6.11 | Sign in with a recovery code; reuse it | Works once; refused the second time; `recoveryCodesRemaining` is 9 | |
 | 6.12 | One recovery code in two simultaneous requests, many times | Exactly one succeeds each time | |
@@ -269,7 +269,7 @@ All run in a real browser against the real backend and the production build of t
 
 ## 14. Precedence: one request, several things wrong
 
-Each row is one request. The order of checks is the table in `identity-and-security.md` 4.3; the expected answer is always that of the first failing step. For every row: nothing is changed, no rate-limit or attempt counter moves unless the row says so, no secret is checked, and the frontend never sends the request again by itself.
+Each row is one request, judged by the order of checks in `identity-and-security.md` 4.3. The first failing check determines the refusal. Requests refused before step 8 do not execute the operation or check/count a submitted secret. Session cleanup, rate-limit bookkeeping and audit effects follow the applicable step and explicit row. Requests reaching step 8 or completing an operation follow their stated outcomes. No refused mutation is automatically replayed.
 
 Stale and fresh credentials of the browser:
 
