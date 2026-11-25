@@ -126,6 +126,14 @@ Changes made after the coordinator's source review of `f36ca68`, and the questio
 - **Response objects that carry a secret do not print it.** Found by the log inspection: at DEBUG the web framework logs the object it is about to write, and the records for the enrollment secret and the recovery codes printed their fields. Their text form is now fixed. Production logs at INFO, where this line is not written at all.
 - **Hashing limits are bounds, not defaults:** start-up is refused above four simultaneous hashes or a wait above two seconds, in every profile.
 
+### Final targeted corrections (owner decisions of 2026-11-25)
+
+- **A comprehensive local breached-password list is mandatory outside dev and test.** The server and the operator command refuse to start when it is missing, unreadable or unsuitable. The list is a file of sorted SHA-1 hashes searched on disk, with a manifest carrying its size and SHA-256; "unsuitable" is defined in `docs/backend-password-blocklist.md`, including a fixed minimum of 100,000,000 entries that configuration cannot lower. The earlier optional plain-text extra list is gone: one setting, one format. The selected source is Have I Been Pwned's Pwned Passwords. No breach data is in the repository.
+- **No session identifier is logged, retired ones included, at any level.** The identifier that the log inspection had found at DEBUG came from Spring Security's session fixation strategy ("Changed session id from ..."). Looking further, at TRACE the embedded server prints raw requests and cookies, and the SQL parameter logger and the database driver print bound values, which include session identifiers and password hashes. A filter installed with the logging system drops those loggers below INFO whatever their configured level and replaces identifier shapes and Argon2 hashes in every other message. The log inspection now runs at TRACE with no exemption.
+- **The client-address budget for password change and recovery-code regeneration is confirmed** as implemented: 30 requests in 15 minutes, shared by the two operations, separate from sign-in, counted at step 5.
+
+Questions 1 and 5 below are thereby decided. Questions 2 to 4 remain open as wording and retention questions.
+
 Questions for the contract, reported and not decided here:
 
 1. **Section 7.1 says password change and recovery-code regeneration draw on "client address"; section 7.2 defines no limit for that counter.** Implemented as its own counter, 30 requests in 15 minutes per client address, counted at step 5 and separate from the sign-in counter. The number and whether it should instead share the sign-in counter need confirming.

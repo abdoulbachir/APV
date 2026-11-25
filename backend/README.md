@@ -107,7 +107,7 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_ALLOWED_ORIGINS` | empty | The exact origins accepted on state-changing requests, comma-separated. Empty: the origin must equal the scheme, host and port the request was addressed to. **Set it in production behind a TLS-terminating proxy** (`https://your.site`), where the backend itself sees plain HTTP. |
 | `APV_ARGON2_MEMORY_KIB` / `APV_ARGON2_ITERATIONS` | `19456` / `2` | Argon2id cost. May be raised, never lowered: lower values refuse to start. Existing hashes are upgraded at the next sign-in. |
 | `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once: 1 to 4, on their own threads so the rest of the server keeps answering. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. The backend refuses to start with more than 4 at once or a longer wait, in every profile. |
-| `APV_PASSWORD_BLOCKLIST_PATH` | empty | A local file of blocked passwords, one per line, added to the small built-in list. Never fetched from the network. |
+| `APV_PASSWORD_BLOCKLIST_PATH` | empty | The comprehensive local breached-password list: a file of sorted SHA-1 hashes with its manifest. **Required outside `dev` and `test`**: the server and the operator command refuse to start when it is missing, unreadable or unsuitable. Source, format, verification, size and updates: [`docs/backend-password-blocklist.md`](../docs/backend-password-blocklist.md). In `dev` and `test` the small bundled list is enough. Never looked up over the network. |
 
 Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`.
 
@@ -164,7 +164,11 @@ Rules the command and the database enforce:
 - Once a super administrator has been usable (activated, enabled, authenticator enrolled), no command and no SQL statement can leave the site with none: the change is refused, also when two are attempted at the same time. To replace the only one, create and enroll a second one first.
 - Recovery requires confirming the person through a channel you already had before the request. Facts supplied by the requester do not count. What you answer is written to the audit log.
 
-First start of a real site: set the database variables and the two keys, start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend.
+First start of a real site: set the database variables and the two keys, build the breached-password list and set `APV_PASSWORD_BLOCKLIST_PATH` (`docs/backend-password-blocklist.md`), start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend.
+
+### Logging
+
+Logs never contain a session identifier (live, replaced or expired, in the stored form or as the cookie carries it), a password hash or a raw request, at any level. This does not depend on the logging configuration: a filter installed with the logging system (`SensitiveLogFilter`, `logback-spring.xml`) drops everything below INFO from the loggers that print raw requests, cookies, bound SQL values or a replaced session identifier (the embedded server, the database driver, Spring's SQL parameter logger, the session fixation strategy), and replaces identifier shapes and Argon2 hashes in every other message with `[redacted-id]` and `[redacted-hash]`. Setting those loggers to DEBUG or TRACE has no effect. Passwords, codes and one-time credentials have no recognisable shape; they are kept out by never being given to a logger. The default level, INFO, is the one to run with.
 
 ### What the server keeps
 

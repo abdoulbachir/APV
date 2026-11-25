@@ -16,8 +16,22 @@ import org.springframework.context.annotation.Import;
  * ignores it.
  */
 @EnableAutoConfiguration
-@Import({AppClock.class, AccountRepository.class, SessionStore.class, Audit.class, StaffAdministration.class,
+@Import({IdentityProperties.class, OperatorConfiguration.RequiredConfiguration.class, AppClock.class, AccountRepository.class, SessionStore.class, Audit.class, StaffAdministration.class,
         OperatorCommands.class, DatabasePurpose.class})
 @ComponentScan(basePackageClasses = AuditService.class)
 public class OperatorConfiguration {
+
+    /**
+     * The operator command runs under the same configuration rules as the server. It refuses to
+     * run without the keys and without a suitable breached-password list, although it evaluates
+     * no password itself: a deployment whose server could not start must not be administered
+     * as if it could.
+     */
+    static class RequiredConfiguration {
+
+        @org.springframework.context.annotation.Bean
+        BreachedPasswords breachedPasswords(IdentityProperties properties) {
+            return BreachedPasswords.forOperator(properties);
+        }
+    }
 }

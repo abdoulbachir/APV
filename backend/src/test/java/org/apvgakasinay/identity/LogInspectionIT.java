@@ -11,18 +11,27 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Scenario 9.8 for application logs. The whole journey is run with the application, the
- * security framework, the web framework and the session store logging at DEBUG, far more than
- * production logs; everything written to the console is captured and searched for every
- * secret the journey used.
+ * Scenario 9.8 for application logs. The whole journey is run with everything that could print
+ * a request, a session or a statement turned up to TRACE, far beyond what production logs:
+ * the application, Spring Security, Spring Session, Spring Web, Spring JDBC and transactions,
+ * the embedded server, the connection pool and the database driver. Everything written to the
+ * console is captured and searched for every secret the journey used. There is no exemption:
+ * a session identifier that was replaced or deleted is searched for exactly like a live one,
+ * in the form the store keeps and in the form the cookie carries.
  */
 @ExtendWith(OutputCaptureExtension.class)
 @TestPropertySource(properties = {
-        "logging.level.org.apvgakasinay=DEBUG",
-        "logging.level.org.springframework.security=DEBUG",
-        "logging.level.org.springframework.web=DEBUG",
-        "logging.level.org.springframework.session=DEBUG",
-        "logging.level.org.springframework.jdbc.core=DEBUG"})
+        "logging.level.org.apvgakasinay=TRACE",
+        "logging.level.org.springframework.security=TRACE",
+        "logging.level.org.springframework.session=TRACE",
+        "logging.level.org.springframework.web=TRACE",
+        "logging.level.org.springframework.jdbc=TRACE",
+        "logging.level.org.springframework.transaction=TRACE",
+        "logging.level.org.apache.coyote=TRACE",
+        "logging.level.org.apache.tomcat=TRACE",
+        "logging.level.org.apache.catalina=TRACE",
+        "logging.level.org.postgresql=TRACE",
+        "logging.level.com.zaxxer.hikari=TRACE"})
 class LogInspectionIT extends IdentityIntegration {
 
     private static void add(List<String[]> secrets, String kind, String value) {
@@ -35,18 +44,20 @@ class LogInspectionIT extends IdentityIntegration {
         add(secrets, "password", PASSWORD);
         add(secrets, "password", OTHER_PASSWORD);
         add(secrets, "wrong password", "not the right one at all");
-        // Identifiers that a rotation replaced during the journey. They stopped working the moment
-        // they were replaced, so they are reported separately and not counted as leaked secrets.
-        List<String> replaced = new ArrayList<>();
+        List<String> codes = new ArrayList<>();
 
         Browser donor = browser();
         register(donor, "sample.donor@example.org", PASSWORD);
         add(secrets, "CSRF token", donor.token);
+        add(secrets, "anonymous session identifier", donor.storedSessionId());
+        add(secrets, "anonymous session cookie value", donor.sessionId);
         donor.login("sample.donor@example.org", "not the right one at all");
-        replaced.add(donor.storedSessionId());
+        add(secrets, "retired session identifier", donor.storedSessionId());
+        add(secrets, "retired session cookie value", donor.sessionId);
         donor.login("sample.donor@example.org", PASSWORD);
         add(secrets, "CSRF token", donor.token);
-        replaced.add(donor.storedSessionId());
+        add(secrets, "retired session identifier", donor.storedSessionId());
+        add(secrets, "retired session cookie value", donor.sessionId);
         donor.post("/api/auth/change-password", json("currentPassword", "not the right one at all", "newPassword", OTHER_PASSWORD));
         donor.post("/api/auth/change-password", "this is not json but it holds " + PASSWORD);
         assertThat(donor.post("/api/auth/change-password", json("currentPassword", PASSWORD, "newPassword", OTHER_PASSWORD)).status()).isEqualTo(204);
@@ -62,25 +73,32 @@ class LogInspectionIT extends IdentityIntegration {
         owner.post("/api/auth/set-password", json("credential", activation, "newPassword", PASSWORD));
         owner.post("/api/auth/set-password", json("credential", activation, "newPassword", PASSWORD));
         owner.login("sample.owner@example.org", PASSWORD);
-        replaced.add(owner.storedSessionId());
+        add(secrets, "retired session identifier", owner.storedSessionId());
+        add(secrets, "retired session cookie value", owner.sessionId);
         String shown = owner.postEmpty("/api/auth/mfa/enroll").json().get("secret").asText();
         add(secrets, "authenticator secret", shown);
         byte[] secret = base32Decode(shown);
-        Browser.Answer confirmed = owner.post("/api/auth/mfa/confirm", json("code", code(secret)));
+        codes.add(code(secret));
+        Browser.Answer confirmed = owner.post("/api/auth/mfa/confirm", json("code", codes.get(0)));
         assertThat(confirmed.status()).isEqualTo(200);
         confirmed.json().get("codes").forEach(node -> add(secrets, "recovery code", node.asText()));
         add(secrets, "session cookie value", owner.sessionId);
         add(secrets, "live session identifier", owner.storedSessionId());
         nextCode();
         Browser second = pending(new Staff("sample.owner@example.org", owner, secret, List.of()));
-        replaced.add(second.storedSessionId());
+        add(secrets, "retired session identifier", second.storedSessionId());
+        add(secrets, "retired session cookie value", second.sessionId);
         second.post("/api/auth/mfa/verify", json("method", "recovery_code", "code", "AAAA-BBBB-CCCC-DDDD"));
+        // A wrong authenticator code that is not all zeros, so it can be told from padding.
+        codes.add(code(secret).equals("481516") ? "481517" : "481516");
+        second.post("/api/auth/mfa/verify", json("method", "totp", "code", codes.get(1)));
         assertThat(second.post("/api/auth/mfa/verify", json("method", "recovery_code", "code", confirmed.json().get("codes").get(0).asText())).status()).isEqualTo(200);
         add(secrets, "session cookie value", second.sessionId);
         add(secrets, "live session identifier", second.storedSessionId());
         second.csrf();
         add(secrets, "CSRF token", second.token);
-        Browser.Answer regenerated = second.post("/api/auth/mfa/recovery-codes", json("currentPassword", PASSWORD, "code", code(secret)));
+        codes.add(code(secret));
+        Browser.Answer regenerated = second.post("/api/auth/mfa/recovery-codes", json("currentPassword", PASSWORD, "code", codes.get(2)));
         assertThat(regenerated.status()).as(regenerated.body()).isEqualTo(200);
         regenerated.json().get("codes").forEach(node -> add(secrets, "recovery code", node.asText()));
         String reset = staffAdministration.issuePasswordReset("sample.donor@example.org", "test-operator", "in person");
@@ -96,8 +114,11 @@ class LogInspectionIT extends IdentityIntegration {
         }
         donor.postEmpty("/api/auth/logout");
 
+        // The sessions that were signed out or left behind are searched for as well.
+        add(secrets, "ended session identifier", donor.sessionId == null ? null : donor.storedSessionId());
+
         String log = output.getAll();
-        assertThat(log).as("the capture is working and the log is verbose").contains("/api/auth/login").contains("DEBUG");
+        assertThat(log).as("the capture is working and the log is verbose").contains("/api/auth/login").contains("TRACE").contains("DEBUG");
         // Never the value in a failure message: only what kind of value it was.
         List<String> found = new ArrayList<>();
         for (String[] entry : secrets) {
@@ -105,15 +126,33 @@ class LogInspectionIT extends IdentityIntegration {
                 found.add(entry[0]);
             }
         }
-        long replacedLogged = replaced.stream().filter(log::contains).count();
-        assertThat(found).as("kinds of secret found in %d characters of log, out of %d values searched for", log.length(), secrets.size()).isEmpty();
+        // Authenticator codes are six digits, and six digits occur by chance inside timestamps, identifiers and
+        // numbers. A code counts as logged only when it stands alone as a value: not part of a longer run of
+        // letters or digits, and not the fraction of a timestamp or part of a dotted or dashed number.
+        int codesLogged = 0;
+        int incidental = 0;
+        for (String code : codes) {
+            if (java.util.regex.Pattern.compile("(?<![0-9A-Za-z.:,_+-])" + code + "(?![0-9A-Za-z_+-])").matcher(log).find()) {
+                codesLogged++;
+            } else if (log.contains(code)) {
+                incidental++;
+            }
+        }
+        if (codesLogged > 0) {
+            found.add(codesLogged + " authenticator code(s) as a standalone value");
+        }
+        assertThat(found).as("kinds of secret found in %d characters of log, out of %d values and %d codes searched for",
+                log.length(), secrets.size(), codes.size()).isEmpty();
+        // The safeguard was at work, not idle: identifiers were written by the frameworks and replaced.
+        assertThat(log).contains("[redacted-id]");
         Evidence.write("log-inspection", String.format(
-                "Captured %d characters of application log at DEBUG (application, Spring Security, Spring Web, Spring Session, JDBC).%n"
-                        + "Searched for %d values used in the journey: passwords, CSRF tokens, session identifiers (cookie and stored form),%n"
-                        + "one-time credentials, the authenticator secret and every recovery code. Found: 0.%n"
-                        + "Session identifiers that a rotation had already replaced (dead when logged), found: %d of %d. At DEBUG the security%n"
-                        + "framework logs the identifier it has just replaced; production logs at INFO, where it does not.%n"
-                        + "Six-digit authenticator codes are not searched for: six digits occur by chance in timestamps and identifiers.%n",
-                log.length(), secrets.size(), replacedLogged, replaced.size()));
+                "Captured %d characters of log at TRACE: application, Spring Security, Session, Web, JDBC and transactions, embedded server,%n"
+                        + "connection pool and database driver.%n"
+                        + "Searched for %d values used in the journey: passwords, CSRF tokens, every session identifier the journey ever had%n"
+                        + "(anonymous, pending, signed-in; live, replaced by rotation, ended), each in stored form and in cookie form,%n"
+                        + "one-time credentials, the authenticator secret and every recovery code. Found: 0. No exemption for retired identifiers.%n"
+                        + "Authenticator codes: %d searched for as standalone values, found: 0. Occurrences inside longer numbers (not a logged code): %d.%n"
+                        + "Lines in which an identifier shape or a hash was replaced before logging: %d.%n",
+                log.length(), secrets.size(), codes.size(), incidental, log.lines().filter(line -> line.contains("[redacted-")).count()));
     }
 }

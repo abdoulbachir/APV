@@ -47,11 +47,18 @@ jobs:
       - name: Password checks with outgoing network disabled
         shell: bash
         run: |
+          set +e
+          # This run writes its own test reports; the reports of the full run above are kept as they are.
+          cp -r target/surefire-reports "$RUNNER_TEMP/surefire-reports-full"
           sudo unshare --net -- sudo -u "$USER" env "PATH=$PATH" "JAVA_HOME=$JAVA_HOME" "HOME=$HOME" \
             ./mvnw --offline --batch-mode --no-transfer-progress \
-            -Dtest='IdentitySecurityUnitTest#a2_17_passwordChecksNeedNoNetwork,PasswordPolicyTest' \
+            -Dtest='IdentitySecurityUnitTest#a2_17_passwordChecksNeedNoNetwork,PasswordPolicyTest,BreachedPasswordsTest' \
             -Dapv.test.network-disabled=true -DargLine=-Dapv.test.network-disabled=true \
             surefire:test 2>&1 | tee "$RUNNER_TEMP/no-network.log"
+          status=${PIPESTATUS[0]}
+          rm -rf target/no-network-reports && mv target/surefire-reports target/no-network-reports
+          mv "$RUNNER_TEMP/surefire-reports-full" target/surefire-reports
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
           test -f target/identity-evidence/no-network.txt
       - name: Verify backend artifact contains no fictional fixture payload
         run: |
@@ -124,6 +131,12 @@ jobs:
                   totals = [a + b for a, b in zip(totals, numbers)]
                   name = path.split('/')[-1][:-4].replace('org.apvgakasinay.', '')
                   lines.append(f'{kind[0]} {name}: {numbers[0]} run, {numbers[1]} failed, {numbers[2]} errors, {numbers[3]} skipped')
+          rerun = [0, 0, 0, 0]
+          for path in sorted(glob.glob('target/no-network-reports/*.txt')):
+              found = re.search(r'Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)', open(path, encoding='utf-8', errors='replace').read())
+              if found:
+                  rerun = [a + b for a, b in zip(rerun, [int(n) for n in found.groups()])]
+          lines.append(f'(separately, the network-disabled rerun of unit tests: {rerun[0]} run, {rerun[1]} failed, {rerun[2]} errors; not added to the total)')
           head = f'TOTAL {totals[0]} run, {totals[1]} failed, {totals[2]} errors, {totals[3]} skipped'
           print('::notice title=Backend test totals::' + '%0A'.join([head] + lines))
           PY

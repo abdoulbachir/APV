@@ -20,7 +20,21 @@ public final class OperatorMode {
         SpringApplication operator = new SpringApplication(OperatorConfiguration.class);
         operator.setWebApplicationType(WebApplicationType.NONE);
         operator.setBannerMode(Banner.Mode.OFF);
-        try (ConfigurableApplicationContext context = operator.run()) {
+        // Start-up problems are reported by the message below, not by a framework stack trace.
+        operator.setLogStartupInfo(false);
+        ConfigurableApplicationContext started;
+        try {
+            started = operator.run();
+        } catch (RuntimeException failure) {
+            Throwable cause = failure;
+            while (cause.getCause() != null && cause.getCause() != cause) {
+                cause = cause.getCause();
+            }
+            // The same configuration rules as the server: without them nothing is administered.
+            System.out.println("Refused to start: " + cause.getMessage());
+            return 3;
+        }
+        try (ConfigurableApplicationContext context = started) {
             return context.getBean(OperatorCommands.class).run(command, OperatorCommands.terminal(), System.out);
         }
     }

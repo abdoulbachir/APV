@@ -5,8 +5,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -18,7 +16,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * The rules for choosing a password (identity-and-security.md, section 3). Nothing here talks
- * to any other machine: the list of blocked passwords is a file shipped with the application.
+ * to any other machine: breached passwords are looked up in local files only.
  */
 @Component
 public class PasswordPolicy {
@@ -27,18 +25,17 @@ public class PasswordPolicy {
     static final int MAX_CODE_POINTS = 128;
     private static final List<String> SITE_NAMES = List.of("apvgakasinay", "gakasinay", "apv");
 
+    /** The small list shipped with the application: obvious patterns and site-specific words. Always checked. */
     private final Set<String> blocked = new HashSet<>();
+    /** The comprehensive local list. Mandatory outside the dev and test profiles. */
+    private final BreachedPasswords breached;
 
-    public PasswordPolicy(IdentityProperties properties) {
+    public PasswordPolicy(BreachedPasswords breached) {
+        this.breached = breached;
         try (InputStream bundled = PasswordPolicy.class.getResourceAsStream("/identity/password-blocklist.txt")) {
             load(bundled);
-            if (!properties.blocklistPath().isBlank()) {
-                try (InputStream extra = Files.newInputStream(Path.of(properties.blocklistPath()))) {
-                    load(extra);
-                }
-            }
         } catch (IOException unreadable) {
-            throw new IllegalStateException("cannot read the password blocklist", unreadable);
+            throw new IllegalStateException("cannot read the bundled password list", unreadable);
         }
     }
 
@@ -80,7 +77,7 @@ public class PasswordPolicy {
         if (length > MAX_CODE_POINTS) {
             throw ApiException.invalid(field, "too_long", field + " must be at most " + MAX_CODE_POINTS + " characters");
         }
-        if (blocked.contains(normalized) || builtFromContext(normalized, context)) {
+        if (blocked.contains(normalized) || breached.contains(normalized) || builtFromContext(normalized, context)) {
             throw ApiException.invalid(field, "compromised", field + " is too easy to guess");
         }
         return normalized;

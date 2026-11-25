@@ -19,7 +19,7 @@ class PasswordPolicyTest {
         return new IdentityProperties(environment);
     }
 
-    private final PasswordPolicy accepted = new PasswordPolicy(testProperties());
+    private final PasswordPolicy accepted = new PasswordPolicy(BreachedPasswords.none());
 
     private void refused(String password, String code) {
         assertThatThrownBy(() -> accepted.accept("password", password, CONTEXT))

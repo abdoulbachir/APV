@@ -133,6 +133,72 @@ class RateLimitCorrectionsIT extends IdentityIntegration {
         assertError(donor.get("/api/me"), 401, "unauthenticated");
     }
 
+    /** Scenario 8.7, owner decision of 2026-11-25: one budget of thirty for both protected password operations, apart from sign-in. */
+    @Test
+    void a8_7_passwordChangeAndRecoveryCodesShareOneClientAddressBudgetSeparateFromSignIn() {
+        Staff admin = staff("sample.admin@example.org", "admin");
+        Browser browser = admin.browser();
+        String change = "/api/auth/change-password";
+        String regenerate = "/api/auth/mfa/recovery-codes";
+        jdbc.sql("delete from auth_throttle").update();
+
+        // Fifteen requests to each operation: thirty on one counter.
+        for (int i = 0; i < 15; i++) {
+            assertError(browser.post(change, "{}"), 400, "validation_error");
+            assertError(browser.post(regenerate, "{}"), 400, "validation_error");
+        }
+        assertThat(count("select count(*) from auth_throttle where scope = 'protected.address'")).as("one shared counter").isEqualTo(1);
+        assertThat(count("select attempts from auth_throttle where scope = 'protected.address'")).isEqualTo(30);
+        assertThat(count("select count(*) from auth_throttle where scope = 'signin.address'")).as("the sign-in budget was not touched").isZero();
+
+        // Request 31, on either operation, with correct secrets: refused at step 5, before state, body and secrets.
+        advance(java.time.Duration.ofMinutes(4));
+        long step = count("select last_accepted_step from account_totp");
+        Browser.Answer refusedChange = browser.post(change, json("currentPassword", PASSWORD, "newPassword", OTHER_PASSWORD));
+        Browser.Answer refusedRegenerate = browser.post(regenerate, json("currentPassword", PASSWORD, "code", code(admin.secret())));
+        for (Browser.Answer refused : List.of(refusedChange, refusedRegenerate)) {
+            assertError(refused, 429, "rate_limited");
+            // Exactly until the fifteen-minute window ends, so never more than fifteen minutes.
+            long untilWindowEnds = 900 - clock.now().getEpochSecond() % 900;
+            assertThat(Long.parseLong(refused.header("Retry-After"))).isEqualTo(untilWindowEnds).isBetween(1L, 900L);
+        }
+        assertThat(count("select count(*) from auth_throttle where scope like 'password.%' or scope like 'mfa.%'")).as("no secret was checked or counted").isZero();
+        assertThat(count("select last_accepted_step from account_totp")).as("the code was not consumed").isEqualTo(step);
+        assertThat(count("select count(*) from account_recovery_code where used_at is null")).isEqualTo(10);
+        // A malformed body gets the same answer: the limit comes before validation.
+        assertError(browser.post(regenerate, "not json"), 429, "rate_limited");
+
+        // What comes before step 5 still comes before it, and counts toward nothing.
+        long counted = count("select attempts from auth_throttle where scope = 'protected.address'");
+        assertError(browser.post(change, "{}", null), 403, "csrf_invalid");
+        assertError(browser.send("POST", change, "{}", "text/plain", browser.token), 415, "unsupported_media_type");
+        assertError(browser.send("PUT", change, "{}", "application/json", browser.token), 405, "method_not_allowed");
+        browser.extraHeaders.put("Origin", "https://attacker.example");
+        assertError(browser.post(change, "{}"), 403, "forbidden");
+        browser.extraHeaders.clear();
+        assertThat(count("select attempts from auth_throttle where scope = 'protected.address'")).isEqualTo(counted);
+
+        // The session is untouched, and the address can still sign in: that is another budget.
+        assertThat(browser.get("/api/me").status()).isEqualTo(200);
+        Browser sameAddress = browser();
+        sameAddress.address = browser.address;
+        Browser.Answer signIn = sameAddress.login(admin.email(), PASSWORD);
+        assertThat(signIn.status()).as(signIn.body()).isEqualTo(200);
+        // And thirty sign-in requests from an address do not use up its protected budget.
+        Browser other = donor(EMAIL);
+        for (int i = 0; i < 29; i++) {
+            assertError(other.post("/api/auth/login", "{}"), 409, "already_signed_in");
+        }
+        assertError(other.post("/api/auth/login", "{}"), 429, "rate_limited");
+        assertError(other.post(change, "{}"), 400, "validation_error");
+
+        // When the window ends the budget is whole again.
+        advance(java.time.Duration.ofMinutes(11));
+        assertError(browser.post(change, "{}"), 400, "validation_error");
+        Browser.Answer regenerated = browser.post(regenerate, json("currentPassword", PASSWORD, "code", code(admin.secret())));
+        assertThat(regenerated.status()).as(regenerated.body()).isEqualTo(200);
+    }
+
     @Test
     void housekeepingRemovesOnlyWhatCanNoLongerMatter() {
         // Every window and cooldown is far shorter than the retention the housekeeping uses.

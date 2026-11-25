@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot's standard logging, plus one filter that cannot be configured away: no session
+  identifier (live, retired or expired, plain or as the cookie carries it), no password hash and
+  no raw request reaches any log, at any level. See SensitiveLogFilter.
+-->
+<configuration>
+	<turboFilter class="org.apvgakasinay.shared.SensitiveLogFilter"/>
+	<include resource="org/springframework/boot/logging/logback/base.xml"/>
+</configuration>

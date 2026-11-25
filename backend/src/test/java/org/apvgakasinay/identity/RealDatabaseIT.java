@@ -53,6 +53,7 @@ class RealDatabaseIT {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("apv.identity.mfa-encryption-key", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         registry.add("apv.identity.hash-key", () -> "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=");
+        registry.add("apv.identity.password-blocklist-path", () -> org.apvgakasinay.support.TestBlocklist.production().toString());
     }
 
     @Value("${local.server.port}")
@@ -137,6 +138,12 @@ class RealDatabaseIT {
 
         Browser browser = browser();
         browser.csrf();
+        // 2.9, over HTTP in production: a password that is in the local breached list is refused, and the credential is not spent on it.
+        Browser.Answer breached = browser.post("/api/auth/set-password",
+                "{\"credential\":\"" + credential + "\",\"newPassword\":\"" + org.apvgakasinay.support.TestBlocklist.BREACHED_PASSPHRASE + "\"}");
+        assertThat(breached.status()).isEqualTo(400);
+        assertThat(breached.fieldCode()).isEqualTo("compromised");
+        assertThat(count("select count(*) from account_password")).isZero();
         assertThat(browser.post("/api/auth/set-password", "{\"credential\":\"" + credential + "\",\"newPassword\":\"" + PASSWORD + "\"}").status()).isEqualTo(204);
         Browser.Answer login = browser.login("sample.owner@example.org", PASSWORD);
         assertThat(login.json().get("status").asText()).as(login.body()).isEqualTo("mfa_enrollment_required");

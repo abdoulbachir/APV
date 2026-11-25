@@ -180,7 +180,7 @@ class IdentitySecurityUnitTest {
                     "Password policy, blocklist, Argon2id hashing and verification ran with no outgoing network: a connection to 1.1.1.1:443 failed.\n");
         }
         IdentityProperties properties = new IdentityProperties(test());
-        PasswordPolicy policy = new PasswordPolicy(properties);
+        PasswordPolicy policy = new PasswordPolicy(BreachedPasswords.none());
         assertThatThrownBy(() -> policy.accept("password", "passwordpassword", List.of())).isInstanceOf(ApiException.class);
         String normalized = policy.accept("password", "a long harmless passphrase 2026", List.of("sample.donor", "Sample Person"));
         PasswordHasher hasher = new PasswordHasher(properties);
