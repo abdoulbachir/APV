@@ -11,5 +11,6 @@ export function formatMoney(cents: Cents, locale: Locale, compact = false) {
 export function formatDate(iso: string, locale: Locale, long = false) {
   return new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-US', {
     month: long ? 'long' : 'short', day: 'numeric', year: long ? 'numeric' : undefined,
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: 'UTC' } : {}),
   }).format(new Date(iso));
 }

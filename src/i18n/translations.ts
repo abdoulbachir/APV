@@ -1,11 +1,9 @@
-import type { Case, CaseUpdate, LedgerEntry, PublicDonor, Stats } from '../types';
-
 export type Locale = 'en' | 'fr';
 
 const en = {
     navigationA11y: { skip: 'Skip to content', primary: 'Primary navigation' },
     errors: { missingPage: 'Page not found', missingPageBody: 'This page does not exist or has moved.', missingCase: 'Case unavailable', missingCaseBody: 'This case could not be found or is no longer public.', browse: 'Browse active cases', home: 'Return home' },
-    directory: {"title":"Find a story to support.","intro":"Discover active cases and follow the impact of every confirmed gift.","search":"Search cases","searchPlaceholder":"Search stories, names or case numbers","category":"Category","allCategories":"All categories","sort":"Sort by","sorts":{"newest":"Newest first","deadline":"Deadline approaching","closest":"Closest to goal","least":"Least funded"},"categories":{"education":"Education","medical":"Medical","housing":"Housing","family":"Family support","emergency":"Emergency","other":"Other"},"clear":"Clear filters","count":"Active cases: {count}","view":"Display mode","grid":"Grid","list":"List","noDeadline":"No deadline","range":"Showing {start}–{end} of {total}","pagination":"Case pages","previous":"Previous","next":"Next","page":"Page {number}","empty":"No matching cases","exploreAll":"Explore all {count} active cases","back":"Back to cases"},
+    directory: {"title":"Find a story to support.","intro":"Discover active cases and follow the impact of every confirmed gift.","search":"Search cases","searchPlaceholder":"Search stories, names or case numbers","category":"Category","allCategories":"All categories","sort":"Sort by","sorts":{"newest":"Newest first","deadline":"Deadline approaching","closest":"Closest to goal","least":"Least funded","featured":"Featured first"},"categories":{"education":"Education","medical":"Medical","housing":"Housing","family":"Family support","emergency":"Emergency","other":"Other"},"clear":"Clear filters","count":"Active cases: {count}","view":"Display mode","grid":"Grid","list":"List","noDeadline":"No deadline","range":"Showing {start}–{end} of {total}","pagination":"Case pages","previous":"Previous","next":"Next","page":"Page {number}","empty":"No matching cases","exploreAll":"Explore all {count} active cases","back":"Back to cases"},
     theme: { darkMode: 'Dark mode', switchLight: 'Switch to light mode', switchDark: 'Switch to dark mode' },
     redesign: {"preview":"Sample preview · illustrative data","explore":"Explore active cases","activeLead":"A real need.","activeAccent":"A direct impact.","publicRecord":"The public record","transparency":"Transparency at a glance.","transparencyIntro":"A clear view of confirmed gifts, delivered support and available funds.","fundsOverview":"Confirmed funds overview","deliveredRatio":"delivered / received","unavailable":"Unavailable","howLead":"Human support. Nothing hidden.","completedUnavailable":"Available in the next phase","givingPreview":"Giving is not open yet. This is a sample for design review.","illustration":"Symbolic illustration","generatedIllustration":"AI-generated illustration","readStory":"Read the story","remaining":"remaining","photoLabel":"Public photo for {name}","homeArtworkAlt":"Symbolic illustration of a sunlit room with two beds and a moving box","renewalArtworkAlt":"Symbolic illustration of a person seen from behind looking toward the sunrise","caseLoadingTitle":"Loading case","caseUnavailableTitle":"Case unavailable"},
     meta: { homeTitle: 'APV-GAKASINAY — Help moves between us' },
@@ -30,12 +28,13 @@ const en = {
       howTitle: 'Human support. Verifiable movement. Nothing hidden.',
       steps: [
         { number: '01', title: 'Meet the person', text: 'Understand the moment they are moving through and what support can unlock.' },
-        { number: '02', title: 'Give in your own app', text: 'Use Zelle or PayPal. This site never touches your payment.' },
+        { number: '02', title: 'Give in your own app', text: 'Use Zelle, PayPal, Cash App or Apple Cash. This site never touches your payment.' },
         { number: '03', title: 'Follow every dollar', text: 'Confirmed gifts and delivered funds become part of a living public record.' },
       ],
     },
-    stats: { aria: 'Community totals', received: 'Received', delivered: 'Delivered', helped: 'People helped', receivedNote: 'confirmed gifts', deliveredNote: 'handed to people', helpedNote: 'so far' },
+    stats: { aria: 'Community totals', received: 'Received', delivered: 'Delivered', helped: 'Cases helped', receivedNote: 'confirmed gifts', deliveredNote: 'handed to people', helpedNote: 'so far' },
     caseCard: { received: 'received', delivered: 'delivered', ofGoal: 'of goal', openCase: 'Open case for {name}' },
+    publicRead: { fundDonations: 'External gifts', fundAllocated: 'Net allocated to cases', available: 'Available balance', shortfall: 'Funding shortfall', unavailableGiving: 'This case is not accepting new gifts.', givingNotOpen: 'Giving is not open yet.', more: 'Load more', retryHistory: 'Could not load more. Try again.', gallery: 'Case pictures', tooLong: 'Search must be at most 80 characters after trimming.', corrected: 'Corrected', net: 'Net amount', historyChanged: 'The record changed. Reload this case.', allocated: 'Allocated' },
     casePage: {
       back: 'All active cases',
       supportLabel: 'One story. One clear need.',
@@ -88,7 +87,7 @@ export type Translation = TranslationShape<typeof en>;
 const fr = {
     navigationA11y: { skip: 'Aller au contenu', primary: 'Navigation principale' },
     errors: { missingPage: 'Page introuvable', missingPageBody: 'Cette page n’existe pas ou a été déplacée.', missingCase: 'Cas indisponible', missingCaseBody: 'Ce cas est introuvable ou n’est plus public.', browse: 'Découvrir les cas actifs', home: 'Retour à l’accueil' },
-    directory: {"title":"Trouvez une histoire à soutenir.","intro":"Découvrez les cas actifs et suivez l’impact de chaque don confirmé.","search":"Rechercher des cas","searchPlaceholder":"Rechercher une histoire, un nom ou un numéro","category":"Catégorie","allCategories":"Toutes les catégories","sort":"Trier par","sorts":{"newest":"Les plus récents","deadline":"Échéance proche","closest":"Objectif presque atteint","least":"Les moins financés"},"categories":{"education":"Éducation","medical":"Santé","housing":"Logement","family":"Soutien familial","emergency":"Urgence","other":"Autre"},"clear":"Effacer les filtres","count":"Cas actifs : {count}","view":"Mode d’affichage","grid":"Grille","list":"Liste","noDeadline":"Sans échéance","range":"Résultats {start}–{end} sur {total}","pagination":"Pages de cas","previous":"Précédent","next":"Suivant","page":"Page {number}","empty":"Aucun cas correspondant","exploreAll":"Découvrir les {count} cas actifs","back":"Retour aux cas"},
+    directory: {"title":"Trouvez une histoire à soutenir.","intro":"Découvrez les cas actifs et suivez l’impact de chaque don confirmé.","search":"Rechercher des cas","searchPlaceholder":"Rechercher une histoire, un nom ou un numéro","category":"Catégorie","allCategories":"Toutes les catégories","sort":"Trier par","sorts":{"newest":"Les plus récents","deadline":"Échéance proche","closest":"Objectif presque atteint","least":"Les moins financés","featured":"En vedette"},"categories":{"education":"Éducation","medical":"Santé","housing":"Logement","family":"Soutien familial","emergency":"Urgence","other":"Autre"},"clear":"Effacer les filtres","count":"Cas actifs : {count}","view":"Mode d’affichage","grid":"Grille","list":"Liste","noDeadline":"Sans échéance","range":"Résultats {start}–{end} sur {total}","pagination":"Pages de cas","previous":"Précédent","next":"Suivant","page":"Page {number}","empty":"Aucun cas correspondant","exploreAll":"Découvrir les {count} cas actifs","back":"Retour aux cas"},
     theme: { darkMode: 'Mode sombre', switchLight: 'Activer le mode clair', switchDark: 'Activer le mode sombre' },
     redesign: {"preview":"Aperçu · données fictives","explore":"Découvrir les cas actifs","activeLead":"Un besoin réel.","activeAccent":"Un impact direct.","publicRecord":"Le registre public","transparency":"La transparence en un regard.","transparencyIntro":"Une vue claire des dons confirmés, des fonds remis et du solde disponible.","fundsOverview":"Aperçu des fonds confirmés","deliveredRatio":"remis / reçu","unavailable":"Indisponible","howLead":"Un soutien humain. Rien de caché.","completedUnavailable":"Disponible à la prochaine phase","givingPreview":"Les dons ne sont pas encore ouverts. Ceci est un aperçu pour validation du design.","illustration":"Illustration symbolique","generatedIllustration":"Illustration générée par IA","readStory":"Lire son histoire","remaining":"restants","photoLabel":"Photo publique de {name}","homeArtworkAlt":"Illustration symbolique d’une chambre ensoleillée avec deux lits et un carton de déménagement","renewalArtworkAlt":"Illustration symbolique d’une personne vue de dos face au lever du soleil","caseLoadingTitle":"Chargement du cas","caseUnavailableTitle":"Cas indisponible"},
     meta: { homeTitle: 'APV-GAKASINAY — L’aide circule entre nous' },
@@ -113,11 +112,11 @@ const fr = {
       howTitle: 'Un soutien humain. Des mouvements vérifiables. Rien de caché.',
       steps: [
         { number: '01', title: 'Rencontrez la personne', text: 'Comprenez ce qu’elle traverse et ce que votre soutien peut rendre possible.' },
-        { number: '02', title: 'Donnez dans votre application', text: 'Utilisez Zelle ou PayPal. Ce site ne touche jamais à votre paiement.' },
+        { number: '02', title: 'Donnez dans votre application', text: 'Utilisez Zelle, PayPal, Cash App ou Apple Cash. Ce site ne touche jamais à votre paiement.' },
         { number: '03', title: 'Suivez chaque dollar', text: 'Les dons confirmés et les fonds remis rejoignent un registre public vivant.' },
       ],
     },
-    stats: { aria: 'Totaux de la communauté', received: 'Reçu', delivered: 'Remis', helped: 'Personnes aidées', receivedNote: 'dons confirmés', deliveredNote: 'remis aux personnes', helpedNote: 'jusqu’ici' },
+    stats: { aria: 'Totaux de la communauté', received: 'Reçu', delivered: 'Remis', helped: 'Cas aidés', receivedNote: 'dons confirmés', deliveredNote: 'remis aux personnes', helpedNote: 'jusqu’ici' },
     caseCard: { received: 'reçu', delivered: 'remis', ofGoal: 'de l’objectif', openCase: 'Ouvrir le cas de {name}' },
     casePage: {
       back: 'Tous les cas actifs',
@@ -166,34 +165,3 @@ const fr = {
 
 export const translations = { en, fr } as const;
 
-export function mockContent(locale: Locale): { stats: Stats; cases: Case[]; updates: CaseUpdate[]; donors: PublicDonor[]; ledger: LedgerEntry[] } {
-  const text = translations[locale].mock;
-  const mainCase: Case = {
-    code: 'HELP-014', kind: 'case', title: text.caseTitle, publicName: text.publicName, story: text.story,
-    photoUrl: null, goal: 850000, deadline: '2027-01-18T12:00:00.000Z', status: 'active',
-    received: 567500, delivered: 320000, createdAt: '2026-10-04T15:00:00.000Z',
-  };
-  const fund: Case = {
-    code: 'FUND', kind: 'fund', title: translations[locale].home.fundTitle, publicName: '', story: translations[locale].home.fundBody,
-    photoUrl: null, goal: null, deadline: null, status: 'active', received: 284000, delivered: 120000, createdAt: '2026-01-02T12:00:00.000Z',
-  };
-  return {
-    stats: { received: 2847500, delivered: 2312000, peopleHelped: 18 },
-    cases: [mainCase, fund],
-    updates: [{ id: 'update-1', caseCode: mainCase.code, text: text.updateText, photoUrl: null, date: '2026-11-19T17:30:00.000Z', author: text.updateAuthor }],
-    donors: [
-      { name: text.donors[0], amount: 12500, date: '2026-11-21T12:00:00.000Z' },
-      { name: null, amount: 25000, date: '2026-11-18T12:00:00.000Z' },
-      { name: text.donors[1], amount: 7500, date: '2026-11-16T12:00:00.000Z' },
-      { name: text.donors[2], amount: 50000, date: '2026-11-11T12:00:00.000Z' },
-    ],
-    ledger: [
-      { kind: 'donation', amount: 12500, date: '2026-11-21T12:00:00.000Z', label: text.ledger[0] },
-      { kind: 'donation', amount: 25000, date: '2026-11-18T12:00:00.000Z', label: text.ledger[1] },
-      { kind: 'donation', amount: 7500, date: '2026-11-16T12:00:00.000Z', label: text.ledger[3] },
-      { kind: 'donation', amount: 50000, date: '2026-11-11T12:00:00.000Z', label: text.ledger[3] },
-      { kind: 'disbursement', amount: 320000, date: '2026-11-09T12:00:00.000Z', label: text.ledger[2] },
-      { kind: 'donation', amount: 472500, date: '2026-11-05T12:00:00.000Z', label: text.ledger[4] },
-    ],
-  };
-}
