@@ -13,6 +13,12 @@ final class Responses {
     }
 
     record CsrfToken(String headerName, String token) {
+
+        /** Never the contents: frameworks print the object they are about to write when logging at DEBUG. */
+        @Override
+        public String toString() {
+            return "CsrfToken[not shown]";
+        }
     }
 
     record AuthOptions(boolean registrationOpen) {
@@ -29,17 +35,41 @@ final class Responses {
 
     record AccountView(String id, String email, boolean emailVerified, String displayName, String role, List<String> permissions,
                        Mfa mfa, String locale, String createdAt, SessionInfo session) {
+
+        /** Never the contents: frameworks print the object they are about to write when logging at DEBUG. */
+        @Override
+        public String toString() {
+            return "AccountView[not shown]";
+        }
     }
 
     record SignedIn(String status, AccountView account) {
+
+        /** Never the contents: frameworks print the object they are about to write when logging at DEBUG. */
+        @Override
+        public String toString() {
+            return "SignedIn[not shown]";
+        }
     }
 
     record SecondFactorPending(String status, String pendingExpiresAt) {
     }
 
     record MfaEnrollment(String secret, String otpauthUri, String expiresAt) {
+
+        /** Never the contents: frameworks print the object they are about to write when logging at DEBUG. */
+        @Override
+        public String toString() {
+            return "MfaEnrollment[not shown]";
+        }
     }
 
     record MfaRecoveryCodes(List<String> codes, String generatedAt) {
+
+        /** Never the contents: frameworks print the object they are about to write when logging at DEBUG. */
+        @Override
+        public String toString() {
+            return "MfaRecoveryCodes[not shown]";
+        }
     }
 }

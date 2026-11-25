@@ -28,6 +28,11 @@ public class MfaService {
 
     /** A pending authenticator secret, shown once. */
     public record Enrollment(String secret, String otpauthUri, Instant expiresAt) {
+
+        @Override
+        public String toString() {
+            return "Enrollment[not shown]";
+        }
     }
 
     private final AccountRepository accounts;
@@ -63,6 +68,11 @@ public class MfaService {
     private enum Step { ACCEPTED, WRONG_CODE, EXHAUSTED, ALREADY_COMPLETED, ENDED, REVOKED, WINDOW_CLOSED, LOST_RACE, FORBIDDEN }
 
     private record Attempt(Step step, Account account, List<String> codes, boolean bootstrapped, Enrollment enrollment) {
+
+        @Override
+        public String toString() {
+            return "Attempt[" + step + "]";
+        }
 
         static Attempt of(Step step) {
             return new Attempt(step, null, null, false, null);
