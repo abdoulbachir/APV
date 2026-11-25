@@ -5,7 +5,10 @@ Contract and security design for identity. Nothing here is implemented: no Sprin
 - Baseline: `main` at `a7fbab22f837bdadc495d307b7fafdf1e83554ad` (milestone 0B accepted).
 - First revision: `bd162cdeb3b98d38aa92f8a71162cab48abc0943`. Reviewed in pull request 8: changes required.
 - Second revision: `022b576a6212ecde4b61f9c358ad4c1fde420644`, answering that review finding by finding (section 2). Accepted, with two narrow clarifications requested.
-- This revision makes those two clarifications (section 2a).
+- Third revision: `549bb5580a6dcc6c7c9b7b24cccf800b5539b2b2` (section 2a).
+- Fourth revision: `1b1ae5b672e215e4a099dda8b73299d2432e7c47` (section 2b).
+- Final technically accepted revision: `b5ea149fb3e33380dd622ad734117a15051b4bfd` (section 2c); frontend PASS and independent Traycer PASS, no remaining acceptance blockers in M1A scope.
+- Closure: owner approved all seven security policies and operational recovery advice on 2026-11-25 and authorized merging PR #8 after the documentation-only closure revision and final CI are verified. See `../docs/decisions.md`.
 - Contract version: 0.3.0. The seven public read endpoints are unchanged, apart from documenting 405.
 
 File names below are in `contract/` unless they start with another folder. "I&S" is `identity-and-security.md`; "tests" is `tests/security-acceptance.md`.
@@ -215,9 +218,9 @@ One place is deliberately left as it was: the comment above `csrfHeaderName` in 
 2. `src/api/generated/identity-api.ts`: regenerated. `needsSession` is replaced by `allowedStates`; `LoginResult` and `MfaVerifyRequest` are unions; `Permission` has two members; `AuthOptions` and `getAuthOptions` are new; the CSRF header name is `X-CSRF-TOKEN`.
 3. One backend test line expects contract version 0.3.0 (unchanged from the first revision).
 
-## 6. Owner decisions needed
+## 6. Owner decisions — approved
 
-All are proposals. None is treated as approved anywhere in this pull request.
+The table below preserves the recommendations considered during review. On 2026-11-25 the owner accepted decisions 1–7 and adopted item 8 as operational advice, not an enforced rule. The authoritative approved wording is in `../docs/decisions.md`.
 
 | # | Decision | Recommendation |
 |---|---|---|
@@ -244,10 +247,10 @@ All are proposals. None is treated as approved anywhere in this pull request.
 
 Frontend agent:
 
-- [ ] Each of the seven findings is resolved, or countered.
-- [ ] The CSRF rule after `csrf_invalid` (I&S 9.1) and the per-code handling of 401 (I&S 4.7, 11) are implementable as written.
-- [ ] `identity-api.ts` has the shape the frontend wants.
-- [ ] The browser tests (section 10 of the test matrix) are feasible.
+- [x] Each of the seven findings is resolved, or countered.
+- [x] The CSRF rule after `csrf_invalid` (I&S 9.1) and the per-code handling of 401 (I&S 4.7, 11) are implementable as written.
+- [x] `identity-api.ts` has the shape the frontend wants.
+- [x] The browser tests (section 10 of the test matrix) are feasible.
 
 Backend agent:
 
@@ -257,5 +260,13 @@ Backend agent:
 
 Project owner:
 
-- [ ] The decisions in section 6.
-- [ ] Authorization to merge this contract and to start milestone 1B.
+- [x] The decisions in section 6.
+- [x] Authorization to merge PR #8 after verification of the documentation-only closure and final CI.
+
+Independent acceptance:
+
+- [x] Traycer PASS at exact `b5ea149fb3e33380dd622ad734117a15051b4bfd`. Three wording corrections verified; machine-readable OpenAPI (excluding summary/description), generated types and runtime unchanged from the prior checkpoint. Full contract validation passed. Earlier independent regression evidence reused for unchanged code, including 8 frontend tests, both builds, 38 backend unit and 76 PostgreSQL integration tests.
+- [x] Coordinator technical acceptance recorded in [PR comment](https://github.com/abdoulbachir/APV/pull/8#issuecomment-7152601618); all four CI workflows succeeded on the accepted technical SHA.
+- Closure CI and merge result are to be verified on GitHub after this documentation-only commit. This file does not claim either occurred yet.
+
+M1B remains unimplemented. The four ADR probes, 220 planned security acceptance scenarios, runtime security, and browser integration must be verified in M1B. The generated `csrfHeaderName` comment is a documented nonblocking M1B cleanup. Generated fictional dataset cleanup remains separate and precedes parallel M1B implementation.

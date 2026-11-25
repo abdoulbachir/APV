@@ -1,6 +1,6 @@
 # ADR 0002: Identity, sessions and request security
 
-- Status: proposed for milestone 1B. Revised after the independent review of pull request 8. Awaiting the project owner's decisions.
+- Status: accepted as the M1A design baseline on 2026-11-25, following independent acceptance at `b5ea149fb3e33380dd622ad734117a15051b4bfd` and the owner's approval of the seven policy decisions in `docs/decisions.md`. Implementation remains subject to the four compatibility probes below and M1B runtime acceptance.
 - Date: 2026-11-24
 - Scope: how sign-in, sessions, the second factor and request protection are built on the architecture approved in ADR 0001. It changes none of ADR 0001.
 

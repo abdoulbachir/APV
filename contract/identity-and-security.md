@@ -2,10 +2,12 @@
 
 Rules behind the identity endpoints of `openapi.yaml` (version 0.3.0), revised after the independent review of commit `bd162cd` (pull request 8). The frontend and the backend each implement against this document in milestone 1B. Nothing here is implemented yet.
 
-Each rule is marked:
+Status: technically accepted at `b5ea149fb3e33380dd622ad734117a15051b4bfd`; owner policy decisions approved on 2026-11-25 (see `../docs/decisions.md`). This is an accepted design, not runtime evidence.
 
-- **[Approved]** already decided by the project owner or the accepted architecture.
-- **[Proposal]** a new security recommendation, to be reviewed before implementation.
+Rule labels:
+
+- **[Approved]** decided by the project owner or the accepted architecture.
+- **[M1A design]** reviewed technical design to implement and verify in M1B; framework compatibility probes and runtime acceptance remain required.
 
 ## 1. Who can do what
 
@@ -42,7 +44,7 @@ An account is never required to give or to report a gift. **[Approved]**
 | `contact_messages.read` | No | No | No | No | Yes | Super administration |
 | `audit.read` | No | No | No | No | Yes | Super administration |
 
-**[Approved]** boundaries; **[Proposal]** the permission names.
+**[Approved]** boundaries; **[M1A design]** the permission names.
 
 `can_disburse` exists only on administrators. A super administrator can always record a disbursement, as the original design says ("me and chosen admins").
 
@@ -62,13 +64,13 @@ Role alone is never enough for data that belongs to a person.
 
 - **[Approved]** Deny by default. A route with no declared rule is refused. Adding a controller without a rule fails a test, it does not open a hole.
 - **[Approved]** The server checks every protected request itself. `Account.permissions` is for deciding what to show and is not a boundary.
-- **[Proposal]** Permissions are computed from the account's role and `can_disburse` on every request, from the database, not from a copy stored in the session. A removed permission stops working on the next request. See 6.3.
+- **[M1A design]** Permissions are computed from the account's role and `can_disburse` on every request, from the database, not from a copy stored in the session. A removed permission stops working on the next request. See 6.3.
 
 ## 2. Accounts
 
 ### 2.1 Fields
 
-Minimal on purpose. **[Proposal]**
+Minimal on purpose. **[M1A design]**
 
 | Field | Notes |
 |---|---|
@@ -89,7 +91,7 @@ No address, phone number, date of birth or picture. Profile editing, pictures an
 
 ### 2.2 Public sign-up
 
-**[Proposal, owner decision 1]** Public sign-up is **closed in production** until the site can prove that the person signing up controls the address (a verification email). The reason is in "Preclaimed addresses" below.
+**[Approved, owner decision 1]** Public sign-up is **closed in production** until the site can prove that the person signing up controls the address (a verification email). The reason is in "Preclaimed addresses" below.
 
 - A server setting decides. It is closed unless explicitly opened, and the production profile refuses to start with it open while no address proof exists.
 - `GET /auth/options` tells the frontend (`registrationOpen`), which hides the sign-up form when closed.
@@ -121,7 +123,7 @@ Frontend experience: after 202, show "Your account is ready. Sign in." and the s
 
 ## 3. Passwords
 
-**[Proposal]**, following OWASP's Password Storage Cheat Sheet and NIST SP 800-63B revision 4.
+**[Approved policy, owner decision 6; M1A design for technical details]**, following OWASP's Password Storage Cheat Sheet and NIST SP 800-63B revision 4.
 
 | Rule | Value |
 |---|---|
@@ -155,8 +157,8 @@ Passwords, hashes, one-time credentials, authenticator secrets, recovery codes, 
 ### 4.1 Mechanism
 
 - **[Approved]** Server-side sessions stored in PostgreSQL, with Spring Session JDBC. The browser holds only a random identifier in a cookie. No JWT, nothing in `localStorage` or `sessionStorage`, no external identity provider.
-- **[Proposal]** A session holds its CSRF token and, once someone signs in, the account identifier, its security version at sign-in, the sign-in instant, the state (4.3) and the absolute deadline. It holds no permission list.
-- **[Proposal]** A browser gets an **anonymous session** the first time it calls `GET /auth/csrf`. It holds only the CSRF token, grants nothing, and expires after 30 idle minutes and at most 2 hours. Anonymous sessions are created only by that endpoint, which is rate-limited (section 7), and expired rows are deleted by a scheduled task.
+- **[M1A design]** A session holds its CSRF token and, once someone signs in, the account identifier, its security version at sign-in, the sign-in instant, the state (4.3) and the absolute deadline. It holds no permission list.
+- **[M1A design]** A browser gets an **anonymous session** the first time it calls `GET /auth/csrf`. It holds only the CSRF token, grants nothing, and expires after 30 idle minutes and at most 2 hours. Anonymous sessions are created only by that endpoint, which is rate-limited (section 7), and expired rows are deleted by a scheduled task.
 
 ### 4.2 Cookie
 
@@ -172,7 +174,7 @@ There is one cookie. The CSRF token is not in a cookie.
 | `Domain` | Not set | Not set |
 | Lifetime | Session cookie (no `Max-Age`); the server decides expiry | Same |
 
-**[Approved]** attributes; **[Proposal]** names. The `__Host-` prefix makes browsers refuse the cookie unless it is `Secure`, has `Path=/` and has no `Domain`, so a sibling subdomain cannot plant or read it.
+**[Approved]** attributes; **[M1A design]** names. The `__Host-` prefix makes browsers refuse the cookie unless it is `Secure`, has `Path=/` and has no `Domain`, so a sibling subdomain cannot plant or read it.
 
 The insecure form exists only in the `dev` and `test` profiles. Outside them the application refuses to start if the session cookie is not `Secure`, and `ProfileGuard` already refuses mixing a production profile with `dev`. Development needs never relax production.
 
@@ -245,7 +247,7 @@ So, for a signed-in or pending session that has been lost:
 
 ### 4.4 Lifetimes
 
-**[Proposal, owner decision 2]**
+**[Approved, owner decision 2]**
 
 | | Idle timeout | Absolute lifetime |
 |---|---|---|
@@ -295,7 +297,7 @@ The server guarantees both directions: a lost session is never reported as `inva
 
 ## 5. Second factor for staff
 
-All of this section is **[Proposal]**.
+Mandatory staff MFA and ten recovery codes are **[Approved, owner decision 3]**; implementation details are **[M1A design]**.
 
 ### 5.1 Rule
 
@@ -370,7 +372,7 @@ A recovery code is the normal way back. With no authenticator and no recovery co
 
 ### 6.3 How it is guaranteed
 
-Expiry alone is not relied on. Two independent mechanisms, **[Proposal]**:
+Expiry alone is not relied on. Two independent mechanisms, **[M1A design]**:
 
 1. **Delete.** Spring Session JDBC indexes sessions by account, so every event above deletes the account's session rows in the same database transaction as the change.
 2. **Check on every request.** Each authenticated request loads the account row (one primary-key read). If the account is disabled, or its security version differs from the one stored in the session, the session is deleted and the answer is 401. The same read supplies the current role and `can_disburse`, so permissions are never stale.
@@ -385,7 +387,7 @@ If the first mechanism ever misses a row, the second still refuses it.
 
 ## 7. Rate limiting
 
-**[Proposal]**. Counters live in PostgreSQL. No other infrastructure.
+**[M1A design]**. Counters live in PostgreSQL. No other infrastructure.
 
 ### 7.1 Every check of a secret is limited
 
@@ -426,7 +428,7 @@ Not only sign-in. Each place a password, code or credential is checked draws on 
 
 ## 8. Operator procedures
 
-All **[Proposal]**. Browser-based staff management belongs to milestone 5. Until then, staff accounts are managed by an operator command run on the server by someone who already has access to it.
+Staff provisioning and recovery policies are **[Approved, owner decisions 4 and 5]**; implementation details are **[M1A design]**. Browser-based staff management belongs to milestone 5. Until then, staff accounts are managed by an operator command run on the server by someone who already has access to it.
 
 ### 8.1 The operator command
 
@@ -517,7 +519,7 @@ Operations that only add to the set (creating an account, enabling one, completi
 
 ### 9.1 CSRF
 
-**[Approved]** Spring Security's CSRF protection; details **[Proposal]**. The token is bound to the server-side session, not to a cookie the browser could be made to send from elsewhere.
+**[Approved]** Spring Security's CSRF protection; details **[M1A design]**. The token is bound to the server-side session, not to a cookie the browser could be made to send from elsewhere.
 
 **Mechanism.**
 
@@ -543,7 +545,7 @@ Operations that only add to the set (creating an account, enabling one, completi
 ### 9.2 Origin and fetch metadata
 
 - **[Approved]** One origin. No CORS headers are sent at all, so no other site can read a response or send credentials with a scripted request.
-- **[Proposal]** Every request using methods other than `GET`, `HEAD` and `OPTIONS` is checked at step 2 of the order in 4.3, before its body, its token and its session are looked at. It is refused with 403 `forbidden` when either of these holds:
+- **[M1A design]** Every request using methods other than `GET`, `HEAD` and `OPTIONS` is checked at step 2 of the order in 4.3, before its body, its token and its session are looked at. It is refused with 403 `forbidden` when either of these holds:
   1. An `Origin` header is present and is not exactly the site's own origin (scheme, host and port). `Origin: null` is not the site's origin.
   2. A `Sec-Fetch-Site` header is present and its value is anything other than `same-origin`. This refuses `cross-site`, `same-site` and `none`.
 - Both headers are evaluated; one failing is enough. Neither header present is allowed through to the later steps: older browsers and non-browser tools send neither, and the CSRF token still stands in their way.
@@ -639,7 +641,7 @@ The same table will take financial administration events later: the columns are 
 
 ### 10.2 Development data and real databases
 
-The fixture loader deletes case, ledger and picture data before loading a fixture. Today it accepts an empty database or one whose content came from a fixture. That is not strict enough once accounts exist: an empty production database, before its first account, would look loadable. So the rule becomes explicit. **[Proposal]** for milestone 1B:
+The fixture loader deletes case, ledger and picture data before loading a fixture. Today it accepts an empty database or one whose content came from a fixture. That is not strict enough once accounts exist: an empty production database, before its first account, would look loadable. So the rule becomes explicit. **[M1A design]** for milestone 1B:
 
 - **A database must be marked disposable before anything fictional can enter it.** The marker is a row written deliberately when a development or test database is created: by the initialization script of the local Compose database, and by the test setup. It is never written by the application at start-up, and never by a migration.
 - The fixture loader and the development account seed run **only** on a database carrying that marker. An unmarked database, empty or not, is refused. They also keep the existing checks: `dev` or `test` profile only, local database only.
@@ -649,7 +651,7 @@ The fixture loader deletes case, ledger and picture data before loading a fixtur
 
 ## 11. Browser rules
 
-For the frontend, which owns their implementation. **[Proposal]**, to be agreed with the frontend agent. Each has a test in `tests/security-acceptance.md`.
+For the frontend, which owns their implementation. **[M1A design]**, accepted by the frontend agent. Each has a test in `tests/security-acceptance.md`.
 
 **Secrets.**
 
