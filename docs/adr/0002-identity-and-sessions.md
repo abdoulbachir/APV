@@ -33,7 +33,7 @@ No dependency version changes. Everything is what Spring Boot 4.1.3, already in 
 | Spring Security | 7.1.3 | `spring-security.version` in the Spring Boot 4.1.3 dependency list |
 | Spring Session | 4.1.2 | `spring-session.version` in the same list |
 | Starters | `spring-boot-starter-security`, `spring-boot-starter-session-jdbc`, and their `-test` companions | Present in the same list |
-| Bouncy Castle | Not managed by Spring Boot | Required by `Argon2PasswordEncoder`. One new dependency (`org.bouncycastle:bcprov-jdk18on`), to be pinned to an exact version in milestone 1B. |
+| Bouncy Castle | 1.85, not managed by Spring Boot | Required by `Argon2PasswordEncoder`. `org.bouncycastle:bcprov-jdk18on:1.85`, the version Spring Security 7.1.3 is built against; verified by probe 4. |
 
 Checked on 2026-11-24 in the official documentation:
 
@@ -46,12 +46,48 @@ Checked on 2026-11-24 in the official documentation:
 - Password length rules (minimum 15 for a single factor, at least 64 allowed, no composition rules, no periodic change, blocklist): https://pages.nist.gov/800-63-4/sp800-63b.html
 - Time-based one-time passwords: RFC 6238. `__Host-` cookie prefix: RFC 6265bis.
 
-Not verified by running, to be confirmed at the start of milestone 1B before any design depends on them:
+## Compatibility probes
 
-- That Spring Security's multi-factor support can hold a custom time-based-code factor the way this design assumes. The documentation I read describes passwords and one-time tokens; I found no built-in time-based-code verifier. If the fit is poor, the fallback is a session attribute for the state, enforced by one authorization rule, with the same contract.
-- That a per-session idle timeout by role and a fixed absolute deadline work as intended with Spring Session JDBC 4.1.2.
-- That the session-stored CSRF token is replaced at each session-identifier change in the way section 9.1 of the contract requires, including for the two second-factor transitions that are custom code.
-- The exact Bouncy Castle version to pin.
+The four points that were "not verified by running" have been run. The probes are executable tests in `backend/probes/`, a separate throwaway project on the same Spring Boot parent as the backend. Evidence: commit `a1b7f000a966e6c5dd69ff436500cd68e87b25c9`, [Backend checks run 45548617064](https://github.com/abdoulbachir/APV/actions/runs/45548617064), 59 probe tests, 0 failures, with PostgreSQL 18.7 started by Testcontainers. The accepted backend's 114 tests passed in the same run.
+
+This is framework evidence, not runtime acceptance of identity: the probe application has in-memory accounts, its own paths, no rate limits, no audit and no migrations.
+
+| # | Question | Result | How it was shown |
+|---|---|---|---|
+| 1 | Can a custom time-based-code factor take part in Spring Security's multi-factor model? | **Pass.** No fallback needed. | The password step grants the framework's `FACTOR_PASSWORD` authority, the custom code check grants `FACTOR_TOTP` (`FactorGrantedAuthority.fromFactor("TOTP")`), and `AuthorizationManagerFactories.multiFactor().when(isStaff).requireFactors(…)` makes "authenticated" mean both for staff and the password alone for donors. A password-only staff session is refused on every fully signed-in operation, by the framework's own authorization manager. |
+| 2 | Per-role idle timeout, fixed absolute deadline, pending expiry, and refusal of expired sessions before cleanup, on Spring Session JDBC? | **Pass.** | Each `SPRING_SESSION` row carries its own `MAX_INACTIVE_INTERVAL` (1800 anonymous, 600 pending, 7200 donor, 1800 staff). An idle-expired row is refused while it is still in the table, with cleanup switched off. The absolute deadline is a session attribute checked by a filter before the CSRF check; activity moves the idle clock in the row and never the deadline. |
+| 3 | Is the session-stored CSRF token replaced at every session transition? | **Pass.** | At password sign-in, second-factor verification, enrollment confirmation and password change: the session identifier and the token are both replaced; the old token on the new session, and any token with the old identifier, answer 403 `csrf_invalid`; a `GET` with the old identifier is 401; a fresh token works. A protected `POST` with a fresh anonymous token is 401, and sign-in with it works. |
+| 4 | Which Bouncy Castle version, and does Argon2id behave as accepted? | **Pass.** `org.bouncycastle:bcprov-jdk18on:1.85`. | 1.85 is the version Spring Security 7.1.3 itself is built against (`gradle/libs.versions.toml` at tag 7.1.3). Hashes are `$argon2id$v=19$m=19456,t=2,p=1$…` with a 16-byte salt and 32-byte output; 128-code-point Unicode passwords are never cut; NFC is applied by the application, not the encoder; hashes upgrade when parameters rise. |
+
+### What the implementation must take from the probes
+
+- **Transitions are explicit.** The contract's sign-in, second-factor and password-change operations are JSON endpoints, not the framework's login filter, so the framework does not rotate anything by itself. One component must apply `ChangeSessionIdAuthenticationStrategy` and then `CsrfAuthenticationStrategy`, set the session's own idle timeout, and save the security context. The probe's `SessionTransitions` is that component in miniature.
+- **The absolute deadline is ours.** Spring Session has only an idle timeout. The deadline is a session attribute enforced by a filter placed before the CSRF filter, which ends the session; from then on the request is handled as one with no session. That ordering is what gives 403 `csrf_invalid` on a `POST` and 401 on a `GET`, as the contract requires.
+- **Idle expiry is exact.** Spring Session JDBC refuses a row whose idle time has passed when it loads it, independently of the cleanup job.
+- **Sessions are found by account.** `findByPrincipalName` returns all sessions of an account, so deleting them on revocation works as the contract's first mechanism assumes. The principal name stored in the row must therefore be the stable account identifier, not something that can change.
+- **Session content is serialized.** The authentication, including the factor authorities with their issue instants, is stored in the row with Java serialization and read back correctly. Classes stored there must stay serializable and compatible across deployments, or sessions must be discarded on upgrade.
+- **The pending state needs no extra flag.** "Staff with the password factor and without the code factor" is the pending state; the framework's access-denied handling is where the contract's 401 `mfa_required` is produced instead of a 403.
+- **Spring Session creates its tables in the probe.** The implementation creates the same tables in a Flyway migration and switches automatic initialization off.
+
+### Argon2id timings
+
+Median of nine single-threaded verifications after one warm-up.
+
+| Parameters | CI runner (4 processors, 4 GiB heap) | Development machine (24 processors, 8 GiB heap) |
+|---|---|---|
+| 19 MiB, 2 iterations (the accepted floor) | 24 ms | 18 ms |
+| 46 MiB, 1 iteration | 39 ms | 38 ms |
+| 46 MiB, 2 iterations | 68 ms | 51 ms |
+| 64 MiB, 3 iterations | 142 ms | 108 ms |
+
+Limits of these numbers: both machines are faster than a small server is likely to be; a shared CI runner is noisy; the measurement is single-threaded, while the design allows four hashes at once; and it is the Java implementation in Bouncy Castle, not native code. The production value must be measured on the production machine. What the numbers do show is that the accepted floor is far below the 0.25 to 0.5 second target on this class of hardware, so production will most likely run well above the floor, and the memory for four simultaneous hashes (four times the chosen memory cost) must be budgeted when the server is sized.
+
+### Still open after the probes
+
+- The probes used single-instance, in-process state for accounts and for the "last accepted time step". The database versions of those (conditional updates) are implementation work and are covered by the acceptance matrix, not by these probes.
+- Rate limiting, the origin and fetch-metadata check, the security-version check and the super administrator guard were not probed; none was listed as a framework risk.
+- Bouncy Castle 1.85 is the version Spring Security 7.1.3 is built against. Newer releases exist (1.85.2, 1.86, 1.87). I did not review their release notes or advisories; that review belongs with the dependency pin in the implementation.
+- Java-serialized session attributes are a compatibility commitment across upgrades.
 
 The API contract does not depend on any of these.
 

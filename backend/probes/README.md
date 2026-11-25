@@ -40,3 +40,5 @@ Every scenario uses a real HTTP client against a real port, with the session coo
 ## Results
 
 Recorded in `docs/adr/0002-identity-and-sessions.md`, section "Compatibility probes", with the commit and CI run they come from.
+
+All four probes pass: 59 tests, 0 failures, at commit `a1b7f000a966e6c5dd69ff436500cd68e87b25c9`. No fallback was needed for the second factor.
