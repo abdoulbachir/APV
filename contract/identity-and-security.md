@@ -200,7 +200,7 @@ Which operation accepts which state is written in the contract as `x-session-sta
 
 The answer in a wrong state is always the same:
 
-- **401** when more sign-in is owed. Code `unauthenticated` from `anonymous`; `mfa_required` or `mfa_enrollment_required` from those states.
+- **401** when more sign-in is owed. Code `unauthenticated` from `anonymous`; `mfa_required` or `mfa_enrollment_required` from those states. These three codes describe the session. They are distinct from the two 401 codes that describe a wrong secret; see 4.7.
 - **409 `already_signed_in`** when the session is fully signed in and the operation is for one that is not. Nothing is changed, and the existing session is left alone. The frontend reads `GET /me` and offers to sign out. Signing in "over" a signed-in session is never done silently.
 - **403 `forbidden`** when a pending session calls the other pending state's operation, or a signed-in account lacks the permission.
 
@@ -252,6 +252,20 @@ A request can succeed on the server while its answer never reaches the browser. 
 | Sign-up | Sign in. |
 | Sign-out | `GET /me`. |
 
+### 4.7 The five 401 codes
+
+A 401 is one of two different things, and the code always says which.
+
+| Code | About | Session afterwards | Sent by |
+|---|---|---|---|
+| `unauthenticated` | The session | None, or anonymous. Anything that was signed in or pending is gone. | Any operation that needs a session; and the fifth wrong code, an expired pending sign-in, a closed enrollment window |
+| `mfa_required` | The session | Unchanged: still waiting for the second factor | `GET /me` and operations that need a full session |
+| `mfa_enrollment_required` | The session | Unchanged: still waiting for enrollment | Same |
+| `invalid_credentials` | The password in this request | **Unchanged.** A signed-in session stays signed in. | Sign-in; password change; recovery-code regeneration |
+| `mfa_code_invalid` | The code in this request | **Unchanged.** A pending sign-in stays pending and may try again. | Second-factor verification; enrollment confirmation; recovery-code regeneration |
+
+The server guarantees both directions: a lost session is never reported as `invalid_credentials` or `mfa_code_invalid`, and a wrong secret never ends a session, with the single stated exception of the fifth wrong code. What the frontend does with each code is in section 11.
+
 ## 5. Second factor for staff
 
 All of this section is **[Proposal]**.
@@ -283,8 +297,17 @@ Neither authenticator codes nor recovery codes are phishing-resistant: a convinc
 Rules:
 
 - **One pending secret per account.** Starting enrollment again, from the same tab or another, replaces it. A code from a replaced or expired secret (10 minutes) answers 401 `mfa_code_invalid`; the frontend starts enrollment again.
-- **Simultaneous confirmations.** Activation is one conditional update from "pending" to "active". Exactly one request wins; the other finds the session already signed in and gets 409 `already_signed_in`.
-- **The enrollment window.** A staff account may enroll only during the 60 minutes after it redeemed an activation or staff-recovery credential (section 8). Outside that window a staff account without a second factor cannot sign in at all: it is "not activated" again and needs a new credential. A password alone, however it was obtained, never opens enrollment.
+- **Simultaneous confirmations.** Activation is one conditional update from "pending" to "active", so exactly one request succeeds. The guarantees are: one success, one active factor, one set of recovery codes, and no codes or secret disclosed to any other request. The error a losing request gets depends on what it presents, because the winner rotated the session identifier and the CSRF token:
+
+  | The losing request arrives with | Answer |
+  |---|---|
+  | The same browser session, observed after it became signed in | 409 `already_signed_in` |
+  | The CSRF token from before the rotation | 403 `csrf_invalid` |
+  | The session identifier from before the rotation | 401 `unauthenticated` |
+  | Another pending session of the same account (another browser) | 401 `mfa_code_invalid`: the pending secret it knew no longer exists. That session stays pending until it expires and can do nothing with it. |
+
+  All four are correct outcomes. Tests assert the guarantees, and that each loser's error is one this table allows for its situation.
+- **The enrollment window.** A staff account may enroll only during the 60 minutes after it redeemed an activation or staff-recovery credential (section 8). The window is checked when enrollment starts **and again when it is confirmed**. A confirmation after the window closed answers 401 `unauthenticated`, ends the pending session and activates nothing. Outside the window a staff account without a second factor cannot sign in at all: it is "not activated" again and needs a new credential. A password alone, however it was obtained, never opens enrollment.
 
 ### 5.4 Recovery codes
 
@@ -481,13 +504,12 @@ Operations that only add to the set (creating an account, enabling one, completi
 
 **What 403 `csrf_invalid` guarantees.** The token is checked before the operation, before rate-limit counters and before the body is read (4.3, step 3). The request changed nothing and counted against nothing.
 
-**What the frontend does after `csrf_invalid`.** A stale token usually means the session changed underneath the page, often in another tab: someone signed out, signed in as another account, or the session expired. Blindly retrying could then perform the action as a different identity than the person intended. So:
+**What the frontend does after `csrf_invalid`.** A stale token usually means the session changed underneath the page, often in another tab: someone signed out, signed in as another account, or the session expired. The page cannot always tell whether the identity is still the one the person meant: in a pending state `GET /me` carries no account identifier, so two different pending sign-ins look the same. So there is one rule, with no exceptions:
 
-1. Fetch a new token, and read `GET /me`.
-2. Compare the identity now (account identifier and state) with the identity the page was showing when the person acted.
-3. **Changed:** do not resend anything. Clear the page's private state, show the new state (signed out, or the other account), and require the person to act again.
-4. **Unchanged, and the request was sign-in, sign-up, sign-out or a read-only refresh:** resend once.
-5. **Unchanged, and the request was account-sensitive** (password change, set password, anything under `/auth/mfa/`, and every later financial or administrative mutation): never resend automatically. Keep what the person typed where that is safe (never passwords or codes), say the page was out of date, and require a fresh submission.
+1. Fetch a new token.
+2. Read `GET /me` and show the state it reports. If that is not the state the page was showing, clear the page's private state (section 11).
+3. **Never send the refused request again automatically.** This holds for every `POST`, sign-in, sign-up and sign-out included, so a password is never resubmitted without the person asking. Say that the page was out of date and let the person submit again. Text they typed may be kept where that is safe; passwords, codes and credentials are cleared.
+4. A `GET` that failed for this reason may be repeated; `GET` requests do not need the token in the first place.
 
 `SameSite=Lax` on the session cookie is a second, independent barrier, not a replacement.
 
@@ -606,12 +628,30 @@ For the frontend, which owns their implementation. **[Proposal]**, to be agreed 
 
 **Storage.** `localStorage` may keep preferences that are not private: language and colour theme. Nothing about the account, the session or its permissions.
 
-**Private state must not outlive the identity.** Everything the page holds about the account is cleared, and private screens are left, when:
+**Private state must not outlive the identity.** Everything the page holds about the account is cleared, and private screens are left, when the session is really gone:
 
 - the person signs out;
-- any request answers 401, or `GET /me` shows another account or another state;
+- a request answers 401 `unauthenticated` (see the table below; the other 401 codes do not mean this);
+- `GET /me` shows another account, or a state other than the one the page was showing;
 - another tab signs out or signs in as someone else. Tabs tell each other, and each tab re-reads `GET /me` when it becomes visible again;
 - the page is restored from the back-forward cache: it re-reads `GET /me` before showing anything private. `no-store` responses already keep private pages out of that cache in most browsers; the re-check covers the rest.
+
+**What each 401 code means for the page.** Not every 401 is a lost session (4.7), and treating them alike would sign a person out for mistyping a password.
+
+| Code | The page |
+|---|---|
+| `unauthenticated` on any request | The session is gone. Clear private state, then read `GET /me` once to confirm and to learn where to go, and show the sign-in screen. During a second-factor or enrollment step this means the pending sign-in ended (fifth wrong code, expiry, closed window): return to the password step with a message, keeping nothing. |
+| `mfa_required` (from `GET /me` or a protected request) | Not a lost session. Show the second-factor challenge. Never the generic sign-in screen. |
+| `mfa_enrollment_required` | Not a lost session. Show the enrollment screen. |
+| `invalid_credentials` on sign-in | Stay on the sign-in screen and show the error. |
+| `invalid_credentials` on password change or recovery-code regeneration | The person is still signed in. Stay on the screen, show the error on the current-password field, keep private state, do not call sign-out and do not navigate. |
+| `mfa_code_invalid` on second-factor verification | The pending sign-in is kept. Stay on the challenge, show the error, clear the code field, let the person try again. |
+| `mfa_code_invalid` on enrollment confirmation | The pending session is kept. Show the error; if a fresh code also fails, start enrollment again to get a new secret. |
+| `mfa_code_invalid` on recovery-code regeneration | Still signed in. Show the error on the code field. |
+
+`GET /me` is the one place the frontend learns the state at load: 200 means signed in; a 401 there is expected and routes by its code as above.
+
+**Theme before first paint.** `index.html` currently sets the colour theme with an inline script. In milestone 1B that script must move to a self-hosted file so the page content policy can forbid inline script, while the theme is still applied before the first paint. The policy is not loosened for it.
 
 **No fallback to mock data.** In real-API mode, a failed identity call is an error shown to the person. It never falls back to mock data, and a production build cannot contain the mock identity.
 
@@ -630,7 +670,7 @@ What is defended, how, and what is left.
 | Session theft through script injection | `HttpOnly` cookie; no token in storage; strict content policy on API responses | An injected script can still act as the person while the page is open. The frontend's own content policy and review are the defence. |
 | Session fixation | New identifier at every privilege change; `__Host-` cookie | None known |
 | Cross-site request forgery | CSRF token bound to the server-side session on every non-GET; `SameSite=Lax`; JSON-only bodies; origin check | None known |
-| An action performed as the wrong identity after another tab changed the session | No automatic resend after an identity change; account-sensitive requests are never resent automatically (9.1) | The person must act again |
+| An action performed as the wrong identity after another tab changed the session | After `csrf_invalid` no `POST` is ever resent automatically; the page reads `GET /me` and the person submits again (9.1) | The person must act again |
 | Privilege escalation by request fields | Closed request schemas; unknown fields refused; no role field on sign-up | None known |
 | Reading another person's data | No identifier in M1 requests; later, lookups by session | To be re-examined for each new endpoint |
 | Stale privileges after demotion | Security version checked on every request; sessions deleted | None known |

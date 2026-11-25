@@ -47,7 +47,7 @@ Sign-up is open in these tests unless a row says otherwise.
 | 2.12 | All lower-case letters, no digit, no symbol, 15 long, not on the list | Accepted: no composition rules |
 | 2.13 | Stored hash | Argon2id; parameters at or above the minimum; two accounts with the same password have different hashes |
 | 2.14 | Raise the work factor in configuration, sign in | Stored hash is upgraded; next sign-in works |
-| 2.15 | Change password with a wrong current password | 401 `invalid_credentials`; password unchanged; counted (8.9) |
+| 2.15 | Change password with a wrong current password | 401 `invalid_credentials`; password unchanged; counted (8.9); the session is still signed in and `GET /me` answers 200 |
 | 2.16 | Change password to the current one | Refused `same_as_current` |
 | 2.17 | No outgoing network connection during any password check | Verified with the network disabled |
 
@@ -90,10 +90,12 @@ Sign-up is open in these tests unless a row says otherwise.
 | 4.10 | A cross-site form post (`application/x-www-form-urlencoded`) to sign-in | 415 or 403; never processed | |
 | 4.11 | `POST` with `Origin` of another site | 403 | |
 | 4.12 | `GET` endpoints with no token | Work | |
-| 4.13 | Tab A shows account X. Tab B signs out and signs in as account Y. Tab A submits a password change. | The request is refused as `csrf_invalid`; the frontend reads `GET /me`, sees another identity, clears X's screens and resends nothing. Y's password is unchanged. | B |
-| 4.14 | Same identity, stale token, on sign-in | One automatic resend succeeds | B |
-| 4.15 | Same identity, stale token, on password change and on each second-factor operation | No automatic resend; the person is asked to submit again | B |
-| 4.16 | Where the token lives in the browser | In memory only: not in a cookie, storage or the address | B |
+| 4.13 | Tab A shows account X. Tab B signs out and signs in as account Y. Tab A submits a password change. | The request is refused as `csrf_invalid`; the frontend fetches a token, reads `GET /me`, sees another identity, clears X's screens and resends nothing. Y's password is unchanged. | B |
+| 4.14 | Stale token on **every** `POST` in turn: sign-in, sign-up, sign-out, password change, set password, and each second-factor operation, with the identity unchanged | Exactly one request per submission reaches the server: no automatic resend, for any of them. The frontend fetches a token, reads `GET /me`, says the page was out of date and waits. Password, code and credential fields are cleared. | B |
+| 4.15 | After 4.14, the person submits again | The request carries the new token and succeeds | B |
+| 4.16a | Tab A is on the second-factor challenge of account X. Tab B starts a sign-in as account Y and is also pending. Tab A submits its code. | Nothing is resent automatically. Tab A cannot tell the two pending identities apart from `GET /me`, which is why no `POST` is ever replayed. | B |
+| 4.16b | A `GET` that fails while the token is stale | May be repeated; `GET` needs no token | |
+| 4.17 | Where the token lives in the browser | In memory only: not in a cookie, storage or the address | B |
 
 ## 5. Authorization
 
@@ -121,12 +123,16 @@ Sign-up is open in these tests unless a row says otherwise.
 | 6.2 | Enroll, confirm with a correct code | 200 with ten recovery codes; session `authenticated`; identifier rotated | B |
 | 6.3 | Confirm with a wrong code; after the pending secret expired; with a code from a secret that was replaced by a second `enroll` | 401 `mfa_code_invalid` each; factor not active | |
 | 6.4 | Two tabs start enrollment; the first tab confirms with its own code | 401 `mfa_code_invalid`: only the latest pending secret counts | |
-| 6.5 | Two simultaneous confirmations with a correct code | One 200; the other 409 `already_signed_in`; one set of recovery codes exists | |
+| 6.5 | Simultaneous confirmations with a correct code, repeated many times, in each arrangement: two requests on the same session; one request holding the pre-rotation CSRF token; one holding the pre-rotation session identifier; two pending sessions of the same account in two browsers | Always exactly one 200, one active factor and one stored set of recovery codes. No losing answer contains codes or a secret. Each loser's error is the one `identity-and-security.md` 5.3 allows for its arrangement: 409 `already_signed_in`, 403 `csrf_invalid`, 401 `unauthenticated`, or 401 `mfa_code_invalid`. | |
+| 6.5a | Start enrollment inside the window, confirm with a correct code after the window closed (clock moved) | 401 `unauthenticated`; pending session ended; no factor active; the account needs a new credential | |
+| 6.5b | Wrong code at confirmation, then a correct one for the same pending secret | 401 `mfa_code_invalid`, session still pending; then 200 | |
 | 6.6 | Staff with a second factor signs in | `mfa_required`; verify with a correct code gives `authenticated` with an account | B |
 | 6.7 | The same code in two simultaneous verification requests, many times | Exactly one succeeds each time | |
 | 6.8 | The same code again within its 30 seconds, in a new sign-in | Refused | |
 | 6.9 | Codes for the previous and next step; a code two steps away | Accepted; refused | |
-| 6.10 | Four wrong codes, then a fifth, then a correct one | 401 `mfa_code_invalid` four times; the fifth is 401 `unauthenticated` and the session is gone; the correct code is 401 `unauthenticated` | |
+| 6.10 | Four wrong codes, then a fifth, then a correct one | 401 `mfa_code_invalid` four times, the session still pending after each (`GET /me` answers 401 `mfa_required`); the fifth is 401 `unauthenticated` and the session is gone; the correct code is 401 `unauthenticated` | |
+| 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change), on every operation that checks a password or code | Always `unauthenticated`. Never `invalid_credentials` or `mfa_code_invalid`. | |
+| 6.10b | Every wrong password or code on a live session, except the fifth code | Always `invalid_credentials` or `mfa_code_invalid`, and the session is unchanged afterwards | |
 | 6.11 | Sign in with a recovery code; reuse it | Works once; refused the second time; `recoveryCodesRemaining` is 9 | |
 | 6.12 | One recovery code in two simultaneous requests, many times | Exactly one succeeds each time | |
 | 6.13 | Authenticator method with a recovery-shaped code, and the reverse | 400 `validation_error` before any code is checked or counted | |
@@ -210,10 +216,17 @@ All run in a real browser against the real backend and the production build of t
 | 10.3 | `localStorage`, `sessionStorage`, IndexedDB and script-written cookies after the whole journey | Only language and theme preferences. Nothing about the account, session or permissions. |
 | 10.4 | Console output and any error or analytics reporting during the journey, including failures | No secret |
 | 10.5 | Sign out | Account screens are left; in-memory account data, recovery codes and tokens are gone |
-| 10.6 | A 401 on any request while a private screen is shown; the session expiring | Same clearing; the sign-in screen is shown |
+| 10.6 | A 401 `unauthenticated` on any request while a private screen is shown; the session expiring | Private state cleared; `GET /me` read once; the sign-in screen is shown |
+| 10.6a | Wrong current password on the password-change screen | The error is shown on that field. The person is still signed in, on the same screen, with private state intact; no sign-out, no navigation. `GET /me` still answers 200. |
+| 10.6b | Wrong authenticator code at sign-in, attempts one to four | Each time the challenge stays, the error is shown, the code field is cleared; a correct code then signs in |
+| 10.6c | The fifth wrong code | The person is returned to the password step with a message; nothing of the pending sign-in remains; a correct code is no longer accepted |
+| 10.6d | Wrong code on recovery-code regeneration | Error on the code field; still signed in |
+| 10.6e | Load the application while the session is pending a second factor, and while pending enrollment | `GET /me` answers 401 `mfa_required` or `mfa_enrollment_required`; the challenge or the enrollment screen is shown, never the generic sign-in screen |
+| 10.6f | A pending sign-in expires while its challenge is shown, then the person submits a code | 401 `unauthenticated`; back to the password step |
 | 10.7 | Another tab signs out, or signs in as another account | This tab clears and shows the new state when it is next used, at the latest when it becomes visible |
 | 10.8 | Back button after signing out, including restoration from the back-forward cache | No private screen is shown; `GET /me` is re-read first |
 | 10.9 | Every identity screen loaded from the production build with the page content policy enforced | No policy violation; the policy allows no inline script, no `eval`, and no other origin |
+| 10.9a | The colour theme under that policy | Applied before the first paint, in both themes, by a self-hosted script; no inline script and no flash of the wrong theme |
 | 10.10 | Real-API mode with the backend stopped, or answering 500 | An error is shown. No mock account, no mock sign-in. |
 | 10.11 | A production build | Contains no mock identity code path |
 | 10.12 | Each identity screen in English and in French | Complete; no missing or untranslated text, including every error code's message |

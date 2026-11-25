@@ -65,6 +65,16 @@ info:
       the state's code when more sign-in is owed, 409 `already_signed_in` when the session is
       fully signed in and the operation is for one that is not, 403 `forbidden` when a pending
       session calls the other pending state's operation.
+    - **What a 401 means.** The code says which of two different things happened, and
+      clients must not treat them alike. `unauthenticated`, `mfa_required` and
+      `mfa_enrollment_required` describe the session: it is missing, lost, or still owes a
+      second factor. `invalid_credentials` and `mfa_code_invalid` describe only the secret
+      sent with this request: it was wrong, and the session is exactly as it was before.
+      A lost session is never reported with one of the last two, and a wrong password or code
+      is never reported with one of the first three, except that the fifth wrong code of a
+      pending sign-in ends it and is `unauthenticated`.
+    - **After `csrf_invalid`.** Fetch a new token and read `GET /me`. Never send a refused
+      `POST` again by itself: the person submits again. A `GET` may be repeated.
     - **Identity headers.** Every answer of an identity operation, errors included, is
       `Cache-Control: no-store`. Every 405 has `Allow`. Every 429 and every identity 503 has
       `Retry-After`.
@@ -546,8 +556,8 @@ paths:
         The token stops being valid whenever the session identifier changes or the session
         ends: sign-in, second-factor verification, completed enrollment, password change,
         sign-out, expiry. Call this again after each of those. After a 403 `csrf_invalid`,
-        follow the rule in `contract/identity-and-security.md` section 9.1: read `GET /me`
-        first, and never resend an account-sensitive request automatically.
+        fetch a new token, read `GET /me`, and let the person submit again: a refused `POST`
+        is never sent again automatically (`contract/identity-and-security.md` section 9.1).
       x-returns-credential: true
       responses:
         '200':
@@ -742,7 +752,9 @@ paths:
       description: |
         Needs the current password. On success every other session of the account is ended,
         and the identifier of this session is replaced. A wrong current password is 401
-        `invalid_credentials` and counts toward the sign-in rate limit.
+        `invalid_credentials` and counts toward the account's password rate limit; the session
+        stays signed in and nothing else changes. 401 `unauthenticated` means something
+        different: there is no signed-in session any more.
       security:
         - sessionCookie: []
       parameters:
@@ -919,8 +931,20 @@ paths:
         token.
 
         A wrong code, or a code for a pending secret that expired or was replaced, answers 401
-        `mfa_code_invalid`; start again with `POST /auth/mfa/enroll`. When two requests
-        confirm at the same instant, one succeeds and the other gets 409 `already_signed_in`.
+        `mfa_code_invalid`; the pending session is kept, and the person starts again with
+        `POST /auth/mfa/enroll`.
+
+        The enrollment window is checked again here. If it has closed, the answer is 401
+        `unauthenticated`, the pending session is ended and nothing is activated.
+
+        When several requests confirm at the same instant, exactly one succeeds: one factor
+        becomes active and one set of recovery codes exists. Every other request fails and
+        receives no codes. Which error it gets depends on what it presents: 409
+        `already_signed_in` if it arrives on the session that is now signed in; 403
+        `csrf_invalid` or 401 `unauthenticated` if it still carries the token or the session
+        identifier from before the rotation; 401 `mfa_code_invalid` if it came from another
+        pending session of the same account, whose pending secret no longer exists.
+
         If the answer is lost on the way, the codes are gone: sign in and replace them with
         `POST /auth/mfa/recovery-codes`.
       x-returns-credential: true
@@ -1140,11 +1164,15 @@ components:
   responses:
     Unauthenticated:
       description: |
-        No session in the state this operation needs. The code is `unauthenticated` when
-        there is no sign-in at all, or `mfa_required` / `mfa_enrollment_required` when a
-        second factor is still owed. On `POST /auth/change-password` and
-        `POST /auth/mfa/recovery-codes` it can also be `invalid_credentials` or
-        `mfa_code_invalid`, when the password or code sent to confirm the action is wrong.
+        Two kinds of 401, told apart by the code.
+
+        About the session: `unauthenticated` when there is no sign-in at all or it was lost,
+        `mfa_required` / `mfa_enrollment_required` when a second factor is still owed.
+
+        About the secret in this request only, with the session unchanged: on
+        `POST /auth/change-password` and `POST /auth/mfa/recovery-codes`, `invalid_credentials`
+        when the password sent to confirm the action is wrong, and on the second of these
+        `mfa_code_invalid` when the code is wrong.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
@@ -1153,7 +1181,9 @@ components:
           example:
             error: { code: unauthenticated, message: Sign-in required, requestId: 5f0c1c9e2b7a4d1f }
     InvalidCredentials:
-      description: The address and password do not match an account that can sign in. Deliberately says no more.
+      description: |
+        The address and password do not match an account that can sign in. Deliberately says
+        no more. It is about the secret sent, never about the session.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
@@ -1164,8 +1194,10 @@ components:
     MfaCodeInvalid:
       description: |
         `mfa_code_invalid`: the code is wrong, expired, already used, or belongs to a replaced
-        pending secret. `unauthenticated`: there is no pending session, it expired, or this
-        was the fifth wrong code and the pending session has been ended.
+        pending secret. The pending session is kept and the person may try again.
+        `unauthenticated`: there is no pending session any more. It expired, the enrollment
+        window closed, or this was the fifth wrong code and the pending session has been
+        ended. The person starts again with the password.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:

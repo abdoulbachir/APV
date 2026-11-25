@@ -4,7 +4,8 @@ Contract and security design for identity. Nothing here is implemented: no Sprin
 
 - Baseline: `main` at `a7fbab22f837bdadc495d307b7fafdf1e83554ad` (milestone 0B accepted).
 - First revision: `bd162cdeb3b98d38aa92f8a71162cab48abc0943`. Reviewed in pull request 8: changes required.
-- This revision answers that review, finding by finding (section 2).
+- Second revision: `022b576a6212ecde4b61f9c358ad4c1fde420644`, answering that review finding by finding (section 2). Accepted, with two narrow clarifications requested.
+- This revision makes those two clarifications (section 2a).
 - Contract version: 0.3.0. The seven public read endpoints are unchanged, apart from documenting 405.
 
 File names below are in `contract/` unless they start with another folder. "I&S" is `identity-and-security.md`; "tests" is `tests/security-acceptance.md`.
@@ -57,10 +58,10 @@ Twelve operations: the eleven of the first revision and `GET /api/auth/options`,
 |---|---|---|
 | Session-bound CSRF, anonymous bootstrap, cookie and header details, invalidation | The token lives in the server-side session, not in a cookie. `GET /auth/csrf` creates a short anonymous session for a browser that has none. Header `X-CSRF-TOKEN`. One cookie only. Replaced at every identifier change, destroyed at sign-out and expiry. | I&S 4.1, 4.2, 9.1; `openapi.yaml` `getCsrfToken`, `CsrfHeader`, `CsrfToken` |
 | `csrf_invalid` guarantees rejection before any change | Checked before rate limits and before the body is read; an explicit order of checks | I&S 4.3, 9.1; tests 4.9 |
-| Never replay account-sensitive mutations after an identity change in another tab | After `csrf_invalid` the frontend reads `GET /me` and compares identities. Changed: resend nothing. Unchanged: only sign-in, sign-up, sign-out and reads are resent once; password and second-factor operations never are. | I&S 9.1; tests 4.13 to 4.15 |
+| Never replay account-sensitive mutations after an identity change in another tab | Superseded by clarification 2 in section 2a: no `POST` is ever resent automatically | I&S 9.1; tests 4.13 to 4.16b |
 | Sign-in, sign-up, set-password when already signed in | 409 `already_signed_in`; nothing changes | I&S 4.3; `openapi.yaml` `AlreadySignedIn`; tests 3.14 |
 | Expiry during a pending second factor | 401 `unauthenticated`; `pendingExpiresAt` in the pending result | I&S 4.4; tests 3.16 |
-| Pending enrollment concurrency | One pending secret per account, the latest wins; simultaneous confirmations: one succeeds, the other 409 | I&S 5.3; tests 6.3 to 6.5 |
+| Pending enrollment concurrency | One pending secret per account, the latest wins; simultaneous confirmations: exactly one succeeds (the loser's error is refined in section 2a) | I&S 5.3; tests 6.3 to 6.5 |
 | Refresh after a lost success response | A table for every state-changing call; never resend a secret, read `GET /me` | I&S 4.6; tests 3.17 |
 | Concurrent code and recovery-code consumption; security-version race | Single-use things are consumed by conditional updates. Privileged writes re-read and lock the account row. | I&S 5.2, 5.4, 6.3, 10; tests 5.12, 5.13, 6.7, 6.12, 7.9 |
 
@@ -116,6 +117,31 @@ Twelve operations: the eleven of the first revision and `GET /api/auth/options`,
 | English and French, both themes, mobile, accessible errors, keyboard, autofill | Tests | tests 10.12 to 10.16 |
 | No real-to-mock fallback | Rule and tests | I&S 11; tests 10.10, 10.11 |
 | The real-database guard must be explicit | Fictional data can only enter a database explicitly marked disposable when it was created. An unmarked database is refused, empty or not. A real database can never be marked disposable. | I&S 10.2; tests 13.3 to 13.6 |
+
+## 2a. Final clarifications, after the review of `022b576`
+
+### Clarification 1: a 401 is not always a lost session
+
+| Point | Resolution | Where |
+|---|---|---|
+| "Any 401 clears private state" conflicted with wrong-password and wrong-code answers | The five 401 codes are split into two kinds: three describe the session, two describe only the secret sent, with the session unchanged. The server guarantees both directions. | I&S 4.7; `openapi.yaml` conventions, `Unauthenticated`, `InvalidCredentials`, `MfaCodeInvalid`, `changePassword` |
+| Per-error handling in the browser | A table: what the page does for each code on each kind of screen. Only `unauthenticated` clears private state. | I&S 11 |
+| Reconcile through `GET /me` on real loss | On `unauthenticated`: clear, read `GET /me` once, route by what it says | I&S 11; tests 10.6 |
+| Pending challenge kept on retryable errors | `mfa_code_invalid` keeps the pending session, on verification and on enrollment confirmation | I&S 4.7, 5.3; `openapi.yaml`; tests 6.5b, 6.10, 10.6b |
+| `GET /me` 401 while pending routes to the challenge | Stated; never the generic sign-in screen | I&S 11; tests 10.6e |
+| Browser tests: wrong current password, wrong code, fifth failure | Added, with expiry during a challenge and regeneration | tests 10.6a to 10.6f; API-level 6.10a, 6.10b, 2.15 |
+
+### Clarification 2: no automatic resubmission, and concurrent enrollment
+
+| Point | Resolution | Where |
+|---|---|---|
+| Identity comparison cannot work in pending states | Removed. `GET /me` has no account identifier while pending, so the rule no longer depends on comparing identities. | I&S 9.1 |
+| Automatic replay of sign-in, sign-up and sign-out was still permitted | Removed. After `csrf_invalid` no `POST` is ever sent again automatically. Fetch a token, read `GET /me`, the person submits again. A `GET` may be repeated. | I&S 9.1; `openapi.yaml` conventions and `getCsrfToken`; tests 4.13 to 4.16b |
+| The loser of a concurrent confirmation | The guarantees are fixed (one success, one active factor, one recovery set, nothing disclosed to a loser). The loser's error depends on what it presents, in a four-row table: 409, 403, 401 `unauthenticated`, or 401 `mfa_code_invalid`. | I&S 5.3; `openapi.yaml` `confirmMfaEnrollment`; tests 6.5 |
+| Enrollment-window expiry at confirmation | The window is checked again at confirmation; closed means 401 `unauthenticated`, pending session ended, nothing activated | I&S 5.3; `openapi.yaml`; tests 6.5a |
+| Frontend note: inline theme initializer | Recorded for milestone 1B: move to a self-hosted script, keep pre-paint behavior, do not loosen the policy | I&S 11; tests 10.9a |
+
+No schema, operation, generated type or tooling changed in this revision: the two generated files are identical to `022b576`. Only descriptions in `openapi.yaml`, the design document, the test matrix and this file changed. The fixture storage strategy is untouched.
 
 ## 3. Contract tooling
 
@@ -190,7 +216,7 @@ All are proposals. None is treated as approved anywhere in this pull request.
 Frontend agent:
 
 - [ ] Each of the seven findings is resolved, or countered.
-- [ ] The CSRF rule after `csrf_invalid` (I&S 9.1) is implementable as written.
+- [ ] The CSRF rule after `csrf_invalid` (I&S 9.1) and the per-code handling of 401 (I&S 4.7, 11) are implementable as written.
 - [ ] `identity-api.ts` has the shape the frontend wants.
 - [ ] The browser tests (section 10 of the test matrix) are feasible.
 
