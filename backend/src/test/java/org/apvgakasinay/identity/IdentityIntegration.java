@@ -64,7 +64,7 @@ abstract class IdentityIntegration {
     void cleanIdentityData() {
         // TRUNCATE is how a disposable database is reset; it is the one thing the append-only and one-way rules do not see.
         jdbc.sql("""
-                truncate table spring_session_attributes, spring_session, auth_throttle, audit_event, one_time_credential,
+                truncate table spring_session_retired, spring_session_attributes, spring_session, pending_sign_in, auth_throttle, audit_event, one_time_credential,
                                account_recovery_code, account_totp, account_password, account, identity_guard
                 restart identity cascade
                 """).update();
@@ -75,6 +75,39 @@ abstract class IdentityIntegration {
 
     Browser browser() {
         return new Browser(port);
+    }
+
+    /** Runs the calls at the same moment, each on its own thread, and returns their results in order. */
+    static <T> List<T> together(List<java.util.concurrent.Callable<T>> calls) {
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(calls.size());
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            List<java.util.concurrent.Future<T>> futures = new ArrayList<>();
+            for (java.util.concurrent.Callable<T> call : calls) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    return call.call();
+                }));
+            }
+            start.countDown();
+            List<T> results = new ArrayList<>();
+            for (java.util.concurrent.Future<T> future : futures) {
+                results.add(future.get(60, java.util.concurrent.TimeUnit.SECONDS));
+            }
+            return results;
+        } catch (Exception failure) {
+            throw new AssertionError(failure);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** A second handle on the same browser session: same cookie, same token, as another tab's request would carry. */
+    static Browser sameSession(Browser browser) {
+        Browser copy = browser.copyOfCookie();
+        copy.token = browser.token;
+        copy.address = browser.address;
+        return copy;
     }
 
     private static final java.util.Map<String, String> SUCCESS_SCHEMAS = java.util.Map.of(

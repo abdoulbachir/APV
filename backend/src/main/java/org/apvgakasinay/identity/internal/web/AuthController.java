@@ -88,6 +88,9 @@ class AuthController {
         JsonBody body = JsonBody.read(request, json, Set.of("email", "password"));
         String email = body.email("email");
         String password = body.text("password", 1, 128);
+        // The request is valid, so the operation proceeds, and it proceeds as from anonymous: a
+        // sign-in that was waiting for a second factor is over, whatever the password turns out to be.
+        endPendingSession(request, current);
         IdentityService.SignIn result = identity.login(email, password, request, response, current.caller());
         if (result.state() == AUTHENTICATED) {
             return new Responses.SignedIn("authenticated", views.of(result.account(), request.getSession(false)));
@@ -105,7 +108,7 @@ class AuthController {
     }
 
     @PostMapping("/change-password")
-    @IdentityOperation(states = {AUTHENTICATED}, body = true)
+    @IdentityOperation(states = {AUTHENTICATED}, limit = "protected", body = true)
     ResponseEntity<Void> changePassword(HttpServletRequest request, HttpServletResponse response) {
         Current current = Current.of(request);
         JsonBody body = JsonBody.read(request, json, Set.of("currentPassword", "newPassword"));
@@ -160,17 +163,17 @@ class AuthController {
     }
 
     @PostMapping("/mfa/recovery-codes")
-    @IdentityOperation(states = {AUTHENTICATED}, body = true, staffOnly = true)
+    @IdentityOperation(states = {AUTHENTICATED}, limit = "protected", body = true, staffOnly = true)
     Responses.MfaRecoveryCodes recoveryCodes(HttpServletRequest request) {
         Current current = Current.of(request);
         JsonBody body = JsonBody.read(request, json, Set.of("currentPassword", "code"));
         String currentPassword = body.text("currentPassword", 1, 128);
         String code = body.matching("code", 6, 6, JsonBody.TOTP_CODE);
-        List<String> codes = mfa.regenerateRecoveryCodes(current.account(), currentPassword, code, current.caller());
+        List<String> codes = mfa.regenerateRecoveryCodes(current.account(), currentPassword, code, request, current.caller());
         return new Responses.MfaRecoveryCodes(codes, Timestamps.format(clock.now()));
     }
 
-    /** A session that was waiting for a second factor is discarded before sign-up or set-password proceeds. */
+    /** A session that was waiting for a second factor is discarded before sign-in, sign-up or set-password proceeds. */
     private static void endPendingSession(HttpServletRequest request, Current current) {
         if (current.state().pending()) {
             Sessions.end(request);

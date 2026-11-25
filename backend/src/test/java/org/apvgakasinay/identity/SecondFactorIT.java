@@ -25,19 +25,6 @@ class SecondFactorIT extends IdentityIntegration {
         return json("method", "totp", "code", code);
     }
 
-    private List<Integer> together(List<Callable<Integer>> calls) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(calls.size());
-        try {
-            List<Integer> statuses = new ArrayList<>();
-            for (Future<Integer> result : pool.invokeAll(calls)) {
-                statuses.add(result.get());
-            }
-            return statuses;
-        } finally {
-            pool.shutdownNow();
-        }
-    }
-
     @Test
     void a6_1_staffWithoutASecondFactorCanOnlyEnroll() {
         Browser browser = activatedStaff("sample.admin@example.org", "admin");

@@ -159,7 +159,10 @@ class RateLimitIT extends IdentityIntegration {
         }
         assertError(donor.post("/api/auth/change-password", json("currentPassword", PASSWORD, "newPassword", OTHER_PASSWORD)), 429, "rate_limited");
         assertThat(donor.get("/api/me").status()).isEqualTo(200);
-        assertThat(browser().login(EMAIL, PASSWORD).status()).as("the password was not changed").isNotEqualTo(401);
+        // One counter per account for every password check: sign-in for this address is paused too, from any client address.
+        Browser.Answer signIn = browser().login(EMAIL, PASSWORD);
+        assertError(signIn, 429, "rate_limited");
+        assertThat(signIn.header("Retry-After")).isEqualTo("900");
     }
 
     @Test

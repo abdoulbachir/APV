@@ -7,3 +7,5 @@ apv:
     registration-open: true
     # Lets a test choose the client address it appears to come from.
     trusted-proxies: 127.0.0.1
+    # Housekeeping is exercised directly by its test, never by a timer in the middle of another one.
+    cleanup-interval: PT24H

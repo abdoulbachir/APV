@@ -27,7 +27,14 @@ class DevAccountSeeder implements ApplicationRunner {
     private final DatabasePurpose purpose;
     private final AppClock clock;
 
-    DevAccountSeeder(AccountRepository accounts, PasswordHasher hasher, Keys keys, DatabasePurpose purpose, AppClock clock) {
+    private final String databaseUrl;
+    private final String allowedHosts;
+
+    DevAccountSeeder(AccountRepository accounts, PasswordHasher hasher, Keys keys, DatabasePurpose purpose, AppClock clock,
+                     @org.springframework.beans.factory.annotation.Value("${spring.datasource.url:}") String databaseUrl,
+                     @org.springframework.beans.factory.annotation.Value("${apv.fixtures.allowed-hosts:localhost,127.0.0.1,[::1]}") String allowedHosts) {
+        this.databaseUrl = databaseUrl;
+        this.allowedHosts = allowedHosts;
         this.accounts = accounts;
         this.hasher = hasher;
         this.keys = keys;
@@ -38,6 +45,10 @@ class DevAccountSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        if (!onThisMachine(databaseUrl, allowedHosts)) {
+            System.out.println("DEVELOPMENT ACCOUNTS: not created. The database is not on this machine.");
+            return;
+        }
         if (!purpose.disposable()) {
             System.out.println("DEVELOPMENT ACCOUNTS: not created. This database is not marked disposable.");
             return;
@@ -48,6 +59,21 @@ class DevAccountSeeder implements ApplicationRunner {
         seed("dev.admin@example.test", "Dev Admin", "admin");
         seed("dev.owner@example.test", "Dev Owner", "super_admin");
         System.out.println();
+    }
+
+    /**
+     * The same rule the fixture loader applies: exactly one host, and it is this machine or a
+     * host listed explicitly (a container network in tests). Anything else is not a development database.
+     */
+    static boolean onThisMachine(String jdbcUrl, String allowedHosts) {
+        java.util.regex.Matcher url = java.util.regex.Pattern
+                .compile("^jdbc:postgresql://(\\[[^\\]]+\\]|[^:/?,]+)(:\\d+)?/.*$").matcher(jdbcUrl == null ? "" : jdbcUrl);
+        if (!url.matches()) {
+            return false;
+        }
+        String host = url.group(1).toLowerCase(Locale.ROOT);
+        return java.util.Arrays.stream(allowedHosts.split(",")).map(allowed -> allowed.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(allowed -> !allowed.isEmpty() && allowed.equals(host));
     }
 
     private void seed(String email, String displayName, String role) {

@@ -18,6 +18,8 @@ public class IdentityProperties {
     /** OWASP's minimum for Argon2id. Configuration may raise these, never lower them. */
     static final int MIN_ARGON2_MEMORY_KIB = 19456;
     static final int MIN_ARGON2_ITERATIONS = 2;
+    static final int MAX_HASH_CONCURRENCY = 4;
+    static final long MAX_HASH_WAIT_MILLIS = 2000;
 
     private final boolean development;
     private final boolean registrationOpen;
@@ -65,8 +67,13 @@ public class IdentityProperties {
         if (argon2MemoryKib < MIN_ARGON2_MEMORY_KIB || argon2Iterations < MIN_ARGON2_ITERATIONS) {
             throw new IllegalStateException("Argon2id parameters may be raised, never set below 19456 KiB and 2 iterations.");
         }
-        if (hashConcurrency < 1) {
-            throw new IllegalStateException("apv.identity.hash-concurrency must be at least 1.");
+        // The accepted protection of the server: at most four hashes at once, at most two seconds of waiting.
+        // Configuration may make it stricter, never looser, in any profile.
+        if (hashConcurrency < 1 || hashConcurrency > MAX_HASH_CONCURRENCY) {
+            throw new IllegalStateException("apv.identity.hash-concurrency must be between 1 and 4.");
+        }
+        if (hashWaitMillis < 1 || hashWaitMillis > MAX_HASH_WAIT_MILLIS) {
+            throw new IllegalStateException("apv.identity.hash-wait-millis must be between 1 and 2000.");
         }
         if (!development) {
             if (!cookieSecure || !cookieName.startsWith("__Host-")) {

@@ -35,6 +35,18 @@ public class AccountRepository {
     public record Redeemed(long accountId, String purpose) {
     }
 
+    /** A pending sign-in: how many wrong codes it has had, and whether it is over. */
+    public record Pending(long accountId, int failures, String outcome, Instant expiresAt) {
+
+        public boolean open(Instant now) {
+            return outcome == null && now.isBefore(expiresAt);
+        }
+
+        public boolean completed() {
+            return "completed".equals(outcome);
+        }
+    }
+
     /** The guard row. */
     public record Guard(boolean bootstrapped, boolean databaseReal) {
     }
@@ -100,6 +112,12 @@ public class AccountRepository {
     public Optional<String> passwordHash(long accountId) {
         return jdbc.sql("select password_hash from account_password where account_id = :id").param("id", accountId)
                 .query(String.class).optional();
+    }
+
+    /** Replaces the hash only if it is still the one the caller verified. False when it was changed meanwhile. */
+    public boolean replacePasswordHash(long accountId, String expectedHash, String newHash) {
+        return jdbc.sql("update account_password set password_hash = :new where account_id = :id and password_hash = :expected")
+                .param("new", newHash).param("id", accountId).param("expected", expectedHash).update() == 1;
     }
 
     public void setPassword(long accountId, String hash, Instant now) {
@@ -219,6 +237,58 @@ public class AccountRepository {
     public int recoveryCodesRemaining(long accountId) {
         return jdbc.sql("select count(*) from account_recovery_code where account_id = :id and used_at is null")
                 .param("id", accountId).query(Integer.class).single();
+    }
+
+    // ------------------------------------------------------------------ pending sign-ins
+
+    public void insertPending(byte[] id, long accountId, Instant expiresAt) {
+        jdbc.sql("insert into pending_sign_in (id, account_id, expires_at) values (:id, :account, :expires)")
+                .param("id", id).param("account", accountId).param("expires", Timestamp.from(expiresAt)).update();
+    }
+
+    /**
+     * Reads a pending sign-in and locks its row until the transaction ends. Every request that
+     * checks a code of a pending sign-in calls this first, so they run one after another,
+     * whichever instance they arrive at.
+     */
+    public Optional<Pending> lockPending(byte[] id) {
+        return jdbc.sql("select account_id, failures, outcome, expires_at from pending_sign_in where id = :id for update")
+                .param("id", id).query(AccountRepository::pending).optional();
+    }
+
+    public Optional<Pending> pending(byte[] id) {
+        return jdbc.sql("select account_id, failures, outcome, expires_at from pending_sign_in where id = :id")
+                .param("id", id).query(AccountRepository::pending).optional();
+    }
+
+    private static Pending pending(ResultSet rs, int row) throws SQLException {
+        return new Pending(rs.getLong("account_id"), rs.getInt("failures"), rs.getString("outcome"), rs.getTimestamp("expires_at").toInstant());
+    }
+
+    /** Counts one wrong code. Returns the new count; at five the sign-in is over. Call only while holding the row lock. */
+    public int countPendingFailure(byte[] id) {
+        return jdbc.sql("""
+                        update pending_sign_in
+                           set failures = failures + 1, outcome = case when failures + 1 >= 5 then 'exhausted' end
+                         where id = :id and outcome is null
+                        returning failures
+                        """)
+                .param("id", id).query(Integer.class).single();
+    }
+
+    public void completePending(byte[] id) {
+        jdbc.sql("update pending_sign_in set outcome = 'completed' where id = :id and outcome is null").param("id", id).update();
+    }
+
+    /** Removes pending sign-ins that ended at least an hour ago, a bounded number per call. */
+    public int removeExpiredPending(Instant before, int atMost) {
+        return jdbc.sql("delete from pending_sign_in where ctid in (select ctid from pending_sign_in where expires_at < :before limit :atMost)")
+                .param("before", Timestamp.from(before)).param("atMost", atMost).update();
+    }
+
+    /** Deletes one stored session by its identifier. */
+    public void deleteSession(String sessionId) {
+        jdbc.sql("delete from spring_session where session_id = :id").param("id", sessionId).update();
     }
 
     // ------------------------------------------------------------------ one-time credentials

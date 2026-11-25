@@ -40,7 +40,8 @@ class AfterCsrfFilter extends OncePerRequestFilter {
             "signin", Throttle.SIGN_IN_BY_ADDRESS,
             "signup", Throttle.SIGN_UP_BY_ADDRESS,
             "credential", Throttle.CREDENTIAL_BY_ADDRESS,
-            "token", Throttle.TOKEN_BY_ADDRESS);
+            "token", Throttle.TOKEN_BY_ADDRESS,
+            "protected", Throttle.PROTECTED_BY_ADDRESS);
 
     private final Throttle throttle;
     private final AccountRepository accounts;
@@ -92,6 +93,19 @@ class AfterCsrfFilter extends OncePerRequestFilter {
                 Sessions.end(request);
                 audit.record(AuditEvent.of("session.revoked", Outcome.REFUSED).account(identity.accountId())
                         .request(caller.address(), caller.requestId()));
+                identity = null;
+                account = null;
+            }
+        }
+        if (identity != null && identity.state().pending()) {
+            // A pending sign-in that has been completed, exhausted or has expired does not exist,
+            // whatever a session row may still say.
+            byte[] pendingId = Sessions.pendingId(session);
+            AccountRepository.Pending pending = pendingId == null ? null : accounts.pending(pendingId).orElse(null);
+            // Completed is different: this request began before the same sign-in was completed by
+            // another one. It keeps the pending view it started with and ends nothing.
+            if (pending == null || (!pending.completed() && !pending.open(clock.now()))) {
+                Sessions.end(request);
                 identity = null;
                 account = null;
             }

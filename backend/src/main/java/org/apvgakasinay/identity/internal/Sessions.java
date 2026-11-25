@@ -43,7 +43,7 @@ public class Sessions {
     static final String STATE = "apv.state";
     static final String SIGNED_IN_AT = "apv.signedInAt";
     public static final String ABSOLUTE_DEADLINE = "apv.absoluteDeadline";
-    static final String MFA_FAILURES = "apv.mfaFailures";
+    static final String PENDING_ID = "apv.pendingSignIn";
     static final String BOUND_ID = "apv.boundSessionId";
 
     static final Duration ANONYMOUS_IDLE = Duration.ofMinutes(30);
@@ -53,7 +53,6 @@ public class Sessions {
     static final Duration DONOR_ABSOLUTE = Duration.ofHours(24);
     static final Duration STAFF_IDLE = Duration.ofMinutes(30);
     static final Duration STAFF_ABSOLUTE = Duration.ofHours(12);
-    static final int MAX_MFA_FAILURES = 5;
 
     /** What a session says about who it belongs to. Null fields never occur: an anonymous session has no identity at all. */
     public record Identity(long accountId, long securityVersion, SessionState state, Instant signedInAt, Instant absoluteDeadline,
@@ -63,8 +62,10 @@ public class Sessions {
     private final SessionAuthenticationStrategy rotateIdentifierThenToken;
     private final SecurityContextRepository contexts;
     private final SessionStore store;
+    private final AccountRepository accounts;
 
-    public Sessions(CsrfTokenRepository csrfTokens, SecurityContextRepository contexts, SessionStore store) {
+    public Sessions(CsrfTokenRepository csrfTokens, SecurityContextRepository contexts, SessionStore store, AccountRepository accounts) {
+        this.accounts = accounts;
         this.rotateIdentifierThenToken = new CompositeSessionAuthenticationStrategy(List.of(
                 new ChangeSessionIdAuthenticationStrategy(),
                 new CsrfAuthenticationStrategy(csrfTokens)));
@@ -133,7 +134,15 @@ public class Sessions {
         session.setAttribute(STATE, state.code());
         session.setAttribute(SIGNED_IN_AT, signedInAt.getEpochSecond());
         session.setAttribute(ABSOLUTE_DEADLINE, deadline.getEpochSecond());
-        session.removeAttribute(MFA_FAILURES);
+        if (state.pending()) {
+            // The budget of five wrong codes lives in the database, under a random identifier
+            // only this session knows, so it is counted exactly across requests and instances.
+            byte[] pendingId = Keys.random(32);
+            accounts.insertPending(pendingId, account.id(), deadline);
+            session.setAttribute(PENDING_ID, java.util.HexFormat.of().formatHex(pendingId));
+        } else {
+            session.removeAttribute(PENDING_ID);
+        }
         // The privilege belongs to this identifier and to no other. The session store saves the
         // identifier on every request, so a slow request that started before the rotation could
         // write the old identifier back. Such a session no longer matches this value and is
@@ -155,11 +164,9 @@ public class Sessions {
         SecurityContextHolder.clearContext();
     }
 
-    /** Counts a wrong second-factor code on this pending sign-in. Returns true when it was the last allowed one. */
-    public static boolean countMfaFailure(HttpSession session) {
-        int failures = session.getAttribute(MFA_FAILURES) instanceof Integer count ? count + 1 : 1;
-        session.setAttribute(MFA_FAILURES, failures);
-        return failures >= MAX_MFA_FAILURES;
+    /** The identifier of the pending sign-in this session carries, or null. */
+    public static byte[] pendingId(HttpSession session) {
+        return session != null && session.getAttribute(PENDING_ID) instanceof String hex ? java.util.HexFormat.of().parseHex(hex) : null;
     }
 
     /** Deletes every stored session of an account, except one that is to continue. */

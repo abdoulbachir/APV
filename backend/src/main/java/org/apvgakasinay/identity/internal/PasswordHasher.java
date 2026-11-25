@@ -29,6 +29,8 @@ public class PasswordHasher {
     private final Semaphore slots;
     private final long waitMillis;
     private final String decoy;
+    private final java.util.concurrent.atomic.AtomicInteger running = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger peak = new java.util.concurrent.atomic.AtomicInteger();
 
     public PasswordHasher(IdentityProperties properties) {
         // 16-byte salt, 32-byte hash, 1 lane; memory and iterations never below OWASP's minimum.
@@ -55,6 +57,11 @@ public class PasswordHasher {
         });
     }
 
+    /** The largest number of hashes that have ever run at the same moment in this process. */
+    public int peakConcurrency() {
+        return peak.get();
+    }
+
     /** True when the stored hash was made with weaker parameters than the current ones. */
     public boolean needsUpgrade(String storedHash) {
         return encoder.upgradeEncoding(storedHash);
@@ -71,9 +78,12 @@ public class PasswordHasher {
         if (!acquired) {
             throw ApiException.of(HttpStatus.SERVICE_UNAVAILABLE, "unavailable", "Too many password checks at once").header("Retry-After", "5");
         }
+        int now = running.incrementAndGet();
+        peak.accumulateAndGet(now, Math::max);
         try {
             return work.get();
         } finally {
+            running.decrementAndGet();
             slots.release();
         }
     }

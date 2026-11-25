@@ -70,6 +70,19 @@ public class IdentityService {
         return ApiException.of(HttpStatus.BAD_REQUEST, "credential_invalid", "Invalid or expired credential");
     }
 
+    /**
+     * The key of the password counter "per email or account": the normalized address, in every
+     * operation that checks a password, so sign-in, password change and recovery-code
+     * regeneration draw on one budget, and an unknown address has a counter like any other.
+     */
+    static String passwordCounter(Account account) {
+        return account.email().toLowerCase(Locale.ROOT);
+    }
+
+    /** What a password sign-in found once the account was read again under its row lock. */
+    private record Checked(Account account, boolean hasFactor, boolean windowClosed) {
+    }
+
     static List<String> context(String email, String displayName) {
         return List.of(email.substring(0, Math.max(0, email.indexOf('@'))), displayName);
     }
@@ -112,39 +125,55 @@ public class IdentityService {
         String normalizedPassword = PasswordPolicy.normalize(password);
         boolean accepted = hasher.matches(normalizedPassword, hash);
 
-        boolean hasFactor = false;
-        if (accepted) {
-            hasFactor = account.isStaff() && accounts.hasActiveTotp(account.id());
-            if (!account.enabled() || !account.activated()) {
-                accepted = false;
-            } else if (account.isStaff() && !hasFactor && !account.enrollmentWindowOpen(now)) {
-                // The enrollment window closed with no second factor: the account is not activated any more.
-                long id = account.id();
-                transaction.executeWithoutResult(status -> {
-                    accounts.removePassword(id);
-                    accounts.setActivation(id, false, null);
-                });
-                audit.event("account.enrollment_window_closed", Outcome.REFUSED, id, caller);
-                accepted = false;
+        // A hash made with weaker parameters is replaced. The new hash is computed here, holding no connection.
+        String upgraded = accepted && hasher.needsUpgrade(hash) ? hasher.hash(normalizedPassword) : null;
+
+        // What was verified above was read without a lock. Before anything is granted or written,
+        // the account is read again under its row lock: if it was disabled, recovered, reset or
+        // given a new password meanwhile, the password just verified is not its password any more,
+        // and this request must neither sign in nor write anything derived from the old state.
+        Checked checked = !accepted ? null : transaction.execute(status -> {
+            Account locked = accounts.findByIdForUpdate(account.id()).orElse(null);
+            if (locked == null || locked.securityVersion() != account.securityVersion()
+                    || !hash.equals(accounts.passwordHash(locked.id()).orElse(null))) {
+                return null;
             }
+            if (!locked.enabled() || !locked.activated()) {
+                return null;
+            }
+            boolean hasFactor = locked.isStaff() && accounts.hasActiveTotp(locked.id());
+            if (locked.isStaff() && !hasFactor && !locked.enrollmentWindowOpen(now)) {
+                // The enrollment window closed with no second factor: the account is not activated any more.
+                accounts.removePassword(locked.id());
+                accounts.setActivation(locked.id(), false, null);
+                accounts.raiseSecurityVersion(locked.id());
+                sessions.endAllOf(locked, null);
+                return new Checked(locked, false, true);
+            }
+            if (upgraded != null) {
+                accounts.replacePasswordHash(locked.id(), hash, upgraded);
+            }
+            return new Checked(locked, hasFactor, false);
+        });
+        if (checked != null && checked.windowClosed()) {
+            audit.event("account.enrollment_window_closed", Outcome.REFUSED, account.id(), caller);
         }
-        if (!accepted) {
+        if (checked == null || checked.windowClosed()) {
             audit.event("session.sign_in", Outcome.FAILURE, account == null ? null : account.id(), caller, Map.of("email_hash", attempted));
             throw invalidCredentials();
         }
 
         throttle.clear(Throttle.PASSWORD_BY_EMAIL_AND_ADDRESS, pair);
         throttle.forgive(Throttle.PASSWORD_BY_ACCOUNT, normalizedEmail);
-        if (hasher.needsUpgrade(hash)) {
-            accounts.setPassword(account.id(), hasher.hash(normalizedPassword), now);
-        }
+        Account current = checked.account();
+        boolean hasFactor = checked.hasFactor();
 
-        SessionState state = !account.isStaff() ? SessionState.AUTHENTICATED
+        SessionState state = !current.isStaff() ? SessionState.AUTHENTICATED
                 : hasFactor ? SessionState.MFA_REQUIRED : SessionState.MFA_ENROLLMENT_REQUIRED;
-        // A session that was waiting for a second factor is simply replaced by this sign-in.
-        sessions.establish(request, response, account, state, now);
-        audit.event("session.sign_in", Outcome.SUCCESS, account.id(), caller, Map.of("state", state.code(), "email_hash", attempted));
-        return new SignIn(state, account, state.pending() ? now.plus(Sessions.PENDING) : null);
+        // The session is issued for the account as it was under the lock, with that security version.
+        sessions.establish(request, response, current, state, now);
+        audit.event("session.sign_in", Outcome.SUCCESS, current.id(), caller, Map.of("state", state.code(), "email_hash", attempted));
+        return new SignIn(state, current, state.pending() ? now.plus(Sessions.PENDING) : null);
     }
 
     public void logout(HttpServletRequest request, Caller caller) {
@@ -163,7 +192,7 @@ public class IdentityService {
                                HttpServletRequest request, HttpServletResponse response, Caller caller) {
         // Body validation comes before the current password is looked at.
         String normalizedNew = policy.accept("newPassword", newPassword, context(current.email(), current.displayName()));
-        String counter = "account:" + current.id();
+        String counter = passwordCounter(current);
         refuseIfThrottled(Throttle.PASSWORD_BY_ACCOUNT, counter, current.id(), caller, null);
 
         String hash = accounts.passwordHash(current.id()).orElse(null);
@@ -184,7 +213,8 @@ public class IdentityService {
         Account updated = transaction.execute(status -> {
             // The row lock makes this wait for, or be seen by, a change of the account made at the same moment.
             Account locked = accounts.findByIdForUpdate(current.id()).orElse(null);
-            if (locked == null || !locked.enabled() || locked.securityVersion() != identity.securityVersion()) {
+            if (locked == null || !locked.enabled() || locked.securityVersion() != identity.securityVersion()
+                    || !hash.equals(accounts.passwordHash(locked.id()).orElse(null))) {
                 return null;
             }
             accounts.setPassword(locked.id(), newHash, now);

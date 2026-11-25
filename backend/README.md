@@ -28,7 +28,7 @@ Run the `docker compose` commands from the repository root and the `./mvnw` comm
 | Run the contract checks | `cd ../contract && npm ci && npm run validate` |
 | Look inside the database | `docker compose exec postgres psql -U apv apv` |
 | Stop PostgreSQL, keep the data | `docker compose down` |
-| Reset the development data | Restart the backend in the `dev` profile, or `docker compose down -v` to delete the database volume |
+| Reset the development data | Restart the backend in the `dev` profile: it reloads the fictional dataset. Deleting the volume is rarely needed; read [Deleting the development database](#deleting-the-development-database) first. |
 | Run an operator command (real database) | `java -jar target/apv-backend-0.1.0-SNAPSHOT.jar operator <command>`; see [Accounts and sign-in](#accounts-and-sign-in) |
 
 Database migrations run by themselves when the backend starts (Flyway). There is no separate migration command. The application never drops or wipes a schema.
@@ -46,7 +46,27 @@ Three things stand between the loader and a database that matters:
 3. **Never over real data.** The database records whether its content came from a fixture. The loader replaces an empty database or fixture data, and refuses when the database holds cases that did not come from a fixture.
 4. **Only a database marked disposable.** Since milestone 1B the loader and the development accounts need a marker that only the creation of a development or test database writes: the schema `apv_disposable_database`, created by `backend/dev/initdb/01-disposable-database.sql` when the Compose database is first created, and by the test setup. The application and the migrations never create it. A database without it is refused, empty or not. A database the operator command has been used on is real for ever and is refused even with the marker.
 
-> **If your development database volume is older than milestone 1B** it has no marker, and the `dev` profile will refuse to start. Run `docker compose down -v` once, then `docker compose up -d`: the new volume is marked when it is created.
+> **If your development database was created before milestone 1B** it has no marker, and the `dev` profile will refuse to load data into it. Nothing needs to be deleted. After checking that it really is your local development database (next section, steps 1 to 3), mark it:
+>
+> ```bash
+> docker compose exec postgres psql -U apv apv -c 'create schema if not exists apv_disposable_database'
+> ```
+
+#### Deleting the development database
+
+`docker compose down -v` deletes the database volume of this Compose project, with everything in it, and cannot be undone. It is only ever for the local development database that `compose.yaml` in this repository created. **Never run it, or any other volume or database deletion, on a server, against a production deployment, or in a directory whose `compose.yaml` is not this one.** Before running it, verify all of the following:
+
+1. You are on your own development machine, in the root of this repository, and `docker compose ls` shows the project `apv-dev`.
+2. The database is disposable and has never been used for real: both of these print `t`.
+   ```bash
+   docker compose exec postgres psql -U apv apv -Atc "select exists (select 1 from information_schema.schemata where schema_name = 'apv_disposable_database')"
+   docker compose exec postgres psql -U apv apv -Atc "select not database_real from identity_guard"
+   ```
+   A database created before milestone 1B has neither yet; then check instead that it holds only fixture data: `select data_origin from organization_settings` prints `fixture`.
+3. Nothing in it is worth keeping. Development accounts you created yourself are lost; the three `dev.*@example.test` accounts are recreated at the next start.
+
+Only then: `docker compose down -v`, followed by `docker compose up -d`. If any check fails or you are unsure, stop: restarting the backend in the `dev` profile already resets the fictional data without deleting anything else.
+
 
 A fresh production database contains the six initial categories, the default timezone and nothing else.
 
@@ -86,7 +106,7 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_TRUSTED_PROXIES` | empty | Comma-separated addresses of reverse proxies whose `X-Forwarded-For` (right-most entry) is believed. Empty: the connection's address is used. |
 | `APV_ALLOWED_ORIGINS` | empty | The exact origins accepted on state-changing requests, comma-separated. Empty: the origin must equal the scheme, host and port the request was addressed to. **Set it in production behind a TLS-terminating proxy** (`https://your.site`), where the backend itself sees plain HTTP. |
 | `APV_ARGON2_MEMORY_KIB` / `APV_ARGON2_ITERATIONS` | `19456` / `2` | Argon2id cost. May be raised, never lowered: lower values refuse to start. Existing hashes are upgraded at the next sign-in. |
-| `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. |
+| `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once: 1 to 4. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. The backend refuses to start with more than 4 at once or a longer wait, in every profile. |
 | `APV_PASSWORD_BLOCKLIST_PATH` | empty | A local file of blocked passwords, one per line, added to the small built-in list. Never fetched from the network. |
 
 Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`.
@@ -224,7 +244,7 @@ These need a signed-in person and arrive with the write endpoints:
 - Upload, storage, consent records and private file access. Only picture metadata exists now.
 - Maintenance mode (503). Rate limits (429) exist on the identity operations since milestone 1B; the public read endpoints have none yet.
 - Email: no message is ever sent. Addresses are unverified, which is why public sign-up is closed outside development, and why password resets go through the operator.
-- Removal of expired rate-limit windows and one-time credentials is not scheduled yet; expired session rows are removed by Spring Session's own cleanup. Old rows are harmless but accumulate.
+- Housekeeping runs every ten minutes in the web application: rate-limit windows and cooldown markers older than two hours (longer than any window or cooldown lasts) and pending sign-ins that ended over an hour ago are removed, a bounded number of rows per run. Expired sessions are removed by Spring Session's own task. One-time credentials are kept: a used or expired credential is only a hash with its dates, and how long to keep that record is the owner's decision.
 
 Since milestone 1B a known path called with a method it does not support answers `405 method_not_allowed` with an `Allow` header (it was 404 before). Unknown paths still answer 404.
 

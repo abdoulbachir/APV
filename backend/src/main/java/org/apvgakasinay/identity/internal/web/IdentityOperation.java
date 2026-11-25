@@ -17,7 +17,7 @@ import org.apvgakasinay.identity.internal.SessionState;
     /** The session states in which the operation may be called. */
     SessionState[] states();
 
-    /** Which per-client-address rate limit applies before anything else is looked at: signin, signup, credential or token. */
+    /** Which per-client-address rate limit applies before anything else is looked at: signin, signup, credential, token, or protected (the operations of a signed-in session that check a password). */
     String limit() default "";
 
     /** True when the operation defines a JSON request body. */

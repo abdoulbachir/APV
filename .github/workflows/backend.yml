@@ -42,6 +42,17 @@ jobs:
         run: |
           set -o pipefail
           ./mvnw --batch-mode --no-transfer-progress verify 2>&1 | tee "$RUNNER_TEMP/maven.log"
+      # Scenario 2.17: the password policy, its blocklist, hashing and verification, run again in a
+      # network namespace that has no interface at all. The test first proves a connection fails.
+      - name: Password checks with outgoing network disabled
+        shell: bash
+        run: |
+          sudo unshare --net -- sudo -u "$USER" env "PATH=$PATH" "JAVA_HOME=$JAVA_HOME" "HOME=$HOME" \
+            ./mvnw --offline --batch-mode --no-transfer-progress \
+            -Dtest='IdentitySecurityUnitTest#a2_17_passwordChecksNeedNoNetwork,PasswordPolicyTest' \
+            -Dapv.test.network-disabled=true -DargLine=-Dapv.test.network-disabled=true \
+            surefire:test 2>&1 | tee "$RUNNER_TEMP/no-network.log"
+          test -f target/identity-evidence/no-network.txt
       - name: Verify backend artifact contains no fictional fixture payload
         run: |
           python3 - <<'PY'
@@ -116,10 +127,23 @@ jobs:
           head = f'TOTAL {totals[0]} run, {totals[1]} failed, {totals[2]} errors, {totals[3]} skipped'
           print('::notice title=Backend test totals::' + '%0A'.join([head] + lines))
           PY
+      - name: Identity evidence
+        if: always()
+        run: |
+          for file in target/identity-evidence/*.txt; do
+            [ -f "$file" ] || continue
+            message=$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' "$file")
+            echo "::notice title=evidence $(basename "$file" .txt)::$message"
+            { echo "### $(basename "$file" .txt)"; echo '```'; cat "$file"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          done
       - name: Report failed tests
         if: failure()
         run: |
           # What Maven itself reported, for failures that happen before any test report exists.
+          if [ -f "$RUNNER_TEMP/no-network.log" ] && ! [ -f target/identity-evidence/no-network.txt ]; then
+            message=$(grep -E "ERROR|FAIL|Tests run" "$RUNNER_TEMP/no-network.log" | grep -vE "^\[ERROR\]\s+at " | tail -n 40 | head -c 8000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=No-network run::$message"
+          fi
           if [ -f "$RUNNER_TEMP/maven.log" ]; then
             message=$(grep -E "^\[ERROR\]|BUILD|Tests run:.*Fail" "$RUNNER_TEMP/maven.log" | grep -vE "^\[ERROR\]\s+at " | tail -n 60 | head -c 12000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
             echo "::error title=Maven output::$message"

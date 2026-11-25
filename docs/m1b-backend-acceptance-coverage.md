@@ -1,6 +1,6 @@
 # Milestone 1B backend: coverage of the security acceptance scenarios
 
-Which executable test covers each of the 220 scenarios of `contract/tests/security-acceptance.md`, as of the commit that contains this file. Generated from the test method names: a method named `a6_7_...` covers scenario 6.7.
+Which executable test covers each of the 220 scenarios of `contract/tests/security-acceptance.md`, as of the commit that contains this file (after the corrective review of the implementation). Generated from the test method names: a method named `a6_7_...` covers scenario 6.7.
 
 This is the backend's part only. **It is not a statement that milestone 1B is accepted.** Scenarios that need the real frontend in a real browser have not been run by anyone yet, and nothing here has been verified independently.
 
@@ -8,11 +8,11 @@ How the backend tests run: the whole application on a real port, real HTTP with 
 
 | Status | Scenarios | Meaning |
 |---|---|---|
-| Backend: covered | 169 | An API, database, concurrency or unit test asserts the expected result |
+| Backend: covered | 175 | An API, database, concurrency or unit test asserts the expected result |
 | Backend: covered. Browser repeat: joint integration | 10 | The matrix marks it **B**: the server behavior is asserted here, the same journey through the real frontend is still to do |
 | Browser only: joint integration | 32 | Nothing the backend alone can show |
-| Partly covered | 7 | The note says exactly what is and is not asserted |
-| Not automated | 2 | No executable test; the note says what stands in its place |
+| Partly covered | 3 | The note says exactly what is and is not asserted |
+| Not automated | 0 | No executable test; the note says what stands in its place |
 | **Total** | **220** | |
 
 Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` need PostgreSQL; `internal/*Test` do not).
@@ -27,7 +27,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 1.4 | An address with a leading or trailing space or tab, at sign-up and at sign-in | Backend: covered | `SignUpSignInIT.a1_4_theServerDoesNotTrimAnAddress` |
 | 1.5 | Twenty simultaneous sign-ups for one address, each from a different client address so the per-address limit is not what is measured | Backend: covered | `SignUpSignInIT.a1_5_twentySimultaneousSignUpsForOneAddressMakeOneAccount` |
 | 1.6 | Sign in with a wrong password, an unknown address, a disabled account and a not-activated staff account | Backend: covered. Browser repeat: joint integration | `SignUpSignInIT.a1_6_everyKindOfRefusedSignInLooksTheSame` |
-| 1.7 | Timing of 1.6 over many runs | Not automated | Not automated. By design a sign-in for an unknown address verifies a decoy Argon2id hash (`PasswordHasher.matches`, asserted in `IdentitySecurityUnitTest.a2_13_and_2_14_...`), so the same work is done; a statistical timing measurement was not run. |
+| 1.7 | Timing of 1.6 over many runs | Backend: covered | `SignInTimingIT.a1_7_anUnknownAddressIsNotAnsweredFasterThanAWrongPassword` Sixty interleaved wrong-password sign-ins each for existing accounts and unknown addresses, compared by median; the ratio must stay within 0.80 to 1.25. The measured medians are published by the CI run (evidence sign-in-timing). A median comparison on a shared CI machine shows the absence of a gross difference, not of a small one. |
 | 1.8 | Sign-up answer for a new and an existing address | Backend: covered | `SignUpSignInIT.a1_2_and_1_8_signUpForAnExistingAddressGivesTheSameAnswerAndChangesNothing` |
 | 1.9 | Sign in with an address in different case | Backend: covered | `SignUpSignInIT.a1_3_and_1_9_lettersCaseDoesNotMakeASecondAccount` |
 | 1.10 | Sign-up closed: `GET /auth/options`, then `POST /auth/register` | Backend: covered. Browser repeat: joint integration | `RealDatabaseIT.a1_10_a3_9_productionHasClosedSignUpAndTheSecureHostCookie` `RegistrationClosedIT.a1_10_closedSignUpIsAnnouncedAndRefused` |
@@ -51,17 +51,17 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 2.11 | A long passphrase that happens to contain the site name with 8 or more other characters | Backend: covered | `PasswordPolicyTest.acceptance_2_11_contextWordWithEnoughElseIsAccepted` |
 | 2.12 | All lower-case letters, no digit, no symbol, 15 long, not on the list | Backend: covered | `PasswordPolicyTest.acceptance_2_12_noCompositionRules` |
 | 2.13 | Stored hash | Backend: covered | `SignUpSignInIT.a2_13_storedHashesAreArgon2idWithUniqueSalts` `IdentitySecurityUnitTest.a2_13_and_2_14_hashesAreArgon2idAndWeakerOnesAreUpgraded` |
-| 2.14 | Raise the work factor in configuration, sign in | Backend: covered | `IdentitySecurityUnitTest.a2_14_argon2ParametersCanBeRaisedNeverLowered` `IdentitySecurityUnitTest.a2_13_and_2_14_hashesAreArgon2idAndWeakerOnesAreUpgraded` |
+| 2.14 | Raise the work factor in configuration, sign in | Backend: covered | `ConcurrencyCorrectionsIT.a2_14_aSignInThatVerifiedAnOldPasswordCannotWriteItBackOrSignIn` `IdentitySecurityUnitTest.a2_14_argon2ParametersCanBeRaisedNeverLowered` `IdentitySecurityUnitTest.a2_13_and_2_14_hashesAreArgon2idAndWeakerOnesAreUpgraded` |
 | 2.15 | Change password with a wrong current password | Backend: covered | `SignUpSignInIT.a2_15_and_2_16_changingThePassword` |
 | 2.16 | Change password to the current one | Backend: covered | `SignUpSignInIT.a2_15_and_2_16_changingThePassword` |
-| 2.17 | No outgoing network connection during any password check | Not automated | Not executed with the network disabled. By construction: the blocklist is a classpath resource plus an optional local file, and the identity module contains no HTTP client. |
+| 2.17 | No outgoing network connection during any password check | Backend: covered | `IdentitySecurityUnitTest.a2_17_passwordChecksNeedNoNetwork` The same test runs a second time in CI inside a network namespace with no interface (`unshare --net`), where it first proves that a connection fails, then runs the policy, the blocklist, hashing and verification (evidence no-network). It covers the password code, not a whole sign-in over HTTP, which needs the database connection. |
 
 ## 3. Sessions
 
 | # | Scenario | Status | Executable tests and notes |
 |---|---|---|---|
 | 3.1 | Obtain an anonymous session with `GET /auth/csrf`, sign in, reuse the earlier identifier | Backend: covered | `SessionLifecycleIT.a3_1_anIdentifierKnownBeforeSignInIsWorthlessAfterwards` |
-| 3.2 | Identifier before and after second-factor verification, enrollment confirmation and a password change | Backend: covered | `SessionLifecycleIT.a3_2_theIdentifierChangesAtEveryChangeOfPrivilege` |
+| 3.2 | Identifier before and after second-factor verification, enrollment confirmation and a password change | Backend: covered | `ConcurrencyCorrectionsIT.a3_2_aReplacedSessionIdentifierCannotBeWrittenBack` `SessionLifecycleIT.a3_2_theIdentifierChangesAtEveryChangeOfPrivilege` |
 | 3.3 | Idle for longer than the idle timeout (clock moved), then `GET /me`; then a `POST` with the old token | Backend: covered | `SessionLifecycleIT.a3_3_idleTimeoutByRoleWhileTheRowIsStillThere` |
 | 3.4 | Keep a session active past its absolute lifetime, then `GET /me`; then a `POST` with the old token | Backend: covered | `SessionLifecycleIT.a3_4_activityNeverMovesTheAbsoluteDeadline` |
 | 3.5 | Deadlines in `Account.session` for donor and staff; `pendingExpiresAt`; anonymous session | Backend: covered | `SessionLifecycleIT.a3_5_deadlinesByKindOfSession` |
@@ -74,7 +74,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 3.12 | A session identifier that was never issued | Backend: covered | `SessionLifecycleIT.a3_12_and_3_13_sessionsThatGrantNothing` |
 | 3.13 | An anonymous session calls `GET /me` and a protected route | Backend: covered | `SessionLifecycleIT.a3_12_and_3_13_sessionsThatGrantNothing` |
 | 3.14 | Fully signed in, call `/auth/login`, `/auth/register`, `/auth/set-password` | Backend: covered. Browser repeat: joint integration | `SessionLifecycleIT.a3_14_aSignedInSessionIsNeverSignedInOver` |
-| 3.15 | With a pending second factor, sign in again as another account | Backend: covered | `SessionLifecycleIT.a3_15_aPendingSignInIsReplacedByANewSignIn` |
+| 3.15 | With a pending second factor, sign in again as another account | Backend: covered | `ConcurrencyCorrectionsIT.a3_15_aFailedSignInEndsThePendingSignInAndARefusedRequestDoesNot` `SessionLifecycleIT.a3_15_aPendingSignInIsReplacedByANewSignIn` |
 | 3.16 | Wait past `pendingExpiresAt`, then call `/auth/mfa/verify`, `/enroll`, `/confirm` with the token the page still holds | Backend: covered | `SessionLifecycleIT.a3_16_aPendingSignInExpiresAfterTenMinutes` |
 | 3.16a | Same, but each call made with a fresh token of a new anonymous session | Backend: covered | `SessionLifecycleIT.a3_16_aPendingSignInExpiresAfterTenMinutes` |
 | 3.17 | Drop the answer of each state-changing call on the way back, then follow the table in `identity-and-security.md` 4.6 | Browser only: joint integration | Needs the frontend. The server side of each row (what a repeated or follow-up call answers) is covered by 3.14, 3.18 and group 14. |
@@ -121,7 +121,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 5.9 | Demote an admin, or remove `can_disburse`, while signed in | Backend: covered | `AuthorizationAndHeadersIT.a5_9_removingAPermissionEndsTheSessionFirst` |
 | 5.10 | Disable an account while signed in | Backend: covered | `AuthorizationAndHeadersIT.a5_10_aDisabledAccountLosesItsSessionsAndCannotSignIn` |
 | 5.11 | A session whose row survived deletion but whose security version is old: `GET /me`; a password change with its still-valid token and a **wrong** current password; the same with the right one | Backend: covered | `AuthorizationAndHeadersIT.a5_11_aSessionWhoseRowSurvivedIsRefusedByItsSecurityVersion` |
-| 5.12 | A privileged write and a demotion of its account, started together, many times | Backend: covered | `AuthorizationAndHeadersIT.a5_12_and_5_13_aWriteRacingARevocationNeverLeavesALiveSession` |
+| 5.12 | A privileged write and a demotion of its account, started together, many times | Backend: covered | `AuthorizationAndHeadersIT.a5_12_and_5_13_aWriteRacingARevocationNeverLeavesALiveSession` `ConcurrencyCorrectionsIT.a5_12_aPasswordChangeThatVerifiedAnOldPasswordChangesNothing` `ConcurrencyCorrectionsIT.a5_12_verificationThatRacesARevocationNeitherSignsInNorSpendsTheCode` `ConcurrencyCorrectionsIT.a5_12_regenerationThatRacesAChangeTouchesNeitherTheNewCodesNorTheFactor` `ConcurrencyCorrectionsIT.a5_12_enrollmentStepsThatRaceAChangeDoNothing` `ConcurrencyCorrectionsIT.a5_12_verificationAndStaffRecoveryTogetherNeverLeaveASession` |
 | 5.13 | A read in flight when the demotion commits; a request starting just after | Backend: covered | `AuthorizationAndHeadersIT.a5_12_and_5_13_aWriteRacingARevocationNeverLeavesALiveSession` `AuthorizationAndHeadersIT.a5_9_removingAPermissionEndsTheSessionFirst` |
 
 ## 6. Second factor
@@ -139,7 +139,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 6.7 | The same code in two simultaneous verification requests, many times | Backend: covered | `SecondFactorIT.a6_7_and_6_8_aCodeWorksOnceAlsoAtTheSameInstant` |
 | 6.8 | The same code again within its 30 seconds, in a new sign-in | Backend: covered | `SecondFactorIT.a6_7_and_6_8_aCodeWorksOnceAlsoAtTheSameInstant` |
 | 6.9 | Codes for the previous and next step; a code two steps away | Backend: covered | `SecondFactorIT.a6_9_oneStepEitherSideIsAcceptedAndNoFurther` `IdentitySecurityUnitTest.a6_9_authenticatorCodesMatchTheRfcTestVectors` `IdentitySecurityUnitTest.a6_9_aCodeMatchesOnlyWithinOneStepEitherSide` |
-| 6.10 | Four wrong codes, then a fifth, then a correct one | Backend: covered | `SecondFactorIT.a6_10_fourWrongCodesKeepThePendingSignInTheFifthEndsIt` |
+| 6.10 | Four wrong codes, then a fifth, then a correct one | Backend: covered | `ConcurrencyCorrectionsIT.a6_10_wrongCodesSentTogetherAreCountedExactly` `ConcurrencyCorrectionsIT.a6_10_aCorrectCodeAmongFourWrongOnesSignsInAndStaysSignedIn` `ConcurrencyCorrectionsIT.a6_10_theFifthWrongCodeAndACorrectCodeTogetherHaveOneConsistentOutcome` `ConcurrencyCorrectionsIT.a6_10_aPendingSignInThatIsOverDoesNotExistEvenIfItsSessionRowDoes` `SecondFactorIT.a6_10_fourWrongCodesKeepThePendingSignInTheFifthEndsIt` |
 | 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change, rotation), then every protected operation that checks a password or code (excluding operations accepting anonymous), assuming earlier checks other than the specified CSRF condition pass | Backend: covered | `SessionLifecycleIT.a3_3_idleTimeoutByRoleWhileTheRowIsStillThere` `SessionLifecycleIT.a3_4_activityNeverMovesTheAbsoluteDeadline` `SessionLifecycleIT.a3_6_and_3_7_signOut` `PrecedenceIT.a14_1_to_14_7_staleCredentialsOfTheBrowserAreRefusedByTheTokenCheck` `PrecedenceIT.a14_12_aDisabledAccountWhoseSessionRowsWereDeleted` `PrecedenceIT.a14_13_and_14_14_aRevokedIdentityWhoseRowSurvivedNeverReachesThePasswordCheck` `PrecedenceIT.a14_15_theSameForRecoveryCodes` `PrecedenceIT.a14_16_aPendingSessionOfADisabledAccountDoesNotConsumeTheCode` |
 | 6.10b | Every wrong password or code on a live session, except the fifth code | Backend: covered | `SignUpSignInIT.a2_15_and_2_16_changingThePassword` `SecondFactorIT.a6_10_fourWrongCodesKeepThePendingSignInTheFifthEndsIt` `SecondFactorIT.a6_14_and_6_15_replacingRecoveryCodes` `SecondFactorIT.a6_3_and_6_5b_wrongStaleAndReplacedCodesKeepThePendingSession` `PrecedenceIT.a14_28_and_14_29_validationBeforeThePasswordAndThePasswordCountedOnce` |
 | 6.11 | Sign in with a recovery code; reuse it | Backend: covered | `SecondFactorIT.a6_11_and_6_12_recoveryCodesWorkOnce` |
@@ -153,7 +153,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 6.19 | Password reset for staff, then sign-in | Backend: covered | `SecondFactorIT.a6_19_aPasswordResetDoesNotRemoveTheSecondFactor` |
 | 6.20 | `recover-staff-access`, then sign in with the **old** password | Backend: covered | `SecondFactorIT.a6_20_and_6_21_staffRecoveryMakesTheOldPasswordUseless` |
 | 6.21 | After 6.20: redeem the recovery credential, choose a new password, sign in | Backend: covered | `SecondFactorIT.a6_20_and_6_21_staffRecoveryMakesTheOldPasswordUseless` |
-| 6.22 | A staff account with a password and no second factor, after its enrollment window closed | Backend: covered | `SecondFactorIT.a6_22_aPasswordAloneNeverOpensEnrollmentOnceTheWindowHasClosed` |
+| 6.22 | A staff account with a password and no second factor, after its enrollment window closed | Backend: covered | `ConcurrencyCorrectionsIT.a6_22_anExpiredEnrollmentWindowDoesNotRemoveACredentialIssuedMeanwhile` `SecondFactorIT.a6_22_aPasswordAloneNeverOpensEnrollmentOnceTheWindowHasClosed` |
 | 6.23 | The QR code on the enrollment screen | Browser only: joint integration | Needs the real frontend in a real browser: joint integration. |
 
 ## 7. One-time credentials, operator command and the super administrator invariant
@@ -187,15 +187,15 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 |---|---|---|---|
 | 8.1 | Six failed sign-ins for one address from one client address | Backend: covered | `RateLimitIT.a8_1_a8_2_a8_4_theSixthFailureFromOneAddressIsRefusedAndOnlyThere` |
 | 8.2 | Same, then from another client address | Backend: covered | `RateLimitIT.a8_1_a8_2_a8_4_theSixthFailureFromOneAddressIsRefusedAndOnlyThere` |
-| 8.3 | 21 failures for one address across many client addresses | Backend: covered | `RateLimitIT.a8_3_manyAddressesAgainstOneAccountGetABoundedPause` |
+| 8.3 | 21 failures for one address across many client addresses | Backend: covered | `RateLimitCorrectionsIT.a8_3_theCooldownStartsOnceWhenManyRequestsArriveAtTheBoundary` `RateLimitIT.a8_3_manyAddressesAgainstOneAccountGetABoundedPause` |
 | 8.4 | Throttled attempts for an existing and an unknown address | Backend: covered | `RateLimitIT.a8_1_a8_2_a8_4_theSixthFailureFromOneAddressIsRefusedAndOnlyThere` |
-| 8.5 | Fifty wrong passwords for one address and client address sent at the same instant | Backend: covered | `RateLimitIT.a8_5_and_8_12_fiftySimultaneousGuessesVerifyAtMostFivePasswords` |
+| 8.5 | Fifty wrong passwords for one address and client address sent at the same instant | Backend: covered | `RateLimitCorrectionsIT.a8_5_aWindowLimitAdmitsExactlyItsNumberOfSimultaneousAttempts` `RateLimitIT.a8_5_and_8_12_fiftySimultaneousGuessesVerifyAtMostFivePasswords` |
 | 8.6 | `Retry-After` on every 429 the suite produces | Backend: covered | `RateLimitIT.everyRefusalSaysWhenToComeBack (after every rate-limit test)` |
 | 8.7 | Sign-up, one-time credential, CSRF and options limits | Backend: covered | `RateLimitIT.a8_7_signUpCredentialAndTokenLimits` |
 | 8.8 | A forged forwarded-for header from an untrusted connection | Backend: covered | `ClientAddressTest.a8_8_aForgedHeaderFromAnUntrustedConnectionIsIgnored` `ClientAddressTest.a8_8_onlyTheEntryTheTrustedProxyAddedCounts` |
-| 8.9 | Wrong current password on `change-password` and on `recovery-codes`; wrong code on `recovery-codes` and `confirm` | Backend: covered | `RateLimitIT.a8_9_secretsOfSignedInOperationsDrawOnTheAccountCounters` `RateLimitIT.a8_9_wrongCodesAtEnrollmentAndWrongPasswordsOnRecoveryCodesAreCountedToo` |
+| 8.9 | Wrong current password on `change-password` and on `recovery-codes`; wrong code on `recovery-codes` and `confirm` | Backend: covered | `RateLimitCorrectionsIT.a8_9_onePasswordCounterPerAccountAcrossSignInPasswordChangeAndRecoveryCodes` `RateLimitCorrectionsIT.a8_9_protectedPasswordOperationsHaveAClientAddressBudgetCountedBeforeTheBodyIsRead` `RateLimitIT.a8_9_secretsOfSignedInOperationsDrawOnTheAccountCounters` `RateLimitIT.a8_9_wrongCodesAtEnrollmentAndWrongPasswordsOnRecoveryCodesAreCountedToo` |
 | 8.10 | Counters in the database | Backend: covered | `RateLimitIT.a8_10_countersHoldHashesNotAddresses` |
-| 8.11 | More simultaneous sign-ins than hash slots, from many client addresses | Partly covered | `IdentitySecurityUnitTest.a8_11_whenEveryHashSlotIsBusyARequestIsToldToComeBack` Unit level: `IdentitySecurityUnitTest.a8_11_...` saturates a one-slot hasher and gets 503 with `Retry-After: 5`. Not reproduced over HTTP with four slots; memory was not measured. |
+| 8.11 | More simultaneous sign-ins than hash slots, from many client addresses | Backend: covered | `HashSaturationIT.a8_11_moreSignInsThanHashSlotsNeverRunMoreThanFourHashesAndTheRestAreToldToComeBack` `IdentitySecurityUnitTest.a8_11_whenEveryHashSlotIsBusyARequestIsToldToComeBack` `IdentitySecurityUnitTest.a8_11_hashingLimitsCanBeMadeStricterNeverLooser` `HashSaturationIT` sends forty simultaneous sign-ins over HTTP with the accepted limits (4 at once, 2 s): every answer is 401 or 503 with `Retry-After: 5`, the peak number of simultaneous hashes observed in the process is at most 4, and a password that was turned away leaves no failure record. Heap use is recorded as evidence, not asserted. The unit test covers the bounds on the settings. |
 | 8.12 | One client address trying to occupy all hash slots | Backend: covered | `RateLimitIT.a8_5_and_8_12_fiftySimultaneousGuessesVerifyAtMostFivePasswords` |
 | 8.13 | A successful sign-in after four failures | Backend: covered | `RateLimitIT.a8_13_aSuccessClearsThePairCounter` |
 
@@ -210,7 +210,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 9.5 | No CORS headers on any response; a preflight from another origin | Backend: covered | `AuthorizationAndHeadersIT.a9_1_a9_3_a9_4_a9_5_headersOnEveryIdentityAnswer` |
 | 9.6 | Body over 16 KiB; body that is not JSON; `Content-Type` other than JSON | Backend: covered | `AuthorizationAndHeadersIT.a9_6_and_9_7_bodies` |
 | 9.7 | `POST /auth/logout` and `/auth/mfa/enroll` with no body and no `Content-Type`; with a non-empty body | Backend: covered | `AuthorizationAndHeadersIT.a9_6_and_9_7_bodies` |
-| 9.8 | Application logs and audit rows after the whole suite, searched for every password, credential, secret, code, session identifier and CSRF token used | Partly covered | `AuditIT.a12_1_and_9_8_everyEventIsRecordedOnceAndNoSecretIsWrittenAnywhere` Audit rows and every identity table are searched for every password, credential, secret, code, session identifier and token used (`AuditIT.a12_1_and_9_8_...`, `StaffAdministrationIT.a7_2_and_7_12_...`, `RealDatabaseIT`). Application log output is not captured and searched; the code logs none of these values. |
+| 9.8 | Application logs and audit rows after the whole suite, searched for every password, credential, secret, code, session identifier and CSRF token used | Backend: covered | `AuditIT.a12_1_and_9_8_everyEventIsRecordedOnceAndNoSecretIsWrittenAnywhere` `LogInspectionIT.a9_8_noSecretIsWrittenToTheApplicationLog` `LogInspectionIT` captures the console of the whole journey with the application, Spring Security, Spring Web, Spring Session and JDBC logging at DEBUG, and searches it for every password, CSRF token, live session identifier, one-time credential, authenticator secret and recovery code used. Not searched for: six-digit codes (they occur by chance). Reported, not failed: at DEBUG the security framework logs a session identifier it has just replaced, which is dead by then; production logs at INFO. Audit rows and identity tables are searched by `AuditIT`. |
 | 9.9 | Every response of the suite validated against `openapi.yaml` | Backend: covered | `IdentityIntegration.everyIdentityAnswerMatchesTheContract (after every test)` |
 | 9.10 | Forced server error in an identity endpoint | Backend: covered | `AuthorizationAndHeadersIT.a9_10_aServerErrorSaysNothingAboutTheServer` |
 
@@ -263,12 +263,12 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | # | Scenario | Status | Executable tests and notes |
 |---|---|---|---|
 | 13.1 | The whole milestone 0B suite: 114 backend tests, contract checks, frontend parity | Backend: covered | `CI: Backend checks, Contract checks, Frontend checks, Live public API integration` Evidence is the CI run: the 114 milestone 0B backend tests are part of the same `verify`, and the contract, frontend and live-integration workflows run on the same commit. Two 0B assertions were changed for 11.1 (405 instead of 404). |
-| 13.2 | Full-dataset acceptance with a signed-in session cookie present | Partly covered | `AuthorizationAndHeadersIT.a9_2_and_13_2_publicEndpointsDoNotDependOnTheSessionAndSetNoCookie` Covered on the example fixture for all seven endpoints (`AuthorizationAndHeadersIT.a9_2_and_13_2_...`). Not repeated over the full 204-case dataset with a cookie; public handlers never read the session. |
-| 13.3 | The fixture loader and the development seed on a database with no disposable marker, empty or not | Backend: covered | `RealDatabaseIT.a13_3_and_13_7_anUnmarkedDatabaseTakesNoFictionalDataAndNoDevelopmentAccount` `StaffAdministrationIT.a13_3_and_13_6_aRealDatabaseNeverAcceptsFictionalDataAndCannotBeMadeDisposableAgain` |
+| 13.2 | Full-dataset acceptance with a signed-in session cookie present | Backend: covered | `AuthorizationAndHeadersIT.a9_2_and_13_2_publicEndpointsDoNotDependOnTheSessionAndSetNoCookie` `PublicApiWithSessionIT.a13_2_theWholePublicApiIsTheSameWithAndWithoutASession` `PublicApiWithSessionIT` loads the full dataset and compares every public path of every published case for a donor, a super administrator and a pending sign-in with the same path without a cookie: bodies and ETags identical, no `Set-Cookie`. |
+| 13.3 | The fixture loader and the development seed on a database with no disposable marker, empty or not | Backend: covered | `RealDatabaseIT.a13_3_and_13_7_anUnmarkedDatabaseTakesNoFictionalDataAndNoDevelopmentAccount` `StaffAdministrationIT.a13_3_and_13_6_aRealDatabaseNeverAcceptsFictionalDataAndCannotBeMadeDisposableAgain` `DevelopmentDataIsolationIT.a13_3_theFixtureLoaderRefusesAnEmptyDatabaseThatWasNotMarkedDisposable` |
 | 13.4 | The same on a database explicitly marked disposable | Backend: covered | `StaffAdministrationIT.a13_4_theFixtureLoaderLeavesIdentityDataAlone` |
 | 13.5 | The operator command on a disposable database | Backend: covered | `StaffAdministrationIT.a13_5_theOperatorCommandRefusesADisposableDatabase` |
 | 13.6 | After the operator command has run once on a database: mark it disposable | Backend: covered | `RealDatabaseIT.a13_6_aRealDatabaseCanNeverBecomeDisposable` `StaffAdministrationIT.a13_3_and_13_6_aRealDatabaseNeverAcceptsFictionalDataAndCannotBeMadeDisposableAgain` |
-| 13.7 | The development seed | Partly covered | `RealDatabaseIT.a13_3_and_13_7_anUnmarkedDatabaseTakesNoFictionalDataAndNoDevelopmentAccount` Absent outside `dev` (`RealDatabaseIT.a13_3_and_13_7_...`); refuses a database that is not disposable (code path shared with `DatabasePurpose`, tested by 13.3). That passwords are printed and not committed is by inspection. The non-local check is the fixture loader's, which runs first in the `dev` profile. |
+| 13.7 | The development seed | Backend: covered | `DevProfileHttpIT.a13_7_theDevelopmentSeedCreatesThreeFictionalAccountsWithGeneratedPasswords` `RealDatabaseIT.a13_3_and_13_7_anUnmarkedDatabaseTakesNoFictionalDataAndNoDevelopmentAccount` `DevelopmentDataIsolationIT.a13_7_theDevelopmentSeedRefusesItTooAndRefusesADatabaseElsewhere` `IdentitySecurityUnitTest.a13_7_developmentAccountsAreOnlyForADatabaseOnThisMachine` Present and correct on a disposable database in the `dev` profile (`DevProfileHttpIT`); absent outside `dev` (`RealDatabaseIT`); refuses an unmarked database and a database that is not on this machine (`DevelopmentDataIsolationIT`, unit test). That the generated passwords are printed to the console and exist in no file is by reading the code. |
 
 ## 14. Precedence
 
@@ -306,3 +306,16 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/identity/` (`*IT` ne
 | 14.30 | `POST /auth/register`: valid token, sign-up closed, malformed body | Backend: covered | `RegistrationClosedIT.a14_30_theClosedSwitchIsDecidedBeforeTheBodyIsValidated` |
 | 14.31 | `POST /auth/logout` with a non-empty body and a bad token | Backend: covered | `PrecedenceIT.a14_31_and_14_32` |
 | 14.32 | `POST /auth/mfa/enroll`: valid token, session in `mfa_required` | Backend: covered | `PrecedenceIT.a14_31_and_14_32` |
+
+## What is still owed, and by whom
+
+Not claimed by this document:
+
+- **Browser scenarios.** Every row marked "Browser only" or "Browser repeat" above. They need the real frontend, built for production with its content policy, driven by a real browser against this backend. None has been run.
+- **Independent security verification** of the backend and of the joint system.
+- **Manual operator verification**, which no automated test replaces:
+  - 7.19: run each operator command on the deployment machine and inspect the process list and the shell history for the credential it printed. The tests show only that the command takes its name as its single argument and asks for the rest on the terminal.
+  - 7.20: that the operator follows the identity-check procedure. The command states it, refuses without an answer and records the answer.
+  - Deployment: the two keys generated, stored outside source control and backed up; `APV_ALLOWED_ORIGINS` set behind the TLS proxy and `APV_TRUSTED_PROXIES` set to that proxy; Argon2id cost calibrated on the production machine; a real breached-password list supplied through `APV_PASSWORD_BLOCKLIST_PATH`; first super administrator created, activated and enrolled.
+- **5.7** stays partly covered until a staff-only and a super-admin-only business route exist.
+- **Contract questions** raised by the implementation are listed in `docs/adr/0002-identity-and-sessions.md` under "Corrective review".

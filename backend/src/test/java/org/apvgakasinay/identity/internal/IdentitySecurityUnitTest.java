@@ -129,6 +129,67 @@ class IdentitySecurityUnitTest {
     }
 
     @Test
+    void a8_11_hashingLimitsCanBeMadeStricterNeverLooser() {
+        for (MockEnvironment environment : List.of(test(), production())) {
+            assertThatThrownBy(() -> new IdentityProperties(environment.withProperty("apv.identity.hash-concurrency", "5")))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("between 1 and 4");
+        }
+        assertThatThrownBy(() -> new IdentityProperties(production().withProperty("apv.identity.hash-concurrency", "0")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new IdentityProperties(production().withProperty("apv.identity.hash-wait-millis", "2001")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("between 1 and 2000");
+        assertThatThrownBy(() -> new IdentityProperties(production().withProperty("apv.identity.hash-wait-millis", "0")))
+                .isInstanceOf(IllegalStateException.class);
+        IdentityProperties defaults = new IdentityProperties(production());
+        assertThat(defaults.hashConcurrency()).isEqualTo(4);
+        assertThat(defaults.hashWaitMillis()).isEqualTo(2000);
+        assertThat(new IdentityProperties(production().withProperty("apv.identity.hash-concurrency", "2")).hashConcurrency()).isEqualTo(2);
+    }
+
+    @Test
+    void a13_7_developmentAccountsAreOnlyForADatabaseOnThisMachine() {
+        String local = "localhost,127.0.0.1,[::1]";
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://localhost:5432/apv", local)).isTrue();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://127.0.0.1/apv", local)).isTrue();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://[::1]:5432/apv", local)).isTrue();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://db.example.org:5432/apv", local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://localhost.example.org/apv", local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://localhost,db.example.org/apv", local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://db.example.org/apv?host=localhost", local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine("", local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine(null, local)).isFalse();
+        assertThat(DevAccountSeeder.onThisMachine("jdbc:postgresql://172.17.0.2:5432/apv", local + ",172.17.0.2")).isTrue();
+    }
+
+    /**
+     * Scenario 2.17. Everything a password check does: the policy with its blocklist, hashing,
+     * verification. Run in CI a second time inside a network namespace with no interface
+     * (-Dapv.test.network-disabled=true), where the first assertion proves there is no network.
+     */
+    @Test
+    void a2_17_passwordChecksNeedNoNetwork() throws Exception {
+        if (Boolean.getBoolean("apv.test.network-disabled")) {
+            assertThatThrownBy(() -> {
+                try (java.net.Socket socket = new java.net.Socket()) {
+                    socket.connect(new java.net.InetSocketAddress("1.1.1.1", 443), 2000);
+                }
+            }).as("this run was supposed to have no outgoing network").isInstanceOf(java.io.IOException.class);
+            java.nio.file.Path evidence = java.nio.file.Path.of("target", "identity-evidence");
+            java.nio.file.Files.createDirectories(evidence);
+            java.nio.file.Files.writeString(evidence.resolve("no-network.txt"),
+                    "Password policy, blocklist, Argon2id hashing and verification ran with no outgoing network: a connection to 1.1.1.1:443 failed.\n");
+        }
+        IdentityProperties properties = new IdentityProperties(test());
+        PasswordPolicy policy = new PasswordPolicy(properties);
+        assertThatThrownBy(() -> policy.accept("password", "passwordpassword", List.of())).isInstanceOf(ApiException.class);
+        String normalized = policy.accept("password", "a long harmless passphrase 2026", List.of("sample.donor", "Sample Person"));
+        PasswordHasher hasher = new PasswordHasher(properties);
+        String hash = hasher.hash(normalized);
+        assertThat(hasher.matches(normalized, hash)).isTrue();
+        assertThat(hasher.matches(normalized, null)).isFalse();
+    }
+
+    @Test
     void a5_4_thePermissionFunctionEqualsTheMatrix() {
         List<String> own = List.of("account.read_own", "account.change_password", "donations.read_own");
         List<String> staff = List.of("cases.manage", "case_updates.post", "donation_reports.read");
