@@ -57,12 +57,12 @@ Sign-up is open in these tests unless a row says otherwise.
 |---|---|---|---|
 | 3.1 | Obtain an anonymous session with `GET /auth/csrf`, sign in, reuse the earlier identifier | The earlier identifier is not signed in (fixation) | |
 | 3.2 | Identifier before and after second-factor verification, enrollment confirmation and a password change | Different each time; the old ones are dead | |
-| 3.3 | Idle for longer than the idle timeout (clock moved) | 401 `unauthenticated` | |
-| 3.4 | Keep a session active past its absolute lifetime | 401 at the absolute deadline despite activity | |
+| 3.3 | Idle for longer than the idle timeout (clock moved), then `GET /me`; then a `POST` with the old token | 401 `unauthenticated`; 403 `csrf_invalid` | |
+| 3.4 | Keep a session active past its absolute lifetime, then `GET /me`; then a `POST` with the old token | 401 `unauthenticated` at the absolute deadline despite activity; 403 `csrf_invalid`. The deadline applies at once, before any cleanup of the row. | |
 | 3.5 | Deadlines in `Account.session` for donor and staff; `pendingExpiresAt`; anonymous session | 2 h and 24 h; 30 min and 12 h; 10 min; 30 min and 2 h | |
-| 3.6 | Sign out, then reuse the cookie | 401; the session row is gone | B |
+| 3.6 | Sign out, then reuse the cookie on `GET /me` and on a `POST` with the old token | 401 `unauthenticated`; 403 `csrf_invalid`; the session row is gone | B |
 | 3.7 | Sign out with no session, and twice | 204 both times | |
-| 3.8 | Two browsers signed in; change the password in one | The other gets 401 on its next request; the first continues | B |
+| 3.8 | Two browsers signed in; change the password in one | In the other, the next `GET` is 401 `unauthenticated` and the next `POST` is 403 `csrf_invalid` followed by 401 on `GET /me`; the first continues | B |
 | 3.9 | Production profile: cookie attributes | `__Host-apv_session`, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`, no `Max-Age`. No other cookie is set. | |
 | 3.10 | Start outside `dev` and `test` with a non-`Secure` session cookie configured | The application refuses to start | |
 | 3.11 | Scripts in the page try to read the session cookie | Not visible | B |
@@ -70,9 +70,10 @@ Sign-up is open in these tests unless a row says otherwise.
 | 3.13 | An anonymous session calls `GET /me` and a protected route | 401 `unauthenticated`: it grants nothing | |
 | 3.14 | Fully signed in, call `/auth/login`, `/auth/register`, `/auth/set-password` | 409 `already_signed_in` each; the session, the account and the target account are unchanged | B |
 | 3.15 | With a pending second factor, sign in again as another account | The pending sign-in is discarded; the new sign-in proceeds | |
-| 3.16 | Wait past `pendingExpiresAt`, then call `/auth/mfa/verify`, `/enroll`, `/confirm` | 401 `unauthenticated` each | |
+| 3.16 | Wait past `pendingExpiresAt`, then call `/auth/mfa/verify`, `/enroll`, `/confirm` with the token the page still holds | 403 `csrf_invalid` each: the session no longer exists, so its token is refused before the state is looked at. `GET /me` then answers 401 `unauthenticated`. | |
+| 3.16a | Same, but each call made with a fresh token of a new anonymous session | 401 `unauthenticated` each. The code is not checked or counted. | |
 | 3.17 | Drop the answer of each state-changing call on the way back, then follow the table in `identity-and-security.md` 4.6 | The frontend reaches the right state through `GET /me` and never resends a password, code or credential by itself | B |
-| 3.18 | Every identity operation called in every session state | Exactly the answer in the table of `identity-and-security.md` 4.3, and the checks happen in its stated order | |
+| 3.18 | Every identity operation called in every session state, each with a valid token for that session | Exactly the answer in the table of `identity-and-security.md` 4.3 | |
 
 ## 4. CSRF
 
@@ -83,12 +84,15 @@ Sign-up is open in these tests unless a row says otherwise.
 | 4.3 | With a made-up token | 403 `csrf_invalid` | |
 | 4.4 | Token fetched before sign-in, used after sign-in | 403; a fresh token works | B |
 | 4.5 | Token from browser A used with browser B's session cookie | 403 | |
-| 4.6 | Token used after sign-out, after a password change, and after the session expired | 403 each; a fresh token works | |
+| 4.6 | A `POST` with the token of a session that was signed out, rotated by a password change, or has expired; with the old cookie, with a new cookie, and with no cookie | 403 `csrf_invalid` each; nothing changed or counted; a fresh token works | |
 | 4.7 | Sign-up, sign-in and sign-out with no token | 403: public mutations are protected too | |
 | 4.8 | Two tokens fetched in a row for one session | Different text, both accepted | |
 | 4.9 | A wrong password sent with a bad token, six times | 403 each; no rate-limit counter moved; no audit record of a failed sign-in: the rejection came first | |
-| 4.10 | A cross-site form post (`application/x-www-form-urlencoded`) to sign-in | 415 or 403; never processed | |
-| 4.11 | `POST` with `Origin` of another site | 403 | |
+| 4.10 | A cross-site form post (`application/x-www-form-urlencoded`) to sign-in, as a browser sends it: `Origin` of the other site | 403 `forbidden`, from the origin check, before the content type is looked at. Never processed. | |
+| 4.10a | The same body and content type sent with no `Origin` and no `Sec-Fetch-Site` | 415: the origin check passes, the declared type is refused next | |
+| 4.11 | A `POST` with: `Origin` of another site; `Origin: null`; no `Origin` and `Sec-Fetch-Site` of `cross-site`, `same-site` or `none`; the site's own `Origin` with `Sec-Fetch-Site: cross-site` | 403 `forbidden` each, and never `csrf_invalid`, even when the token is also wrong | |
+| 4.11a | A `POST` with the site's own `Origin` and `Sec-Fetch-Site: same-origin`; with the site's own `Origin` only; with neither header | Passes the origin check each time and is judged by the later steps | |
+| 4.11b | A `GET` to a public endpoint and to `/me` carrying another site's `Origin` or `Sec-Fetch-Site: cross-site` | Not refused by the origin check | |
 | 4.12 | `GET` endpoints with no token | Work | |
 | 4.13 | Tab A shows account X. Tab B signs out and signs in as account Y. Tab A submits a password change. | The request is refused as `csrf_invalid`; the frontend fetches a token, reads `GET /me`, sees another identity, clears X's screens and resends nothing. Y's password is unchanged. | B |
 | 4.14 | Stale token on **every** `POST` in turn: sign-in, sign-up, sign-out, password change, set password, and each second-factor operation, with the identity unchanged | Exactly one request per submission reaches the server: no automatic resend, for any of them. The frontend fetches a token, reads `GET /me`, says the page was out of date and waits. Password, code and credential fields are cleared. | B |
@@ -109,9 +113,9 @@ Sign-up is open in these tests unless a row says otherwise.
 | 5.6 | Any identity request with an extra property | 400 `unknown_field` |
 | 5.7 | A donor calls a staff-only test route; an admin calls a super-admin-only test route | 403 `forbidden` |
 | 5.8 | Account A tries to act on account B by any identifier in path, query, header or body | No M1 endpoint accepts one; extra fields are refused; A's own account is used |
-| 5.9 | Demote an admin, or remove `can_disburse`, while signed in | The very next request is 401: the session is ended first. After signing in again, the server-side permission function no longer grants what was removed. |
-| 5.10 | Disable an account while signed in | Next request: 401; sign-in refused as `invalid_credentials` |
-| 5.11 | A session whose row survived deletion but whose security version is old | 401, and the row is removed |
+| 5.9 | Demote an admin, or remove `can_disburse`, while signed in | The session is ended first. Its very next `GET` is 401 `unauthenticated`; its next `POST` is 403 `csrf_invalid`, then 401 on `GET /me`. After signing in again, the server-side permission function no longer grants what was removed. |
+| 5.10 | Disable an account while signed in | Next `GET`: 401 `unauthenticated`; next `POST`: 403 `csrf_invalid`; sign-in refused as `invalid_credentials` |
+| 5.11 | A session whose row survived deletion but whose security version is old: `GET /me`; a password change with its still-valid token and a **wrong** current password; the same with the right one | 401 `unauthenticated` each, and the row is removed. The password is never checked: no failed attempt is counted and the right password changes nothing. |
 | 5.12 | A privileged write and a demotion of its account, started together, many times | Never does the write commit after the demotion committed. Either the write committed first, or it was refused. |
 | 5.13 | A read in flight when the demotion commits; a request starting just after | The first may finish; the second is 401 |
 
@@ -123,15 +127,15 @@ Sign-up is open in these tests unless a row says otherwise.
 | 6.2 | Enroll, confirm with a correct code | 200 with ten recovery codes; session `authenticated`; identifier rotated | B |
 | 6.3 | Confirm with a wrong code; after the pending secret expired; with a code from a secret that was replaced by a second `enroll` | 401 `mfa_code_invalid` each; factor not active | |
 | 6.4 | Two tabs start enrollment; the first tab confirms with its own code | 401 `mfa_code_invalid`: only the latest pending secret counts | |
-| 6.5 | Simultaneous confirmations with a correct code, repeated many times, in each arrangement: two requests on the same session; one request holding the pre-rotation CSRF token; one holding the pre-rotation session identifier; two pending sessions of the same account in two browsers | Always exactly one 200, one active factor and one stored set of recovery codes. No losing answer contains codes or a secret. Each loser's error is the one `identity-and-security.md` 5.3 allows for its arrangement: 409 `already_signed_in`, 403 `csrf_invalid`, 401 `unauthenticated`, or 401 `mfa_code_invalid`. | |
+| 6.5 | Simultaneous confirmations with a correct code, repeated many times, in each arrangement of `identity-and-security.md` 5.3 | Always exactly one 200, one active factor and one stored set of recovery codes. No losing answer contains codes or a secret. Each loser gets the one answer of its row: 409 `already_signed_in` on the now signed-in session with its current token; 403 `csrf_invalid` with the pre-rotation token, the pre-rotation session identifier, or both; 401 `unauthenticated` with a fresh anonymous token; 401 `mfa_code_invalid` from another pending session of the same account. | |
 | 6.5a | Start enrollment inside the window, confirm with a correct code after the window closed (clock moved) | 401 `unauthenticated`; pending session ended; no factor active; the account needs a new credential | |
 | 6.5b | Wrong code at confirmation, then a correct one for the same pending secret | 401 `mfa_code_invalid`, session still pending; then 200 | |
 | 6.6 | Staff with a second factor signs in | `mfa_required`; verify with a correct code gives `authenticated` with an account | B |
 | 6.7 | The same code in two simultaneous verification requests, many times | Exactly one succeeds each time | |
 | 6.8 | The same code again within its 30 seconds, in a new sign-in | Refused | |
 | 6.9 | Codes for the previous and next step; a code two steps away | Accepted; refused | |
-| 6.10 | Four wrong codes, then a fifth, then a correct one | 401 `mfa_code_invalid` four times, the session still pending after each (`GET /me` answers 401 `mfa_required`); the fifth is 401 `unauthenticated` and the session is gone; the correct code is 401 `unauthenticated` | |
-| 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change), on every operation that checks a password or code | Always `unauthenticated`. Never `invalid_credentials` or `mfa_code_invalid`. | |
+| 6.10 | Four wrong codes, then a fifth, then a correct one | 401 `mfa_code_invalid` four times, the session still pending after each (`GET /me` answers 401 `mfa_required`); the fifth is 401 `unauthenticated` and the session is gone. The correct code sent next with the token the page still holds is 403 `csrf_invalid`; sent with a fresh anonymous token it is 401 `unauthenticated`. It is never accepted and never checked. | |
+| 6.10a | Every way a session can be lost (expiry, sign-out elsewhere, disablement, security-version change, rotation), then every operation that checks a password or code | Never `invalid_credentials` or `mfa_code_invalid`, and the secret is never checked or counted. The answer is fixed by what the request carries: 403 `csrf_invalid` with the lost session's token; 401 `unauthenticated` with a fresh anonymous token, or with the surviving token of a revoked identity. | |
 | 6.10b | Every wrong password or code on a live session, except the fifth code | Always `invalid_credentials` or `mfa_code_invalid`, and the session is unchanged afterwards | |
 | 6.11 | Sign in with a recovery code; reuse it | Works once; refused the second time; `recoveryCodesRemaining` is 9 | |
 | 6.12 | One recovery code in two simultaneous requests, many times | Exactly one succeeds each time | |
@@ -216,13 +220,13 @@ All run in a real browser against the real backend and the production build of t
 | 10.3 | `localStorage`, `sessionStorage`, IndexedDB and script-written cookies after the whole journey | Only language and theme preferences. Nothing about the account, session or permissions. |
 | 10.4 | Console output and any error or analytics reporting during the journey, including failures | No secret |
 | 10.5 | Sign out | Account screens are left; in-memory account data, recovery codes and tokens are gone |
-| 10.6 | A 401 `unauthenticated` on any request while a private screen is shown; the session expiring | Private state cleared; `GET /me` read once; the sign-in screen is shown |
+| 10.6 | The session is lost while a private screen is shown; then the page makes a `GET`, and separately a `POST` | After the `GET`'s 401 `unauthenticated`, or after the `POST`'s 403 `csrf_invalid` and the `GET /me` that follows it: private state cleared and the sign-in screen shown. The `POST` is not sent again. |
 | 10.6a | Wrong current password on the password-change screen | The error is shown on that field. The person is still signed in, on the same screen, with private state intact; no sign-out, no navigation. `GET /me` still answers 200. |
 | 10.6b | Wrong authenticator code at sign-in, attempts one to four | Each time the challenge stays, the error is shown, the code field is cleared; a correct code then signs in |
-| 10.6c | The fifth wrong code | The person is returned to the password step with a message; nothing of the pending sign-in remains; a correct code is no longer accepted |
+| 10.6c | The fifth wrong code, then the person types a correct one anyway | After the fifth: returned to the password step with a message; nothing of the pending sign-in remains. A further code cannot be submitted from the challenge, and if forced it is refused and not resent. |
 | 10.6d | Wrong code on recovery-code regeneration | Error on the code field; still signed in |
 | 10.6e | Load the application while the session is pending a second factor, and while pending enrollment | `GET /me` answers 401 `mfa_required` or `mfa_enrollment_required`; the challenge or the enrollment screen is shown, never the generic sign-in screen |
-| 10.6f | A pending sign-in expires while its challenge is shown, then the person submits a code | 401 `unauthenticated`; back to the password step |
+| 10.6f | A pending sign-in expires while its challenge is shown, then the person submits a code | The request answers 403 `csrf_invalid`; the frontend fetches a token and reads `GET /me`, which answers 401 `unauthenticated`; the person is returned to the password step. The code is not sent again. |
 | 10.7 | Another tab signs out, or signs in as another account | This tab clears and shows the new state when it is next used, at the latest when it becomes visible |
 | 10.8 | Back button after signing out, including restoration from the back-forward cache | No private screen is shown; `GET /me` is re-read first |
 | 10.9 | Every identity screen loaded from the production build with the page content policy enforced | No policy violation; the policy allows no inline script, no `eval`, and no other origin |
@@ -262,3 +266,54 @@ All run in a real browser against the real backend and the production build of t
 | 13.5 | The operator command on a disposable database | Refused |
 | 13.6 | After the operator command has run once on a database: mark it disposable | Refused by the database |
 | 13.7 | The development seed | Absent outside `dev` and `test`; refuses a non-local database; prints generated passwords, commits none |
+
+## 14. Precedence: one request, several things wrong
+
+Each row is one request. The order of checks is the table in `identity-and-security.md` 4.3; the expected answer is always that of the first failing step. For every row: nothing is changed, no rate-limit or attempt counter moves unless the row says so, no secret is checked, and the frontend never sends the request again by itself.
+
+Stale and fresh credentials of the browser:
+
+| # | The request | Expected |
+|---|---|---|
+| 14.1 | `POST /auth/change-password`: cookie of a signed-out session and that session's token | 403 `csrf_invalid` |
+| 14.2 | The same with the cookie of an expired session whose row has not been cleaned up yet | 403 `csrf_invalid`: a passed deadline means the session does not exist |
+| 14.3 | The same with the pre-rotation cookie and the pre-rotation token, after a password change elsewhere | 403 `csrf_invalid` |
+| 14.4 | A live session's cookie with the token of its previous identifier | 403 `csrf_invalid` |
+| 14.5 | A live session's cookie with another browser's valid token | 403 `csrf_invalid` |
+| 14.6 | A stale cookie and no token at all | 403 `csrf_invalid` |
+| 14.7 | No cookie, and a token that was valid for some session | 403 `csrf_invalid` |
+| 14.8 | A fresh anonymous session and its valid token, to `POST /auth/change-password`, `/auth/mfa/verify`, `/auth/mfa/enroll`, `/auth/mfa/confirm`, `/auth/mfa/recovery-codes` | 401 `unauthenticated` each |
+| 14.9 | A fresh anonymous session and its valid token, to `POST /auth/login` with correct credentials | 200: sign-in is a public operation and accepts `anonymous` |
+| 14.10 | The same to `POST /auth/logout` | 204 |
+| 14.11 | After 14.1: the frontend's follow-up | One `GET /auth/csrf`, one `GET /me` answering 401 `unauthenticated`, private state cleared, sign-in screen. The password change is not sent again. (B) |
+
+Revoked identities:
+
+| # | The request | Expected |
+|---|---|---|
+| 14.12 | Account disabled, session rows deleted: `GET /me`; a `POST` with the old token | 401 `unauthenticated`; 403 `csrf_invalid` |
+| 14.13 | Security version raised, session row and token survived: `POST /auth/change-password` with a wrong current password | 401 `unauthenticated`. Not `invalid_credentials`. The password counter does not move. The row is deleted. |
+| 14.14 | The same with the correct current password | 401 `unauthenticated`. The password is not changed. |
+| 14.15 | The same situation: `POST /auth/mfa/recovery-codes` with a wrong code | 401 `unauthenticated`. Not `mfa_code_invalid`. The second-factor counter does not move. |
+| 14.16 | A pending session whose account was disabled meanwhile, row survived: `POST /auth/mfa/verify` with a correct code | 401 `unauthenticated`. The code is not consumed. |
+| 14.17 | A revoked identity, row survived, calling `POST /auth/login` | Its session is ended at the state check and the sign-in proceeds as from `anonymous`; it does not get 409 |
+
+Several invalid conditions at once:
+
+| # | The request | Expected |
+|---|---|---|
+| 14.18 | Unknown path, wrong origin, bad token, oversized body | 404 `not_found` |
+| 14.19 | `PUT /api/auth/login`, wrong origin, bad token | 405 `method_not_allowed` with `Allow` |
+| 14.20 | `POST /auth/login`: another site's `Origin`, a 1 MiB form-encoded body, no token, no session | 403 `forbidden` |
+| 14.21 | `POST /auth/login`: own origin, 1 MiB body, wrong content type, no token | 413 |
+| 14.22 | `POST /auth/login`: own origin, small body, `text/plain`, no token | 415 |
+| 14.23 | `POST /auth/login`: own origin, JSON, no token, client address already rate-limited | 403 `csrf_invalid`: the token comes before the rate limit, and the refused request does not count toward it |
+| 14.24 | `POST /auth/login`: valid token, client address rate-limited, session fully signed in, malformed body | 429 with `Retry-After` |
+| 14.25 | `POST /auth/login`: valid token, not rate-limited, session fully signed in, malformed body, wrong password | 409 `already_signed_in` |
+| 14.26 | `POST /auth/mfa/verify`: valid token of an anonymous session, malformed body | 401 `unauthenticated`: state before validation |
+| 14.27 | `POST /auth/mfa/verify`: valid token, pending session, a code of the wrong shape | 400 `validation_error`; the attempt is not counted among the five |
+| 14.28 | `POST /auth/change-password`: valid token, signed in, new password too short and current password wrong | 400 `validation_error`; the current password is not checked or counted |
+| 14.29 | `POST /auth/change-password`: valid token, signed in, valid body, wrong current password | 401 `invalid_credentials`; counted once; still signed in |
+| 14.30 | `POST /auth/register`: valid token, sign-up closed, malformed body | 403 `registration_closed`: the closed switch is part of the state check |
+| 14.31 | `POST /auth/logout` with a non-empty body and a bad token | 403 `csrf_invalid` |
+| 14.32 | `POST /auth/mfa/enroll`: valid token, session in `mfa_required` | 403 `forbidden`, from the state check; distinguishable from 14.20 only by context, and in both cases nothing is resent |

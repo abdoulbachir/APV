@@ -206,17 +206,41 @@ The answer in a wrong state is always the same:
 
 A pending session that calls `/auth/login`, `/auth/register` or `/auth/set-password` is discarded first: the pending sign-in is over, and the call proceeds as from `anonymous`.
 
-**Order of checks**, so that every wrong request has exactly one answer:
+**Order of checks**, so that every wrong request has exactly one answer. A request is refused at the first step it fails, and the later steps are not evaluated at all:
 
-1. Path and method: 404, 405.
-2. Body size and type: 413, 415.
-3. CSRF: 403 `csrf_invalid`.
-4. Rate limits: 429.
-5. Session state: 401, 409, 403.
-6. Body validation: 400.
-7. The operation's own checks (password, code, credential): 401, 400.
+| Step | Check | Refusal |
+|---|---|---|
+| 1 | Path and method | 404 `not_found`; 405 `method_not_allowed` |
+| 2 | Origin and fetch metadata, on requests that are not `GET` (9.2) | 403 `forbidden` |
+| 3 | Body size and declared type, before anything is parsed | 413; 415 |
+| 4 | CSRF token, on requests that are not `GET` (9.1) | 403 `csrf_invalid` |
+| 5 | Rate limits | 429 |
+| 6 | Session state: is there a live session, is its identity still valid, is it in a state this operation accepts | 401; 409 `already_signed_in`; 403 `forbidden` |
+| 7 | Body validation | 400 |
+| 8 | The operation's own checks: password, code, credential | 401 `invalid_credentials`, `mfa_code_invalid`; 400 `credential_invalid` |
 
-Everything up to and including step 5 happens before the operation runs and changes nothing.
+Everything up to and including step 7 changes nothing. A secret (password, code, credential) is looked at only in step 8, so a request refused earlier never has its secret checked and never counts as a failed attempt.
+
+**Which session exists at steps 4 and 6.** This is what makes the answers for lost sessions deterministic.
+
+- A session **does not exist** once it has been deleted (sign-out, a revocation that deletes rows, the fifth wrong code), once its identifier has been replaced by a rotation, or once it has passed its idle or absolute deadline. A deadline takes effect at the instant it passes, at every step, whether or not the row has been cleaned up yet.
+- A request whose cookie names a session that does not exist is handled exactly as a request with no cookie. It has no CSRF token on the server, so a `POST` from it fails **step 4** with 403 `csrf_invalid`, whatever token it sends. A `GET` from it reaches step 6 and is `anonymous`.
+- A session whose row still exists and is within its deadlines, but whose identity has been revoked (the account was disabled, or its security version changed, and the row was not deleted), still has its token. A `POST` with that token passes step 4 and is refused at **step 6** with 401 `unauthenticated`; the session is then deleted. Its secret is never checked.
+
+Two more things are decided at step 6, so their place in the order is fixed too:
+
+- **A revoked identity calling an operation that accepts `anonymous`** (sign-in, sign-up, set-password, sign-out): its session is ended, and the request then proceeds as from `anonymous`. It is not answered 409, because that identity is no longer signed in.
+- **Closed sign-up.** `POST /auth/register` on a server where sign-up is closed answers 403 `registration_closed` at this step: after the token and the rate limit, before the body is validated.
+
+So, for a signed-in or pending session that has been lost:
+
+| Request | Answer |
+|---|---|
+| `GET /me`, or any `GET` that needs a session | 401 `unauthenticated` |
+| A `POST` still carrying the lost session's token (the usual case in a browser) | 403 `csrf_invalid`. Then, as always after `csrf_invalid`: new token, `GET /me` (401 `unauthenticated`), clear private state, sign-in screen, nothing resent. |
+| A `POST` to a protected operation with a **fresh, valid** token of an anonymous session | 401 `unauthenticated` |
+| A `POST` to a public operation (sign-in, sign-up, set-password, sign-out) with a fresh, valid anonymous token | Proceeds normally: these accept `anonymous` |
+| A `POST` on a revoked identity whose row and token survived | 401 `unauthenticated`, session deleted, secret not checked |
 
 ### 4.4 Lifetimes
 
@@ -231,7 +255,7 @@ Everything up to and including step 5 happens before the operation runs and chan
 
 Activity moves the idle deadline and never the absolute one. The absolute deadline is fixed at sign-in and checked on every request. `Account.session` reports both, and a pending result reports `pendingExpiresAt`. There is no "remember me".
 
-**Expiry while a second factor is pending.** After 10 minutes the pending session is gone. `POST /auth/mfa/verify`, `/enroll` and `/confirm` then answer 401 `unauthenticated`, and the person starts again with the password. Nothing of the pending sign-in survives.
+**Expiry while a second factor is pending.** After 10 minutes the pending session does not exist any more (4.3). A `POST` to `/auth/mfa/verify`, `/enroll` or `/confirm` from the page that was showing the challenge still carries the dead session's token, so it answers 403 `csrf_invalid`; the frontend fetches a token, reads `GET /me`, gets 401 `unauthenticated` and returns to the password step. The same `POST` sent with a fresh anonymous token answers 401 `unauthenticated`. Either way the code is never checked, and nothing of the pending sign-in survives.
 
 ### 4.5 Rotation
 
@@ -247,7 +271,7 @@ A request can succeed on the server while its answer never reaches the browser. 
 | Second-factor verification | `GET /me` as above. The code is spent either way. |
 | Start of enrollment | Call it again. The earlier pending secret is replaced. |
 | Enrollment confirmation | `GET /me`. If 200, the recovery codes were not seen: replace them with `POST /auth/mfa/recovery-codes`. |
-| Password change | The session identifier may have changed with the lost answer, so the next request may be 401. Sign in, trying the new password first. |
+| Password change | The session identifier may have changed with the lost answer, so the next request may be refused: 401 `unauthenticated` for a `GET`, 403 `csrf_invalid` for a `POST`. Read `GET /me`, then sign in, trying the new password first. |
 | Set password | The credential may be spent. Try signing in with the new password; if that fails, a new credential is needed. |
 | Sign-up | Sign in. |
 | Sign-out | `GET /me`. |
@@ -258,13 +282,15 @@ A 401 is one of two different things, and the code always says which.
 
 | Code | About | Session afterwards | Sent by |
 |---|---|---|---|
-| `unauthenticated` | The session | None, or anonymous. Anything that was signed in or pending is gone. | Any operation that needs a session; and the fifth wrong code, an expired pending sign-in, a closed enrollment window |
+| `unauthenticated` | The session | None, or anonymous. Anything that was signed in or pending is gone. | Any `GET` that needs a session; any `POST` that passed the CSRF check but has no live, valid session in an accepted state; the fifth wrong code; a closed enrollment window |
 | `mfa_required` | The session | Unchanged: still waiting for the second factor | `GET /me` and operations that need a full session |
 | `mfa_enrollment_required` | The session | Unchanged: still waiting for enrollment | Same |
 | `invalid_credentials` | The password in this request | **Unchanged.** A signed-in session stays signed in. | Sign-in; password change; recovery-code regeneration |
 | `mfa_code_invalid` | The code in this request | **Unchanged.** A pending sign-in stays pending and may try again. | Second-factor verification; enrollment confirmation; recovery-code regeneration |
 
 The server guarantees both directions: a lost session is never reported as `invalid_credentials` or `mfa_code_invalid`, and a wrong secret never ends a session, with the single stated exception of the fifth wrong code. What the frontend does with each code is in section 11.
+
+**A lost session is not always a 401.** On a `POST`, the CSRF check comes before the session-state check (4.3), and a lost session has no valid token. So the page that was open when the session was lost normally sees 403 `csrf_invalid` on its next `POST`, and only learns `unauthenticated` from the `GET /me` that follows. `unauthenticated` appears directly on a `POST` only when the token is valid: a fresh anonymous token, or a revoked identity whose row survived. Both paths end the same way for the person, and neither ever checks or counts a secret.
 
 ## 5. Second factor for staff
 
@@ -302,11 +328,11 @@ Rules:
   | The losing request arrives with | Answer |
   |---|---|
   | The same browser session, observed after it became signed in | 409 `already_signed_in` |
-  | The CSRF token from before the rotation | 403 `csrf_invalid` |
-  | The session identifier from before the rotation | 401 `unauthenticated` |
+  | The CSRF token from before the rotation, or the session identifier from before the rotation, or both. A replaced identifier names a session that no longer exists, so its token cannot match either. | 403 `csrf_invalid` |
+  | A fresh token of an anonymous session (the loser re-bootstrapped after losing its session) | 401 `unauthenticated` |
   | Another pending session of the same account (another browser) | 401 `mfa_code_invalid`: the pending secret it knew no longer exists. That session stays pending until it expires and can do nothing with it. |
 
-  All four are correct outcomes. Tests assert the guarantees, and that each loser's error is one this table allows for its situation.
+  Each row has exactly one answer, fixed by the order of checks in 4.3. Tests assert the guarantees, and that each loser gets the answer of its row.
 - **The enrollment window.** A staff account may enroll only during the 60 minutes after it redeemed an activation or staff-recovery credential (section 8). The window is checked when enrollment starts **and again when it is confirmed**. A confirmation after the window closed answers 401 `unauthenticated`, ends the pending session and activates nothing. Outside the window a staff account without a second factor cannot sign in at all: it is "not activated" again and needs a new credential. A password alone, however it was obtained, never opens enrollment.
 
 ### 5.4 Recovery codes
@@ -502,21 +528,26 @@ Operations that only add to the set (creating an account, enabling one, completi
 
 **Invalidation.** The token dies with the session identifier it belongs to. It is replaced at sign-in, second-factor verification, completed enrollment and password change, and destroyed at sign-out and expiry. A token from another session, from before a rotation, or from another browser never matches.
 
-**What 403 `csrf_invalid` guarantees.** The token is checked before the operation, before rate-limit counters and before the body is read (4.3, step 3). The request changed nothing and counted against nothing.
+**What 403 `csrf_invalid` guarantees.** The token is checked at step 4 of the order in 4.3: after the path, the origin and the size and declared type of the body, and before rate limits, before the session state, before the body is parsed and before any secret is looked at. The request changed nothing, counted against nothing, and no password or code in it was examined. It is checked before the session state on purpose: a request that cannot prove it came from this site's own page is told nothing about the session.
 
 **What the frontend does after `csrf_invalid`.** A stale token usually means the session changed underneath the page, often in another tab: someone signed out, signed in as another account, or the session expired. The page cannot always tell whether the identity is still the one the person meant: in a pending state `GET /me` carries no account identifier, so two different pending sign-ins look the same. So there is one rule, with no exceptions:
 
 1. Fetch a new token.
-2. Read `GET /me` and show the state it reports. If that is not the state the page was showing, clear the page's private state (section 11).
+2. Read `GET /me` and show the state it reports. If that is not the state the page was showing, clear the page's private state (section 11). In particular, 401 `unauthenticated` here means the session was lost: clear, and show the sign-in screen.
 3. **Never send the refused request again automatically.** This holds for every `POST`, sign-in, sign-up and sign-out included, so a password is never resubmitted without the person asking. Say that the page was out of date and let the person submit again. Text they typed may be kept where that is safe; passwords, codes and credentials are cleared.
 4. A `GET` that failed for this reason may be repeated; `GET` requests do not need the token in the first place.
 
 `SameSite=Lax` on the session cookie is a second, independent barrier, not a replacement.
 
-### 9.2 Origin
+### 9.2 Origin and fetch metadata
 
 - **[Approved]** One origin. No CORS headers are sent at all, so no other site can read a response or send credentials with a scripted request.
-- **[Proposal]** For requests that are not `GET`, the `Origin` header, when present, must equal the site's own origin; otherwise 403. `Sec-Fetch-Site: cross-site` on such a request is refused too.
+- **[Proposal]** Every request that is not `GET`, `HEAD` or `OPTIONS` is checked at step 2 of the order in 4.3, before its body, its token and its session are looked at. It is refused with 403 `forbidden` when either of these holds:
+  1. An `Origin` header is present and is not exactly the site's own origin (scheme, host and port). `Origin: null` is not the site's origin.
+  2. A `Sec-Fetch-Site` header is present and its value is anything other than `same-origin`. This refuses `cross-site`, `same-site` and `none`.
+- Both headers are evaluated; one failing is enough. Neither header present is allowed through to the later steps: older browsers and non-browser tools send neither, and the CSRF token still stands in their way.
+- The refusal is `forbidden`, not `csrf_invalid`, so the frontend can tell "this request did not come from our own page" from "the token is stale". It changes nothing and counts against nothing.
+- `GET` requests are not subject to this check: they change nothing, and public pages must stay linkable from anywhere.
 
 ### 9.3 Bodies
 
@@ -640,7 +671,9 @@ For the frontend, which owns their implementation. **[Proposal]**, to be agreed 
 
 | Code | The page |
 |---|---|
-| `unauthenticated` on any request | The session is gone. Clear private state, then read `GET /me` once to confirm and to learn where to go, and show the sign-in screen. During a second-factor or enrollment step this means the pending sign-in ended (fifth wrong code, expiry, closed window): return to the password step with a message, keeping nothing. |
+| `unauthenticated` on any request | The session is gone. Clear private state, then read `GET /me` once to confirm and to learn where to go, and show the sign-in screen. During a second-factor or enrollment step this means the pending sign-in ended (fifth wrong code, closed window): return to the password step with a message, keeping nothing. |
+| `csrf_invalid` (403) on any `POST` | Not a verdict on the session yet. Fetch a token, read `GET /me`, then act on what it says: `unauthenticated` means the session was lost, so clear and show sign-in (from a challenge: back to the password step); a pending code means show that challenge; 200 means still signed in. In every case the refused request is not sent again; the person submits again (9.1). |
+| `forbidden` (403) caused by the origin check | Should not happen from the site's own page. Show a generic error; do not resend. |
 | `mfa_required` (from `GET /me` or a protected request) | Not a lost session. Show the second-factor challenge. Never the generic sign-in screen. |
 | `mfa_enrollment_required` | Not a lost session. Show the enrollment screen. |
 | `invalid_credentials` on sign-in | Stay on the sign-in screen and show the error. |

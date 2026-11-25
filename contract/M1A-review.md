@@ -143,6 +143,23 @@ Twelve operations: the eleven of the first revision and `GET /api/auth/options`,
 
 No schema, operation, generated type or tooling changed in this revision: the two generated files are identical to `022b576`. Only descriptions in `openapi.yaml`, the design document, the test matrix and this file changed. The fixture storage strategy is untouched.
 
+## 2b. Precedence corrections, after the independent acceptance review of `549bb55`
+
+Conditional pass, with two precedence inconsistencies confirmed by the frontend agent. Both are resolved by fixing one order of checks and stating which session exists at each step.
+
+| # | Requirement | Resolution | Where |
+|---|---|---|---|
+| 1 | Keep CSRF validation before session-state authorization | Kept, and made explicit as an eight-step table: path and method, origin and fetch metadata, body size and type, CSRF, rate limits, session state, body validation, the operation's own check. A secret is examined only in the last step. | I&S 4.3; `openapi.yaml` conventions |
+| 2 | Expired-session 403 against 401 contradiction | A session that was deleted, rotated or has passed a deadline does not exist, from that instant and at every step. A `POST` still carrying its token is 403 `csrf_invalid`. 401 `unauthenticated` on a `POST` happens only with a valid token: a fresh anonymous one, or a revoked identity whose row survived. A `GET` is 401 directly. | I&S 4.3, 4.4, 4.7, 9.1; `openapi.yaml` conventions, `Unauthenticated`, `Forbidden`, `MfaCodeInvalid`, `verifyMfa` |
+| 3 | Sweep all related tests and prose, not only 6.10a and 10.6f | Revised: tests 3.3, 3.4, 3.6, 3.8, 3.16, 3.18, 4.6, 5.9, 5.10, 5.11, 6.5, 6.10, 6.10a, 10.6, 10.6c, 10.6f; added 3.16a. Prose: I&S 4.4 (pending expiry), 4.6 (lost answer of a password change), 4.7 (table and a new paragraph), 5.3 (the loser table: a pre-rotation identifier is 403, a fresh anonymous token is 401), 11 (a `csrf_invalid` row in the per-code table). | I&S; tests |
+| 4 | Deterministic Origin and fetch-metadata precedence | Step 2, before the body and the token. Refused with 403 `forbidden` when `Origin` is present and not the site's own (`null` included), or `Sec-Fetch-Site` is present and not `same-origin`. Either is enough; neither present passes to the later steps. Never `csrf_invalid`. Not applied to `GET`. | I&S 9.2; `openapi.yaml` `Forbidden`; tests 4.10, 4.10a, 4.11, 4.11a, 4.11b |
+| 5 | Focused scenarios: stale cookies, stale tokens, fresh anonymous tokens, revoked identities, several invalid conditions | A new group of 32 tests | tests 14.1 to 14.32 |
+| 6 | Keep the ban on automatic resubmission | Unchanged, and restated in the header of the new group and in the per-code table | I&S 9.1, 11; tests 14.11 |
+
+Two edge cases became explicit while writing the scenarios: a revoked identity calling an operation that accepts `anonymous` has its session ended and proceeds as anonymous (not 409), and a closed sign-up is refused at the session-state step (I&S 4.3; tests 14.17, 14.30).
+
+No schema, operation, generated type or tooling changed: both generated files are identical to `022b576`. Only description text in `openapi.yaml`, the design document, the test matrix and this file changed. Successful public responses and the fixture storage strategy are untouched.
+
 ## 3. Contract tooling
 
 | Requirement | How |

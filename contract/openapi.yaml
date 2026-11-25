@@ -73,6 +73,17 @@ info:
       A lost session is never reported with one of the last two, and a wrong password or code
       is never reported with one of the first three, except that the fifth wrong code of a
       pending sign-in ends it and is `unauthenticated`.
+    - **Order of checks.** A request is refused at the first of these it fails: path and
+      method (404, 405); origin and fetch metadata on non-`GET` requests (403 `forbidden`);
+      body size and declared type (413, 415); CSRF token (403 `csrf_invalid`); rate limits
+      (429); session state (401, 409, 403 `forbidden`); body validation (400); then the
+      operation's own check of a password, code or credential. A secret is examined only in
+      that last step.
+    - **A lost session on a `POST`.** A session that was deleted, rotated or has passed a
+      deadline no longer exists, so the token the page still holds for it is refused first:
+      403 `csrf_invalid`. `GET /me` then answers 401 `unauthenticated`. A `POST` answers 401
+      `unauthenticated` directly only when its token is valid: a fresh token of an anonymous
+      session, or an identity that was revoked while its session row survived.
     - **After `csrf_invalid`.** Fetch a new token and read `GET /me`. Never send a refused
       `POST` again by itself: the person submits again. A `GET` may be repeated.
     - **Identity headers.** Every answer of an identity operation, errors included, is
@@ -833,9 +844,12 @@ paths:
         requests send it at the same instant.
 
         The first four wrong codes answer 401 `mfa_code_invalid`. The fifth ends the pending
-        session and answers 401 `unauthenticated`, as does every later call: the person starts
-        again with the password. A pending session that has expired (10 minutes) answers 401
-        `unauthenticated` too.
+        session and answers 401 `unauthenticated`: the person starts again with the password.
+
+        After that, and after a pending session has expired (10 minutes), the session no
+        longer exists. A later call that still carries its CSRF token answers 403
+        `csrf_invalid`; one made with a fresh token of an anonymous session answers 401
+        `unauthenticated`. Neither checks the code.
 
         On success the session identifier is replaced again and the session becomes
         `authenticated`. Fetch a new CSRF token afterwards.
@@ -939,10 +953,11 @@ paths:
 
         When several requests confirm at the same instant, exactly one succeeds: one factor
         becomes active and one set of recovery codes exists. Every other request fails and
-        receives no codes. Which error it gets depends on what it presents: 409
-        `already_signed_in` if it arrives on the session that is now signed in; 403
-        `csrf_invalid` or 401 `unauthenticated` if it still carries the token or the session
-        identifier from before the rotation; 401 `mfa_code_invalid` if it came from another
+        receives no codes. Which error it gets is fixed by what it presents: 409
+        `already_signed_in` if it arrives on the session that is now signed in, with that
+        session's current token; 403 `csrf_invalid` if it still carries the token or the
+        session identifier from before the rotation; 401 `unauthenticated` if it carries a
+        fresh token of an anonymous session; 401 `mfa_code_invalid` if it came from another
         pending session of the same account, whose pending secret no longer exists.
 
         If the answer is lost on the way, the codes are gone: sign in and replace them with
@@ -1167,7 +1182,9 @@ components:
         Two kinds of 401, told apart by the code.
 
         About the session: `unauthenticated` when there is no sign-in at all or it was lost,
-        `mfa_required` / `mfa_enrollment_required` when a second factor is still owed.
+        `mfa_required` / `mfa_enrollment_required` when a second factor is still owed. On a
+        `POST` these are reached only with a valid CSRF token; a lost session's stale token is
+        refused first with 403 `csrf_invalid`.
 
         About the secret in this request only, with the session unchanged: on
         `POST /auth/change-password` and `POST /auth/mfa/recovery-codes`, `invalid_credentials`
@@ -1195,9 +1212,11 @@ components:
       description: |
         `mfa_code_invalid`: the code is wrong, expired, already used, or belongs to a replaced
         pending secret. The pending session is kept and the person may try again.
-        `unauthenticated`: there is no pending session any more. It expired, the enrollment
-        window closed, or this was the fifth wrong code and the pending session has been
-        ended. The person starts again with the password.
+        `unauthenticated`: this was the fifth wrong code and the pending session has been
+        ended; or the enrollment window closed; or the request carries a valid token of a
+        session that is not pending. The person starts again with the password. (A request
+        still carrying the token of a pending session that expired or was ended gets 403
+        `csrf_invalid` instead, before this is evaluated.)
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
@@ -1207,9 +1226,13 @@ components:
             error: { code: mfa_code_invalid, message: Invalid code, requestId: 5f0c1c9e2b7a4d1f }
     Forbidden:
       description: |
-        `csrf_invalid` when the CSRF header is missing or does not belong to this session;
-        decided before the operation runs, so nothing was changed. `forbidden` when the
-        session is not allowed to do this. `registration_closed` on sign-up when it is closed.
+        `forbidden` when the `Origin` or `Sec-Fetch-Site` header shows the request did not
+        come from the site's own page (checked first), or when the session is not allowed to
+        do this (checked after the token). `csrf_invalid` when the CSRF header is missing or
+        does not belong to a live session, which includes a session that was deleted, rotated
+        or has expired; decided before the session state, the body and any secret are looked
+        at, so nothing was changed or counted. `registration_closed` on sign-up when it is
+        closed.
       headers:
         Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
