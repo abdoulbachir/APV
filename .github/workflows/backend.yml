@@ -37,7 +37,11 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
       # Unit tests, then integration tests against PostgreSQL started by Testcontainers.
-      - run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Build, unit tests and PostgreSQL integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          ./mvnw --batch-mode --no-transfer-progress verify 2>&1 | tee "$RUNNER_TEMP/maven.log"
       - name: Verify backend artifact contains no fictional fixture payload
         run: |
           python3 - <<'PY'
@@ -115,6 +119,11 @@ jobs:
       - name: Report failed tests
         if: failure()
         run: |
+          # What Maven itself reported, for failures that happen before any test report exists.
+          if [ -f "$RUNNER_TEMP/maven.log" ]; then
+            message=$(grep -E "^\[ERROR\]|BUILD|Tests run:.*Fail" "$RUNNER_TEMP/maven.log" | grep -vE "^\[ERROR\]\s+at " | tail -n 60 | head -c 12000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=Maven output::$message"
+          fi
           for report in target/surefire-reports/*.txt target/failsafe-reports/*.txt; do
             [ -f "$report" ] || continue
             if grep -qE "FAILURE|ERROR" "$report"; then

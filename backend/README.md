@@ -29,6 +29,7 @@ Run the `docker compose` commands from the repository root and the `./mvnw` comm
 | Look inside the database | `docker compose exec postgres psql -U apv apv` |
 | Stop PostgreSQL, keep the data | `docker compose down` |
 | Reset the development data | Restart the backend in the `dev` profile, or `docker compose down -v` to delete the database volume |
+| Run an operator command (real database) | `java -jar target/apv-backend-0.1.0-SNAPSHOT.jar operator <command>`; see [Accounts and sign-in](#accounts-and-sign-in) |
 
 Database migrations run by themselves when the backend starts (Flyway). There is no separate migration command. The application never drops or wipes a schema.
 
@@ -43,6 +44,9 @@ Three things stand between the loader and a database that matters:
 1. **It does not exist outside development.** The loader is only created in the `dev` and `test` profiles. Without them there is no code path that loads a fixture, and a profile named `prod` or `production` refuses to start together with `dev` or `test`.
 2. **Local databases only.** It refuses a database that is not on this machine (`localhost`, `127.0.0.1`, `[::1]`). A container host name can be allowed explicitly with `apv.fixtures.allowed-hosts`.
 3. **Never over real data.** The database records whether its content came from a fixture. The loader replaces an empty database or fixture data, and refuses when the database holds cases that did not come from a fixture.
+4. **Only a database marked disposable.** Since milestone 1B the loader and the development accounts need a marker that only the creation of a development or test database writes: the schema `apv_disposable_database`, created by `backend/dev/initdb/01-disposable-database.sql` when the Compose database is first created, and by the test setup. The application and the migrations never create it. A database without it is refused, empty or not. A database the operator command has been used on is real for ever and is refused even with the marker.
+
+> **If your development database volume is older than milestone 1B** it has no marker, and the `dev` profile will refuse to start. Run `docker compose down -v` once, then `docker compose up -d`: the new volume is marked when it is created.
 
 A fresh production database contains the six initial categories, the default timezone and nothing else.
 
@@ -74,6 +78,77 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_BIND_ADDRESS` | `127.0.0.1` | Address the backend listens on. This machine only by default. |
 | `APV_FIXTURES_PATH` | `../contract/fixtures/dataset.json` | `dev` profile only: the dataset that replaces the database content at every start |
 | `APV_FIXTURES_MEDIA_ROOT` | `../contract/fixtures` | `dev` profile only: folder sample pictures are served from |
+| `APV_MFA_ENCRYPTION_KEY` | none | 32 random bytes, Base64. Encrypts authenticator secrets. **Required outside `dev` and `test`**; there it is generated at each start when unset. |
+| `APV_HASH_KEY` | none | 32 random bytes, Base64. Keys the hashes of recovery codes and rate-limit counters. **Required outside `dev` and `test`.** |
+| `APV_SESSION_COOKIE_NAME` | `__Host-apv_session` | Session cookie name. Outside `dev` and `test` it must start with `__Host-`. |
+| `APV_SESSION_COOKIE_SECURE` | `true` | Outside `dev` and `test` the backend refuses to start with `false`. |
+| `APV_REGISTRATION_OPEN` | `false` | Public sign-up. The backend refuses to start with `true` outside `dev` and `test`, because it cannot verify an email address yet. |
+| `APV_TRUSTED_PROXIES` | empty | Comma-separated addresses of reverse proxies whose `X-Forwarded-For` (right-most entry) is believed. Empty: the connection's address is used. |
+| `APV_ALLOWED_ORIGINS` | empty | The exact origins accepted on state-changing requests, comma-separated. Empty: the origin must equal the scheme, host and port the request was addressed to. **Set it in production behind a TLS-terminating proxy** (`https://your.site`), where the backend itself sees plain HTTP. |
+| `APV_ARGON2_MEMORY_KIB` / `APV_ARGON2_ITERATIONS` | `19456` / `2` | Argon2id cost. May be raised, never lowered: lower values refuse to start. Existing hashes are upgraded at the next sign-in. |
+| `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. |
+| `APV_PASSWORD_BLOCKLIST_PATH` | empty | A local file of blocked passwords, one per line, added to the small built-in list. Never fetched from the network. |
+
+Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`.
+
+## Accounts and sign-in
+
+Milestone 1B adds the twelve identity operations of `contract/openapi.yaml` 0.3.0 (`/api/auth/*` and `/api/me`). The rules are in `contract/identity-and-security.md`; the decisions in `docs/adr/0002-identity-and-sessions.md`; which acceptance scenario is covered by which test in `docs/m1b-backend-acceptance-coverage.md`.
+
+### In development
+
+The `dev` profile uses the cookie `apv_session` without `Secure` (plain HTTP on localhost), opens public sign-up, and creates three fictional accounts at every start, on a disposable database only. Their passwords and authenticator secrets are generated at that moment and **printed to the console**, never stored in a file:
+
+```
+DEVELOPMENT ACCOUNTS (fictional, this start-up only; passwords are regenerated at every start):
+  donor  dev.donor@example.test  password: dev-...
+  admin  dev.admin@example.test  password: dev-...  authenticator secret: ...
+  super_admin  dev.owner@example.test  password: dev-...  authenticator secret: ...
+```
+
+Add the secret to any authenticator app (manual entry, time-based, SHA-1, 6 digits, 30 seconds), or compute a code with `oathtool --totp -b <secret>`. Because the keys are regenerated at each start in development unless you set them, sessions and enrolled authenticators of accounts you created yourself do not survive a restart; the three accounts above are recreated each time.
+
+A browser session, by hand:
+
+```bash
+curl -s -c jar localhost:8080/api/auth/csrf                 # {"token": "...", "headerName": "X-CSRF-TOKEN"}
+curl -s -b jar -c jar -H 'Content-Type: application/json' -H 'X-CSRF-TOKEN: <token>' \
+     -d '{"email":"dev.donor@example.test","password":"<printed password>"}' localhost:8080/api/auth/login
+curl -s -b jar localhost:8080/api/me
+```
+
+Every sign-in step replaces the session identifier and the CSRF token: fetch `/api/auth/csrf` again after each one.
+
+### Operator commands (real databases)
+
+Staff accounts are never created over HTTP and no account ever has a default password. The operator runs a command on the server, against the real database, with the same environment variables as the backend:
+
+```bash
+java -jar apv-backend.jar operator create-super-admin
+```
+
+Nothing listens on the network while it runs: it is a separate small start of the application without the web server. The command name is the only argument; the email, the display name and, for recoveries, how the person's identity was confirmed are asked for on the terminal, so nothing sensitive reaches the process list or the shell history. The command prints a **one-time credential**: it is shown once, stored only as a hash, works once, and only lets its holder choose a password.
+
+| Command | What it does |
+|---|---|
+| `create-super-admin`, `create-admin` | Creates a staff account that cannot sign in yet, and prints an activation credential (60 minutes). After choosing a password the person has 60 minutes to set up their authenticator. |
+| `issue-password-reset` | Prints a reset credential (30 minutes) for any account. The second factor is kept. Existing sessions end when it is used. |
+| `recover-staff-access` | For staff who lost their authenticator and recovery codes: removes the password and the second factor at once, ends sessions, and prints a recovery credential (60 minutes). The old password stops working immediately. |
+| `disable-account`, `enable-account` | Disabling ends the account's sessions at once. |
+| `set-can-disburse` | Grants or removes the disbursement permission of an administrator. Ends that account's sessions. |
+| `list-staff` | Staff accounts and their state. |
+
+Rules the command and the database enforce:
+
+- The first use on a database marks it **real**, for ever. Fictional data can never be loaded into it afterwards. The command refuses a database marked disposable.
+- Once a super administrator has been usable (activated, enabled, authenticator enrolled), no command and no SQL statement can leave the site with none: the change is refused, also when two are attempted at the same time. To replace the only one, create and enroll a second one first.
+- Recovery requires confirming the person through a channel you already had before the request. Facts supplied by the requester do not count. What you answer is written to the audit log.
+
+First start of a real site: set the database variables and the two keys, start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend.
+
+### What the server keeps
+
+Sessions are rows in PostgreSQL (`spring_session`), so they survive a backend restart and can be ended from any instance. Passwords are Argon2id hashes; authenticator secrets are encrypted with a key that is not in the database; recovery codes, one-time credentials and rate-limit keys are stored as hashes. `audit_event` is append-only and never holds a password, code, secret, token or credential.
 
 ## For the frontend
 
@@ -144,11 +219,14 @@ These need a signed-in person and arrive with the write endpoints:
 
 - Who may confirm a donation, record a disbursement or make a transfer.
 - Idempotency keys and provider references that stop the same correction being recorded twice from two requests. The cumulative limit above already stops over-correction.
-- The audit log.
+- The audit log of financial actions. (The security audit log exists since milestone 1B.)
 - A correction write API that tells "this record was wrong" (`donation_reversal`, no money moved) apart from "money really went back" (`refund`), and that never records a real new payment as a correction.
 - Upload, storage, consent records and private file access. Only picture metadata exists now.
-- Rate limiting (429) and maintenance mode (503). The contract defines these responses; nothing produces them yet.
-- Proper `405 Method Not Allowed` answers. For now any method other than `GET` answers 404 `not_found`; to revisit in the security milestone.
+- Maintenance mode (503). Rate limits (429) exist on the identity operations since milestone 1B; the public read endpoints have none yet.
+- Email: no message is ever sent. Addresses are unverified, which is why public sign-up is closed outside development, and why password resets go through the operator.
+- Removal of expired rate-limit windows and one-time credentials is not scheduled yet; expired session rows are removed by Spring Session's own cleanup. Old rows are harmless but accumulate.
+
+Since milestone 1B a known path called with a method it does not support answers `405 method_not_allowed` with an `Allow` header (it was 404 before). Unknown paths still answer 404.
 
 Concurrency, stated exactly:
 
@@ -176,6 +254,9 @@ Integration tests never use an in-memory database. They cover:
 - `NegativeFixturesIT`: every broken fixture in `contract/fixtures/negative-cases.json` is refused and leaves the data untouched.
 - `ProductionProfileIT`: without a development profile there is no fixture loader and no fictional data.
 - `DevProfileHttpIT`: the application started in the `dev` profile on a real port, called over HTTP.
+- `identity.*IT`: the identity operations over real HTTP with one cookie jar per simulated browser, against PostgreSQL. Each test method is named after the scenario of `contract/tests/security-acceptance.md` it covers (`a6_7_...` is scenario 6.7). After every test, every identity response it received is validated against the contract's closed schemas and checked for `no-store`. `RealDatabaseIT` and `OperatorModeIT` run without a development profile on a database that was never marked disposable.
+
+`docs/m1b-backend-acceptance-coverage.md` maps all 220 scenarios to these tests, and says which ones need a browser or are not automated.
 
 The application never reads `example.expected.json`. It computes every total from ledger rows.
 

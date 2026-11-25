@@ -45,7 +45,9 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
             if (!entry.getValue().getBeanType().getPackageName().startsWith("org.apvgakasinay")) {
                 // The framework's error page: not a route of this API. Asked for directly it does not exist.
                 assertThat(entry.getKey().getPatternValues()).containsExactly("/error");
-                assertError(browser().get("/error"), 404, "not_found");
+                Browser.Answer direct = browser().get("/error");
+                assertThat(direct.status()).isEqualTo(404);
+                assertThat(direct.code()).isEqualTo("not_found");
                 continue;
             }
             for (String pattern : entry.getKey().getPatternValues()) {

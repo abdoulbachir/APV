@@ -7,7 +7,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import org.apvgakasinay.identity.DatabasePurpose;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The operator command (identity-and-security.md, 8.1): a mode of this application run on the
@@ -32,11 +31,21 @@ public class OperatorCommands {
         this.purpose = purpose;
     }
 
-    /** Runs one command. Returns the process exit code. */
-    @Transactional
+    private static final java.util.Set<String> COMMANDS = java.util.Set.of("create-super-admin", "create-admin", "issue-password-reset",
+            "recover-staff-access", "disable-account", "enable-account", "set-can-disburse", "list-staff");
+
+    /**
+     * Runs one command. Returns the process exit code. Not one transaction itself: each staff
+     * action is its own, so a refused action rolls back alone and its refusal stays recorded.
+     */
     public int run(String command, BufferedReader in, PrintStream out) throws IOException {
         if (accounts.disposableMarkerPresent()) {
             out.println("Refused: this database is marked disposable (development or test). The operator command is for real databases only.");
+            return 2;
+        }
+        if (!COMMANDS.contains(command)) {
+            out.println("Unknown command. Commands: create-super-admin, create-admin, issue-password-reset, recover-staff-access, "
+                    + "disable-account, enable-account, set-can-disburse, list-staff");
             return 2;
         }
         // From now on this database can never receive fictional data.
@@ -70,11 +79,7 @@ public class OperatorCommands {
                                 account.enabled(), account.activated(), accounts.hasActiveTotp(account.id()), account.canDisburse());
                     }
                 }
-                default -> {
-                    out.println("Unknown command. Commands: create-super-admin, create-admin, issue-password-reset, recover-staff-access, "
-                            + "disable-account, enable-account, set-can-disburse, list-staff");
-                    return 2;
-                }
+                default -> throw new IllegalStateException(command);
             }
             return 0;
         } catch (StaffAdministration.Refused refused) {
