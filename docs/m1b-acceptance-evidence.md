@@ -8,7 +8,7 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five are being corrected in the backend.
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and wait for the reviewer's re-check (see "Second round" below).
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -32,10 +32,24 @@ Everything below this section describes the first run, at `cf0c883`, and is kept
 
 Also from that review, not defects: scenario 13.6 says the database refuses re-marking after operator use, while what holds is that the flag cannot be unset and the `dev` profile then refuses to load; and Chromium itself resends a `POST` when a kept-alive connection is cut, so "exactly one request reaches the server" (3.17, 4.14) is true of the frontend's code, not of the browser. After a lost set-password answer the person can be told the credential could not be used although the password was set.
 
+### Second round: corrections of D1, D2, D4, D5 and D6 at `28515a6`
+
+The backend corrected D1, D2, D4, D5 and D6 in `2f03320`, `eaaeed7` and `9d49d27` (325 backend tests in CI), merged into the integration branch as `28515a6`. D3 is recorded in ADR 0002 as a known limitation, as recommended; the owner has not yet confirmed that.
+
+- **Harness re-run at `28515a6`:** 79 checks pass, 2 partial (10.15, 10.16), none fails. Raw results: `tests/acceptance/results-2026-11-25-rerun-28515a6.json`. A first attempt at this re-run did not start, because a container and two volumes of the previous re-run had not been removed; `teardown.sh` now checks and reports what is left.
+- **Direct checks by the coordinator, same environments:**
+  - D2: 50 refused `POST /api/auth/login` with no cookie set no cookie and added no session row (6 before, 6 after).
+  - D4: `%2F`, `%00`, `;x=1` and `//` paths answer 400 `validation_error` as JSON with a request identifier; `TRACE` answers 405 `method_not_allowed` on an API path and 404 `not_found` elsewhere, never an echo.
+  - D5: `truncate audit_event` on the production-rules database is refused and its 165 rows remain. `truncate ledger_entry cascade` was started but its outcome was not captured, so the ledger half is **not confirmed here**; the backend's test asserts it.
+  - D6 and finding 4: the production-rules backend log of the whole run holds no identifier-shaped text, no hex literal and no ERROR line.
+  - D1 was not exercised by the coordinator; the backend's test covers it.
+- **Left open by the backend, stated in its report:** the second factor and the password change racing a sign-out could still answer 500 (they fail closed; the reviewer saw no error there); the application's database role owns the tables and could drop the TRUNCATE trigger, which is a deployment decision; the backend's D2, D5 and most D4 tests were not run against the uncorrected code.
+- **Not yet done:** the independent reviewer's targeted re-check of these five corrections.
+
 ### Still open
 
 - The owner's decisions on D2 and D3, and on the contract wording proposals.
-- The backend corrections of the new defects, then a targeted re-check of them and a harness re-run.
+- The independent reviewer's targeted re-check of the second-round corrections.
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
