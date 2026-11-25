@@ -205,15 +205,23 @@ public class IdentityService {
                 Map.of("state", signIn.state().code(), "email_hash", signIn.attempted()));
     }
 
+    /**
+     * Ends the session this request was sent for, whatever identifier it has by now.
+     *
+     * The session is named by the identifier the request arrived with, not by the session the
+     * request still holds when it gets here. A sign-in, a second factor or a password change
+     * that finished while this request was running has given the session a new identifier, and
+     * a password change has also raised the security version, so step 6 has already dropped
+     * the session from this request: here there is then no session to end, and the one the
+     * person is signed in with lives on under its new identifier. Every replaced identifier is
+     * recorded with its session (migration V4), which is how it is found.
+     */
     public void logout(HttpServletRequest request, Caller caller) {
-        HttpSession session = request.getSession(false);
-        String identifier = session == null ? null : session.getId();
-        Sessions.Identity identity = Sessions.identity(session);
+        String arrivedWith = request.getRequestedSessionId();
+        Sessions.Identity identity = Sessions.identity(request.getSession(false));
         Sessions.end(request);
-        if (identifier != null) {
-            // The other order of the same race: a sign-in on this session finished first and gave
-            // it a new identifier, so ending it by the identifier this request holds ended nothing.
-            sessions.endSuccessorOf(identifier);
+        if (arrivedWith != null) {
+            sessions.endSuccessorOf(arrivedWith);
         }
         if (identity != null) {
             audit.event("session.sign_out", Outcome.SUCCESS, identity.accountId(), caller);
