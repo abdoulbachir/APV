@@ -41,7 +41,7 @@ Sign-up is open in these tests unless a row says otherwise.
 | 2.6 | 16 code points as sent that become 14 after NFC | Refused `too_short`: the minimum is measured after NFC |
 | 2.7 | 129 code points as sent that would become 128 after NFC | Refused `too_long`: the maximum as sent is checked first |
 | 2.8 | A 128-character password differing from another only in the last character | Only the right one signs in: nothing is cut |
-| 2.9 | A password on the breached list | Refused `compromised` |
+| 2.9 | A password on the breached list; production startup with missing, unreadable or unsuitable configured list; production with suitable local list | Refused `compromised`; startup refused for missing/unreadable/unsuitable list; suitable list loaded and checked locally. Bundled starter alone is sufficient only in dev/test. |
 | 2.10 | `apv-gakasinay-2026`; the email's first part plus `123`; the display name twice | Refused `compromised`: fewer than 8 other characters remain |
 | 2.11 | A long passphrase that happens to contain the site name with 8 or more other characters | Accepted |
 | 2.12 | All lower-case letters, no digit, no symbol, 15 long, not on the list | Accepted: no composition rules |
@@ -186,7 +186,7 @@ Sign-up is open in these tests unless a row says otherwise.
 | 8.4 | Throttled attempts for an existing and an unknown address | Same answer |
 | 8.5 | Fifty wrong passwords for one address and client address sent at the same instant | At most five passwords are verified; the rest are 429. The counter was advanced before each check. |
 | 8.6 | `Retry-After` on every 429 the suite produces | Present; never above 900, or 3600 for sign-up |
-| 8.7 | Sign-up, one-time credential, CSRF and options limits | 429 at the documented counts |
+| 8.7 | Sign-up, one-time credential, CSRF and options limits; shared protected-password client-address budget across change-password and recovery-codes (separate from sign-in) | 429 at the documented counts; protected-password request 31 refused until window ends with Retry-After, before state/body/secret checks after valid CSRF |
 | 8.8 | A forged forwarded-for header from an untrusted connection | Ignored: the connection's address is counted |
 | 8.9 | Wrong current password on `change-password` and on `recovery-codes`; wrong code on `recovery-codes` and `confirm` | Each draws on the account's password or second-factor counter and reaches 429 at the documented count |
 | 8.10 | Counters in the database | Hashes, not emails or addresses |
@@ -205,7 +205,7 @@ Sign-up is open in these tests unless a row says otherwise.
 | 9.5 | No CORS headers on any response; a preflight from another origin | Not allowed | |
 | 9.6 | Body over 16 KiB; body that is not JSON; `Content-Type` other than JSON | 413; 400; 415 | |
 | 9.7 | `POST /auth/logout` and `/auth/mfa/enroll` with no body and no `Content-Type`; with a non-empty body | Accepted; 400 | |
-| 9.8 | Application logs and audit rows after the whole suite, searched for every password, credential, secret, code, session identifier and CSRF token used | None found | |
+| 9.8 | Application logs and audit rows after the whole suite, searched for every password, credential, secret, code, session identifier (including retired/expired identifiers) and CSRF token used; verify DEBUG/TRACE safeguards | None found; no exception for retired identifiers. Distinguish contextual code checks from incidental six-digit matches. | |
 | 9.9 | Every response of the suite validated against `openapi.yaml` | All valid: closed schemas, so no extra field | |
 | 9.10 | Forced server error in an identity endpoint | Generic 500 body; no stack trace, no SQL, no class name | |
 

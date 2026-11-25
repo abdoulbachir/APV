@@ -66,3 +66,14 @@ The project owner explicitly approved all seven M1A security policy decisions an
 Operational advice (adopted, not an application invariant): maintain at least two usable trusted super administrators when practical, and keep recovery codes securely offline. With only one usable super administrator who loses all access, the server-side recovery path in the identity contract applies.
 
 The reviewed identity design is the M1B implementation baseline, subject to the four compatibility probes in ADR 0002 and subsequent runtime acceptance. Generated-comment cleanup and explicit disposable-database enforcement remain implementation tasks. Generated fictional dataset cleanup is a separate post-M1A task before parallel M1B implementation. No runtime authentication, real-data deployment, or production readiness is accepted by this decision.
+
+## Approved on 2026-11-25 — milestone 1B corrective follow-up
+
+The owner explicitly approved the following two policies after reviewing the backend corrective delivery at `81df9dd8a6ee104c47df9520a40828ed1cfee7e5`:
+
+- Protected password operations: a shared client-address budget of 30 requests in 15 minutes for password change and recovery-code regeneration, independent of the sign-in client-address budget, in addition to existing account password/second-factor limits. Refusal is 429 with bounded Retry-After until the window ends. The address budget is checked at step 5.
+- Production requires a comprehensive local breached-password blocklist. Refuse startup outside dev/test if the configured list is missing, unreadable or unsuitable; the small bundled starter list alone is not sufficient. Keep dev/test usable with the starter list. Do not send passwords or hashes to another service. Record the selected list, provenance, format, integrity, sizing and update procedure before deployment.
+
+The owner also directed that the existing prohibition on logging session identifiers be enforced, including expired and rotated identifiers at DEBUG/TRACE. No exception for retired identifiers. This is a correction to implementation, not a change to the accepted confidentiality rule.
+
+These decisions do not authorize merging PR #10 or #11, accepting M1B, or deploying to a real host. Remaining questions: precise wording of body-keyed rate-limit precedence and pending-session discard timing; used/expired credential retention remains a later deployment decision. Preserve existing API schemas, error codes and financial behavior. Joint integration and independent security acceptance remain required.

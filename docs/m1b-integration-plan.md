@@ -1,0 +1,26 @@
+# M1B joint integration — preparation (not acceptance)
+
+## Checkpoints
+
+- Main baseline: `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`. No owner authorization to merge M1B into main yet.
+- Backend PR #10: `81df9dd8a6ee104c47df9520a40828ed1cfee7e5`, corrective CI logs confirm 68 unit + 217 real PostgreSQL integration tests, 59 probes, 2493 authenticated-cookie public comparisons, bounded hash saturation, network-disabled checks. Backend still owes approved comprehensive production blocklist enforcement and strict session-ID logging correction. Verify final exact commit and test logs; no frontend edits by backend agent.
+- Frontend PR #11: `fed88321fb5a240b08c4953791db2aabe8c26ecb` verified 32 automated tests and 8 intercepted Chromium journeys (72 page loads), all four CI checks green. Subsequent documentation revision records two owner approvals; verify its exact-head CI as well.
+- Acceptance matrix: 220 existing scenario IDs; 175 backend-asserted, 10 backend-asserted with browser repeat owed, 32 browser-only, 3 partial reported at backend corrective checkpoint. The owner approvals extend requirements within existing IDs 2.9, 8.7, 9.8. Do not claim 220 passed.
+
+## Integration gates
+
+1. Backend final correction: valid local list required outside dev/test, no retired/live session ID logs even at verbose levels, proof of protected password shared address budget. Exact commit/CI and coordinator review. Keep all previous regression tests. No new API shape.
+2. Review final frontend exact SHA and all four CI workflows. Create integration/m1b-identity only after verifying both branch tips. Combine both commits with ancestry retained; resolve any real overlap explicitly, no force pushes. Open a draft PR to main; component PRs remain drafts. Re-run full CI on combined tree.
+3. Run an isolated actual Spring Boot/PostgreSQL backend, not intercepted identity endpoints. Generate fictional fixtures from the current baseline; use a newly created disposable local database with its explicit marker, unique project/ports/volumes and fictional accounts. Never reclassify or delete an existing real database. Test a separate unmarked isolated database for production startup/operator flows, with valid test keys and a local blocklist fixture satisfying the finalized policy. Real credentials and production infrastructure are out of scope.
+4. Serve real-mode dist through same-origin production preview/proxy with enforced CSP; verify full HTTP headers and a separate HTTPS production-profile scenario for Secure/HttpOnly/SameSite host-only cookies. No mock identity and no real-mode fallback. Verify public regression and images under CSP too.
+5. Execute browser-only and browser-repeat scenarios by ID from the acceptance matrix: sign-in, open/closed registration, pending MFA, operator credential redemption, QR enrollment (decode actual SVG offline to confirm exact otpauth URI), recovery-code use/replay/regeneration and display lifetime, password change, expiry/revocation, errors and focus, browser history, cross-tab same/different identity and same-pending-state changes, stale token on every POST (exact one POST, token + me reconciliation), lost response for every security-sensitive mutation, backend outage, cookie JS visibility, storage/URL/referrer/console/IndexedDB leak inspection, no framing/inline/eval/external connection, prepaint theme, localization, keyboard, contrast, small-width layout and autofill/password-manager behavior. Use real browser network requests, not API stubs. Simulate response loss only by intercepting the response after real server processing; do not mock server state.
+6. Re-run public read tests, fixture isolation, backend migration, contract schemas/type drift, both build modes, dependency audits, PostgreSQL concurrency regressions and artifact scans. Provide a scenario-level evidence map (actual assertion, environment, exact commit, PASS/PARTIAL/FAIL, limitation). No sensitive values in public artifacts, logs, screenshots or PRs.
+7. Traycer independently reviews exact integrated SHA, including previous corrections, contract precedence, state transitions, production configuration and cross-tab/session races. Report remaining manual operator checks and browser limitations. No independent merge of component PRs. Main merge only after explicit owner authorization and exact-head checks.
+
+## Open items that are not accepted by this plan
+
+- Final backend policy implementation and strict logging verification.
+- Body-keyed rate limits evaluated after validated input and before secret checks; pending-session discard timing. Reconcile contract wording/evidence in review, not by silently changing precedence.
+- Comprehensive production blocklist source/format/integrity/size/update instructions and deployment calibration. No actual breached-password file committed to Git.
+- 5.7 partly covered until a relevant staff-only business operation exists; 7.19 process-list/shell-history verification; 7.20 independent identity check remains an operator procedure. Do not invent test routes or claim human behavior verified.
+- Actual hosting, TLS proxy, production keys/backup/restore, Argon2 calibration, credential retention and other later milestones are not implied accepted.
