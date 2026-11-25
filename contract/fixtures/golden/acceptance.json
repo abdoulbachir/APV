@@ -1,0 +1,89 @@
+{
+  "description": "Independent selected M0B acceptance assertions. Amounts in cents; page metadata and code arrays are exact.",
+  "directory": [
+    {
+      "query": {
+        "status": "active",
+        "page": 17
+      },
+      "totalItems": 200,
+      "totalPages": 17,
+      "itemCount": 8
+    },
+    {
+      "query": {
+        "status": "active",
+        "page": 18
+      },
+      "totalItems": 200,
+      "totalPages": 17,
+      "itemCount": 0
+    },
+    {
+      "query": {
+        "status": "active",
+        "sort": "featured",
+        "pageSize": 3
+      },
+      "codes": [
+        "HELP-014",
+        "HELP-101",
+        "HELP-103"
+      ]
+    },
+    {
+      "query": {
+        "status": "active",
+        "q": "  ÉLODIE  "
+      },
+      "codes": [
+        "HELP-106",
+        "HELP-107"
+      ]
+    },
+    {
+      "query": {
+        "status": "active",
+        "category": "food"
+      },
+      "codes": [
+        "HELP-102"
+      ]
+    },
+    {
+      "query": {
+        "status": "completed",
+        "category": "transport"
+      },
+      "codes": [
+        "HELP-903"
+      ]
+    }
+  ],
+  "cases": {
+    "HELP-014": {
+      "received": 567500,
+      "delivered": 320000,
+      "available": 247500
+    },
+    "FUND": {
+      "received": 164000,
+      "delivered": 0,
+      "available": 164000
+    },
+    "HELP-101": {
+      "received": 38500,
+      "delivered": 30000,
+      "available": 8500
+    },
+    "HELP-903": {
+      "received": 24000,
+      "delivered": 25000,
+      "available": -1000
+    }
+  },
+  "missing": [
+    "HELP-902",
+    "HELP-906"
+  ]
+}

@@ -12,7 +12,8 @@
     "check:openapi": "node tools/check-openapi.mjs",
     "check:fixtures": "node tools/check-fixtures.mjs",
     "project": "node tools/project-public.mjs",
-    "validate": "npm run lint && npm run check:openapi && npm run check:fixtures"
+    "validate": "npm run lint && npm run check:openapi && npm run check:fixtures && npm run check:dataset",
+    "check:dataset": "node tools/check-dataset.mjs"
   },
   "devDependencies": {
     "@redocly/cli": "2.83.0",
