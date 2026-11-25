@@ -128,6 +128,28 @@ class IdentitySecurityUnitTest {
         assertThat(refused).as("with one slot and eight simultaneous requests, some are refused").isGreaterThanOrEqualTo(1);
     }
 
+    @Test
+    void a5_4_thePermissionFunctionEqualsTheMatrix() {
+        List<String> own = List.of("account.read_own", "account.change_password", "donations.read_own");
+        List<String> staff = List.of("cases.manage", "case_updates.post", "donation_reports.read");
+        List<String> owner = List.of("donations.confirm", "funds.transfer", "payment_methods.manage", "staff.manage",
+                "contact_messages.read", "audit.read");
+        assertThat(Permissions.planned(null, false)).isEmpty();
+        assertThat(Permissions.planned("donor", false)).containsExactlyInAnyOrderElementsOf(own);
+        List<String> admin = new ArrayList<>(own);
+        admin.addAll(staff);
+        assertThat(Permissions.planned("admin", false)).containsExactlyInAnyOrderElementsOf(admin);
+        admin.add("disbursements.record");
+        assertThat(Permissions.planned("admin", true)).containsExactlyInAnyOrderElementsOf(admin);
+        admin.addAll(owner);
+        assertThat(Permissions.planned("super_admin", false)).containsExactlyInAnyOrderElementsOf(admin);
+        // What is returned today is the same two for every role, and nothing for a visitor.
+        for (String role : List.of("donor", "admin", "super_admin")) {
+            assertThat(Permissions.operational(role, true)).containsExactly("account.read_own", "account.change_password");
+        }
+        assertThat(Permissions.operational(null, false)).isEmpty();
+    }
+
     /** RFC 6238, appendix B, SHA-1 rows, truncated to six digits. */
     @Test
     void a6_9_authenticatorCodesMatchTheRfcTestVectors() {

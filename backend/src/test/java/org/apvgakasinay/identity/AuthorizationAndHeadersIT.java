@@ -6,6 +6,8 @@ import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.apvgakasinay.support.Json;
+import org.apvgakasinay.support.Repo;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.method.HandlerMethod;
@@ -17,6 +19,9 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
 
     @Autowired
     RequestMappingHandlerMapping mappings;
+
+    @Autowired
+    org.apvgakasinay.fixtures.FixtureImporter importer;
 
     @Test
     void a5_1_protectedRoutesAnswer401AsJsonNeverARedirect() {
@@ -37,6 +42,12 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
         for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mappings.getHandlerMethods().entrySet()) {
             boolean declaredIdentity = Arrays.stream(entry.getValue().getMethod().getAnnotations())
                     .map(Annotation::annotationType).anyMatch(type -> type.getSimpleName().equals("IdentityOperation"));
+            if (!entry.getValue().getBeanType().getPackageName().startsWith("org.apvgakasinay")) {
+                // The framework's error page: not a route of this API. Asked for directly it does not exist.
+                assertThat(entry.getKey().getPatternValues()).containsExactly("/error");
+                assertError(browser().get("/error"), 404, "not_found");
+                continue;
+            }
             for (String pattern : entry.getKey().getPatternValues()) {
                 if (declaredIdentity) {
                     identity++;
@@ -126,10 +137,13 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
     }
 
     @Test
-    void a9_2_publicEndpointsDoNotDependOnTheSessionAndSetNoCookie() {
+    void a9_2_and_13_2_publicEndpointsDoNotDependOnTheSessionAndSetNoCookie() {
+        importer.replaceAllData(Json.readMap(Repo.contract("fixtures/example.json")));
+        clock.pin(START);
         Browser visitor = browser();
         Browser donor = donor("sample.donor@example.org");
-        for (String path : List.of("/api/site", "/api/stats", "/api/cases")) {
+        for (String path : List.of("/api/site", "/api/stats", "/api/cases", "/api/cases/HELP-901", "/api/cases/HELP-901/updates",
+                "/api/cases/HELP-901/donors", "/api/cases/HELP-901/ledger")) {
             Browser.Answer anonymous = visitor.get(path);
             Browser.Answer signedIn = donor.get(path);
             assertThat(anonymous.status()).isEqualTo(200);
@@ -184,6 +198,54 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
             if (answer.status() >= 400) {
                 assertValid("Error", answer);
             }
+        }
+    }
+
+    @Test
+    void a9_10_aServerErrorSaysNothingAboutTheServer() {
+        register(browser(), "sample.donor@example.org", PASSWORD);
+        Browser browser = browser();
+        browser.csrf();
+        // Forced: the table the password check reads is out of reach for one request.
+        jdbc.sql("alter table account_password rename to account_password_hidden").update();
+        Browser.Answer answer;
+        try {
+            answer = browser.post("/api/auth/login", json("email", "sample.donor@example.org", "password", PASSWORD));
+        } finally {
+            jdbc.sql("alter table account_password_hidden rename to account_password").update();
+        }
+        assertError(answer, 500, "internal_error");
+        assertThat(answer.header("Cache-Control")).isEqualTo("no-store");
+        assertThat(answer.body()).doesNotContainIgnoringCase("exception").doesNotContainIgnoringCase("sql")
+                .doesNotContain("account_password").doesNotContain("org.").doesNotContain("\tat ").doesNotContain("relation");
+        assertThat(answer.json().at("/error/message").asText()).isEqualTo("Unexpected error");
+        // Nobody was signed in by the failure, and the server works again afterwards.
+        assertError(browser.get("/api/me"), 401, "unauthenticated");
+        assertThat(browser().login("sample.donor@example.org", PASSWORD).status()).isEqualTo(200);
+    }
+
+    @Test
+    void a5_12_and_5_13_aWriteRacingARevocationNeverLeavesALiveSession() throws Exception {
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 5; round++) {
+                String email = "racing.donor" + round + "@example.org";
+                Browser donor = donor(email);
+                String change = json("currentPassword", PASSWORD, "newPassword", OTHER_PASSWORD);
+                java.util.concurrent.Future<Integer> write = pool.submit(() -> donor.post("/api/auth/change-password", change).status());
+                java.util.concurrent.Future<?> revocation = pool.submit(() -> staffAdministration.setEnabled(email, false, "test-operator"));
+                int status = write.get();
+                revocation.get();
+                // The write either finished first (204) or was refused; in no case does a usable session remain.
+                assertThat(status).as("round %d", round).isIn(204, 401, 403);
+                assertError(donor.get("/api/me"), 401, "unauthenticated");
+                donor.csrf();
+                assertError(donor.post("/api/auth/change-password", change), 401, "unauthenticated");
+                assertError(browser().login(email, PASSWORD), 401, "invalid_credentials");
+                assertError(browser().login(email, OTHER_PASSWORD), 401, "invalid_credentials");
+            }
+        } finally {
+            pool.shutdownNow();
         }
     }
 

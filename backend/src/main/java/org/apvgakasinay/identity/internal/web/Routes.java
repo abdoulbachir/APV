@@ -45,6 +45,10 @@ class Routes {
                     if (info.getPathPatternsCondition() == null) {
                         continue;
                     }
+                    if (!entry.getValue().getBeanType().getPackageName().startsWith("org.apvgakasinay")) {
+                        // The framework's own error page is not a route of this API: asked for directly it is unknown.
+                        continue;
+                    }
                     IdentityOperation operation = entry.getValue().getMethodAnnotation(IdentityOperation.class);
                     for (PathPattern pattern : info.getPathPatternsCondition().getPatterns()) {
                         for (RequestMethod method : info.getMethodsCondition().getMethods()) {

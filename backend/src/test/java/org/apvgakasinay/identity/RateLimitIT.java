@@ -164,13 +164,18 @@ class RateLimitIT extends IdentityIntegration {
 
     @Test
     void a8_9_wrongCodesAtEnrollmentAndWrongPasswordsOnRecoveryCodesAreCountedToo() {
+        // Wrong codes at enrollment: four per pending sign-in (the fifth would end it), ten an hour per account.
         Browser enrolling = activatedStaff("new.admin@example.org", "admin");
-        enrolling.login("new.admin@example.org", PASSWORD);
-        enrolling.postEmpty("/api/auth/mfa/enroll");
-        for (int i = 1; i <= 10; i++) {
-            assertError(enrolling.post("/api/auth/mfa/confirm", json("code", "000000")), 401, "mfa_code_invalid");
+        int wrong = 0;
+        while (wrong < 10) {
+            enrolling.login("new.admin@example.org", PASSWORD);
+            enrolling.postEmpty("/api/auth/mfa/enroll");
+            for (int i = 0; i < 4 && wrong < 10; i++, wrong++) {
+                assertError(enrolling.post("/api/auth/mfa/confirm", json("code", "000000")), 401, "mfa_code_invalid");
+            }
         }
         assertError(enrolling.post("/api/auth/mfa/confirm", json("code", "000000")), 429, "rate_limited");
+        assertError(enrolling.get("/api/me"), 401, "mfa_enrollment_required");
 
         Staff admin = staff("sample.admin@example.org", "admin");
         for (int i = 1; i <= 20; i++) {

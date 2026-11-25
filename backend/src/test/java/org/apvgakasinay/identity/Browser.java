@@ -46,7 +46,7 @@ final class Browser {
         }
     }
 
-    private static final Pattern SESSION_COOKIE = Pattern.compile("apv_session=([^;]*)");
+    private static final Pattern SESSION_COOKIE = Pattern.compile("(?:__Host-)?apv_session=([^;]*)");
     private static final AtomicInteger ADDRESSES = new AtomicInteger();
 
     private final HttpClient client = HttpClient.newHttpClient();
@@ -54,6 +54,8 @@ final class Browser {
     /** The client address this browser appears to come from (the test profile trusts 127.0.0.1 as a proxy). */
     String address;
     String sessionId;
+    /** "apv_session" in development and tests; "__Host-apv_session" as in production. */
+    String cookieName = "apv_session";
     String token;
     final Map<String, String> extraHeaders = new LinkedHashMap<>();
 
@@ -100,7 +102,7 @@ final class Browser {
             request.header("X-Forwarded-For", address);
         }
         if (sessionId != null) {
-            request.header("Cookie", "apv_session=" + sessionId);
+            request.header("Cookie", cookieName + "=" + sessionId);
         }
         extraHeaders.forEach(request::header);
         try {

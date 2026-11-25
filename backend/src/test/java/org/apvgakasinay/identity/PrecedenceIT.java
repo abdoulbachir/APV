@@ -206,7 +206,7 @@ class PrecedenceIT extends IdentityIntegration {
             assertError(browser.post("/api/auth/mfa/verify", json("method", "totp", "code", "12345")), 400, "validation_error");
         }
         // Six malformed codes were not counted among the five: the sign-in is still pending and completes.
-        assertThat(count("select count(*) from auth_throttle where scope like 'mfa.%'")).isZero();
+        assertThat(count("select coalesce(sum(attempts), 0) from auth_throttle where scope like 'mfa.%'")).isZero();
         assertThat(browser.post("/api/auth/mfa/verify", json("method", "totp", "code", code(admin.secret()))).status()).isEqualTo(200);
     }
 

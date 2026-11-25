@@ -77,6 +77,43 @@ abstract class IdentityIntegration {
         return new Browser(port);
     }
 
+    private static final java.util.Map<String, String> SUCCESS_SCHEMAS = java.util.Map.of(
+            "GET /api/me", "Account",
+            "GET /api/auth/csrf", "CsrfToken",
+            "GET /api/auth/options", "AuthOptions",
+            "POST /api/auth/register", "RegistrationAccepted",
+            "POST /api/auth/login", "LoginResult",
+            "POST /api/auth/mfa/verify", "SignedIn",
+            "POST /api/auth/mfa/enroll", "MfaEnrollment",
+            "POST /api/auth/mfa/confirm", "MfaRecoveryCodes",
+            "POST /api/auth/mfa/recovery-codes", "MfaRecoveryCodes");
+
+    /**
+     * Scenarios 9.1 and 9.9, applied to everything every test did: each identity answer is
+     * never stored, and its body is valid against the closed schema the contract gives it.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void everyIdentityAnswerMatchesTheContract() {
+        for (Browser.Answer answer : List.copyOf(Browser.RECORDED)) {
+            String path = answer.path().replaceAll("\\?.*", "");
+            if (!path.equals("/api/me") && !path.startsWith("/api/auth/")) {
+                continue;
+            }
+            String what = answer.method() + " " + path + " -> " + answer.status() + " " + answer.body();
+            assertThat(answer.header("Cache-Control")).as(what).isEqualTo("no-store");
+            assertThat(answer.header("ETag")).as(what).isNull();
+            if (answer.status() >= 400) {
+                assertThat(contract.violations("Error", answer.body())).as(what).isEmpty();
+            } else if (answer.status() == 204) {
+                assertThat(answer.body()).as(what).isEmpty();
+            } else {
+                String schema = SUCCESS_SCHEMAS.get(answer.method() + " " + path);
+                assertThat(schema).as("no schema known for " + what).isNotNull();
+                assertThat(contract.violations(schema, answer.body())).as(what).isEmpty();
+            }
+        }
+    }
+
     /** Moves the application clock forward. */
     void advance(Duration duration) {
         clock.pin(clock.now().plus(duration));
