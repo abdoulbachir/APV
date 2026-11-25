@@ -8,3 +8,10 @@ dist/
 /vite.config.js
 /vite.config.d.ts
 .env
+
+# Deterministic development/test fixtures; never commit generated payloads.
+/contract/fixtures/dataset.json
+/contract/fixtures/dataset.public.json
+/src/api/dataset.public.json
+/contract/fixtures/dataset*.json.*.tmp
+/src/api/dataset.public.json.*.tmp

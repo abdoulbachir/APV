@@ -10,7 +10,7 @@ There is no sign-in, no donation reporting, no payment handling, no upload and n
 |---|---|---|
 | Java (JDK) | 21 | Building and running. `backend/.java-version` pins it for CI. |
 | Docker with Compose | any recent | Local PostgreSQL, and the integration tests |
-| Node | 24 | Only for the contract checks in `contract/` |
+| Node | 24 | Generate development/test fixtures and run contract checks; not needed for a production backend build |
 
 Maven is not needed: `./mvnw` downloads the pinned Maven 3.9.16.
 
@@ -22,9 +22,9 @@ Run the `docker compose` commands from the repository root and the `./mvnw` comm
 |---|---|
 | Prepare local settings (once) | `cp .env.example .env` |
 | Start PostgreSQL | `docker compose up -d` |
-| Start the backend with sample data | `set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` |
+| Start the backend with sample data | `node ../contract/tools/generate-dataset.mjs && (set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev)` |
 | Run unit tests (no database, no Docker) | `./mvnw test` |
-| Run everything, including PostgreSQL integration tests | `./mvnw verify` |
+| Run everything, including PostgreSQL integration tests | `node ../contract/tools/generate-dataset.mjs && ./mvnw verify` |
 | Run the contract checks | `cd ../contract && npm ci && npm run validate` |
 | Look inside the database | `docker compose exec postgres psql -U apv apv` |
 | Stop PostgreSQL, keep the data | `docker compose down` |
@@ -36,7 +36,7 @@ Database migrations run by themselves when the backend starts (Flyway). There is
 
 > **The `dev` profile is destructive.** Every time the backend starts in the `dev` profile it **deletes everything in the database** it is connected to and loads a fictional dataset. Use it only with the local development database from `compose.yaml`.
 
-By default it loads the full shared dataset, `contract/fixtures/dataset.json`: 200 current cases, two completed, two drafts, the general fund and 292 ledger entries, all fictional. Set `APV_FIXTURES_PATH` to load another file of the same format, for example `../contract/fixtures/example.json` for the small one. The application clock is pinned to the instant written in the loaded file (2026-11-24 12:00 UTC for both), so responses are repeatable.
+Generate the fixtures before starting the development backend or running integration tests. The generator uses only Node's standard library, and CI runs it automatically. The generated datasets are intentionally absent from a clean checkout and from the packaged backend. By default the development profile loads the full shared dataset, `contract/fixtures/dataset.json`: 200 current cases, two completed, two drafts, the general fund and 292 ledger entries, all fictional. Set `APV_FIXTURES_PATH` to load another file of the same format, for example `../contract/fixtures/example.json` for the small one. The application clock is pinned to the instant written in the loaded file (2026-11-24 12:00 UTC for both), so responses are repeatable.
 
 Three things stand between the loader and a database that matters:
 

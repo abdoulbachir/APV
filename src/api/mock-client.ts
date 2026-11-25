@@ -1,8 +1,11 @@
-import dataset from './dataset.public.json';
 import { APP_CONFIG } from '../config';
 import { ApiError, type ApiClient } from './client';
 import { createMockModel, ModelError, type PublicFixture } from './mock-model';
-const model=createMockModel(dataset as PublicFixture);
+// The generated JSON need not exist at TypeScript/real-build time. Mock scripts generate it first.
+const datasets=import.meta.glob<PublicFixture>('./dataset.public.json',{eager:true,import:'default'});
+const dataset=datasets['./dataset.public.json'];
+if(!dataset)throw new Error('Mock fixture missing: run npm run fixtures:generate');
+const model=createMockModel(dataset);
 async function result<T>(fn:()=>T):Promise<T>{
  await new Promise(resolve=>window.setTimeout(resolve,APP_CONFIG.mockDelayMs));
  if(import.meta.env.DEV&&new URLSearchParams(window.location.search).get('mockError')==='1')throw new ApiError('mock_network_error','Simulated connection error',503);

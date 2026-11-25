@@ -25,6 +25,10 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: node ../contract/tools/generate-dataset.mjs
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -33,6 +37,21 @@ jobs:
           cache-dependency-path: backend/pom.xml
       # Unit tests, then integration tests against PostgreSQL started by Testcontainers.
       - run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Verify backend artifact contains no fictional fixture payload
+        run: |
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          with ZipFile('target/apv-backend-0.1.0-SNAPSHOT.jar') as jar:
+              names = jar.namelist()
+              app = [name for name in names if name.startswith('BOOT-INF/classes/') and not name.endswith('/')]
+              assert app, 'Missing packaged application classes'
+              for name in app:
+                  assert not name.endswith(('dataset.json', 'dataset.public.json', 'example.json', 'example.public.json')), name
+                  payload = jar.read(name)
+                  for marker in (b'PRIVATE-REALNAME-', b'HELP-014', b'Sample household', b'Mariam D.', b'Nadia K.'):
+                      assert marker not in payload, (name, marker)
+              print('Packaged application classes/resources contain no fixture payload markers.')
+          PY
       - name: Test summary
         if: always()
         run: |

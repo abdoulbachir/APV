@@ -108,3 +108,7 @@ Not part of this pull request, because they need code that does not exist yet.
 | Breaking-change diff against `main` (`oasdiff`) on contract pull requests | Unannounced breaking changes | Backend |
 
 One risk to settle in milestone 0B: some Java tooling validates OpenAPI 3.0 better than 3.1. The contract avoids 3.1-only features except nullable types written as `type: [x, 'null']`. If the chosen backend validator cannot read 3.1, we either pick another validator or convert the file for that one check; the source stays 3.1.
+
+## Generated fixture lifecycle
+
+The large full dataset, public projection and frontend copy are ignored build inputs, not tracked source. Run `npm run generate:dataset` here (or `npm run fixtures:generate` at the repository root). The generator uses only Node's standard library; schema validation still requires this folder's `npm ci`. Dataset and parity scripts regenerate their inputs automatically. Keep the small example, schemas, negative inputs, golden expectations and deterministic generator under version control. Never copy private fixtures into the frontend or production artifacts.

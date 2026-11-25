@@ -10,11 +10,9 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import YAML from 'yaml';
-
+// Schema validation dependencies are loaded only by the validation entry points.
+// Fixture generation needs only Node's standard library, including on a clean checkout.
 const require = createRequire(import.meta.url);
-const Ajv2020 = require('ajv/dist/2020');
-const addFormats = require('ajv-formats');
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const readText = rel => readFileSync(path.join(root, rel), 'utf8');
@@ -26,6 +24,8 @@ export const clone = value => structuredClone(value);
 // ---------------------------------------------------------------------------------------
 
 export function newAjv() {
+  const Ajv2020 = require('ajv/dist/2020');
+  const addFormats = require('ajv-formats');
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
   return ajv;
@@ -570,7 +570,7 @@ export function projectPublic(fixture) {
 // ---------------------------------------------------------------------------------------
 
 export function loadContract() {
-  const document = YAML.parse(readText('openapi.yaml'));
+  const document = require('yaml').parse(readText('openapi.yaml'));
   const bundle = JSON.parse(JSON.stringify({ $id: 'https://apv-gakasinay.invalid/openapi', $defs: document.components.schemas })
     .replaceAll('#/components/schemas/', '#/$defs/'));
   const ajv = newAjv();

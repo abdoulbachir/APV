@@ -18,10 +18,10 @@ Using the same inputs is what makes "mock and real return the same thing" testab
 | `example.public.json` | Public projection of `example.json`. Generated; do not edit by hand. |
 | `negative-cases.json` | Changes to `example.json` that must each be rejected, with the reason. |
 | `negative-public-cases.json` | Changes to the projection that must each be rejected. |
-| `dataset.json`, `dataset.public.json` | The full dataset and its projection. Produced in milestone 0B by the frontend agent from the existing generator in `src/api/directory-fixtures.ts`, then reviewed by both agents. |
+| `dataset.json`, `dataset.public.json` | Generated, ignored by Git. Full fictional dataset and its public projection from `contract/tools/generate-dataset.mjs`. |
 | `golden/` | Expected responses for the fixed list of requests. Produced in milestone 0B. |
 
-All of the present files are checked by `npm run validate` in the `contract` folder.
+All fixtures are checked by `npm run validate` in the `contract` folder. On a clean checkout, the large datasets do not exist until generated. The small example, schemas, negative cases, golden expectations and symbolic artwork remain tracked.
 
 ## Principles
 
@@ -90,4 +90,4 @@ Nothing that affects a total is removed, so the mock computes the same numbers a
 
 The full dataset preserves 200 current cases and all original directory case codes. HELP-101 and HELP-102 reuse the contract example's edge scenarios; selected generated cases cover funded, over-goal, paused, no-goal and equal-ratio cases. Two completed and two draft cases are additional. HELP-014 retains its original received and delivered amounts, and the fund retains its available balance with transfers rather than direct disbursements. All records are fictional. The existing approved symbolic WebP artwork is reused as fixture media, not as a photo of a real beneficiary.
 
-Regenerate with `node tools/generate-dataset.mjs` from `contract/`. The checked-in public projection excludes private and unpublished data. `npm run validate` checks both datasets. `golden/acceptance.json` contains initial independent expected values for cross-agent testing; more exhaustive request/response and error tests belong in the integration milestone.
+Generate from the repository root with `npm run fixtures:generate` or `node contract/tools/generate-dataset.mjs` (Node 24; no npm dependencies needed). From `contract/`, use `npm run generate:dataset`. The generator writes the full fixture, its public projection and the identical browser-only copy in `src/api/dataset.public.json`; all three outputs are Git-ignored. The public projection excludes private and unpublished data. `npm run validate` regenerates and checks both datasets. Root `npm test`, `npm run dev` and `npm run build:mock` generate fixtures automatically. Before backend development startup or `./mvnw verify`, generate the fixtures explicitly; CI does this automatically. Normal `npm run build` is real mode and neither requires nor bundles the generated data. The frontend test locks the accepted fixture blob digests; an intentional fixture change requires review and updating the expected hashes. `golden/acceptance.json` contains initial independent expected values for cross-agent testing; more exhaustive request/response and error tests belong in the integration milestone.

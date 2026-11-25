@@ -1,4 +1,3 @@
-import { APP_CONFIG } from '../config';
 import renewalFallback from './hope-window.svg';
 import homeFallback from './new-home.svg';
 
@@ -23,5 +22,5 @@ export function artworkSource(artwork: CaseArtwork) {
 // Fixture-specific imagery is separate from the UI and applies only in mock mode.
 const sampleArtwork: Readonly<Record<string, CaseArtwork>> = { 'HELP-014': 'home' };
 export function getCaseArtwork(code: string): CaseArtwork {
-  return APP_CONFIG.apiMode === 'mock' ? sampleArtwork[code] ?? 'renewal' : 'renewal';
+  return import.meta.env.VITE_API_MODE === 'mock' ? sampleArtwork[code] ?? 'renewal' : 'renewal';
 }

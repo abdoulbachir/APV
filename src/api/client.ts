@@ -25,7 +25,8 @@ const realClient:ApiClient={
  getUpdates:(c,q,l)=>request(casePath(publicReadPaths.listCaseUpdates,c)+params(q),l),getDonors:(c,q,l)=>request(casePath(publicReadPaths.listCaseDonors,c)+params(q),l),getLedger:(c,q,l)=>request(casePath(publicReadPaths.listCaseLedger,c)+params(q),l),
 };
 async function loadMock(){return (await import('./mock-client')).mockClient;}
-export const api:ApiClient=APP_CONFIG.apiMode==='real'?realClient:{
+// Direct compile-time mode check allows real builds to eliminate the entire mock import.
+export const api:ApiClient=import.meta.env.VITE_API_MODE==='mock'?{
  getSite:async l=>(await loadMock()).getSite(l),getStats:async l=>(await loadMock()).getStats(l),getCases:async(q,l)=>(await loadMock()).getCases(q,l),getCase:async(c,l)=>(await loadMock()).getCase(c,l),
  getUpdates:async(c,q,l)=>(await loadMock()).getUpdates(c,q,l),getDonors:async(c,q,l)=>(await loadMock()).getDonors(c,q,l),getLedger:async(c,q,l)=>(await loadMock()).getLedger(c,q,l)
-};
+}:realClient;
