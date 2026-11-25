@@ -13,3 +13,9 @@ The identity transport uses generated operation paths, request/response types an
 The intercepted HTTP transport tests cover all 12 operations, 9 stale-token refusals, no replay, state mapping, bodyless POSTs, and sanitized errors. They are not browser or backend authentication acceptance evidence. Theme initializer is now an external blocking script; complete page CSP and browser verification remain required.
 
 Next: provider and guarded routes, EN/FR forms and MFA/enrollment/recovery flows, local QR, exact production CSP and actual browser tests against backend. Preserve approved public routes, fixture isolation, financial behavior and accessibility.
+
+## Session provider foundation
+
+The in-memory session store, React provider and session boundary now exist. Revalidation drops stale account state synchronously, revokes form leases by generation, and ignores late responses from superseded requests. Preparing a form reads the token and state before accepting secrets, and rejects a lease if the known authority has changed. Visibility, pagehide/pageshow and BroadcastChannel invalidation hooks are implemented; the channel carries only a generic signal. A CSS guard hides guarded content synchronously before bfcache snapshots. No session state, token or form secret is persisted. The store tests cover invalidation, races, pending states, form preparation and failure closure.
+
+The provider/boundary are not mounted on routes yet; this is intentional until localized auth routes and submission lifecycle are added. Future screen code must check the lease generation, never silently refresh a token on submission, notify other tabs after confirmed or uncertain session changes, and clear page-local secrets before applying reconciliation. Actual browser visibility/bfcache/cross-tab behavior and the complete CSP still require acceptance tests. Public routes are unchanged in this slice.

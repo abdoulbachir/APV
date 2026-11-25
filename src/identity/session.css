@@ -1,0 +1,5 @@
+/* Hide stale private/pending screens before a page can enter the back-forward
+   cache or while a visibility/cross-tab revalidation is outstanding. */
+html[data-identity-suspended] .identity-session-content {
+  display: none !important;
+}
