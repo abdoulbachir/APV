@@ -4,7 +4,42 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 **This is not acceptance of milestone 1B.** Four defects were confirmed; three are in the backend and are still open. Independent review by Traycer has not happened. Nothing here was merged into `main`.
 
-## Result
+## Update: corrections verified at `bfb1abb` (2026-11-25, later the same day)
+
+Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
+
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five are being corrected in the backend.
+
+- **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
+- **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
+- **Independent review at `bfb1abb`.** Done by a separate Claude agent with no knowledge of the first run, using its own harness. It is the same model family as the coordinator, not another vendor's reviewer; three earlier attempts with another vendor's model stopped on that model's content filter before reporting. The report is held by the owner (`M1B Independent Acceptance Report (bfb1abb).md`). Its results:
+  - Findings 1 to 5: corrected; none reproduced with its own inputs (2,592 forged tokens, about 1,300 simultaneous token reads, forced database errors naming a session, real-clock sign-in).
+  - 42 browser scenarios: 40 PASS, 2 PARTIAL (10.15 screen reader, 10.16 password manager), 0 FAIL. It closed 10.8 (a real back-forward cache restoration) and 10.12 to 10.14 (enrollment and recovery-code screens in French, dark, 360 px), and scored 7.19 PASS.
+  - Logs at INFO, DEBUG and TRACE: no secret and no usable session identifier among 9,225 values.
+  - 20 unsafe start-up configurations refused; the last-super-administrator rule held under concurrent operator commands.
+  - It agrees with both contract wording proposals, adding to the first that a 429 from an email or account counter is a step-8 answer.
+
+### Defects found by the independent review
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| D2 | Medium | A `POST` refused as `csrf_invalid` with no session creates a session row and cookie, with no rate limit, against 4.1 | Recommended: correct. Owner decides. |
+| D1 | Low | Sign-in racing a sign-out on one session answers 500, and the audit log records a sign-in success | Recommended: correct |
+| D5 | Low | `truncate audit_event` succeeds for the application's role; the ledger tables, which use the same protection, were not tested | Recommended: correct, ledger included |
+| D4 | Low | Some errors under `/api` are not in the contract's shape (an HTML 400 for encoded paths, the framework's body for failures in the security filters, a 500 for a malformed forwarded header from the trusted proxy) | Recommended: correct |
+| D6 | Low | The log filter does not look inside hex-encoded values in driver error text; only values of rolled-back writes appeared | Recommended: correct |
+| D3 | Low | A password change can sign out the person who made it when another request of that session is in flight (3 of 60 rounds) | Recommended: accept as a known limitation. Owner decides. |
+
+Also from that review, not defects: scenario 13.6 says the database refuses re-marking after operator use, while what holds is that the flag cannot be unset and the `dev` profile then refuses to load; and Chromium itself resends a `POST` when a kept-alive connection is cut, so "exactly one request reaches the server" (3.17, 4.14) is true of the frontend's code, not of the browser. After a lost set-password answer the person can be told the credential could not be used although the password was set.
+
+### Still open
+
+- The owner's decisions on D2 and D3, and on the contract wording proposals.
+- The backend corrections of the new defects, then a targeted re-check of them and a harness re-run.
+- 10.15 and 10.16 need a real screen reader and a real password manager.
+- Everything under "Not done" below that concerns production.
+
+## Result of the first run (`cf0c883`)
 
 | | Scenarios | PASS | PARTIAL | FAIL |
 |---|---:|---:|---:|---:|
