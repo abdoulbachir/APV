@@ -1,0 +1,28 @@
+# Configuration common to every environment. Secrets come from environment variables only.
+spring:
+  application:
+    name: apv-backend
+  datasource:
+    url: ${APV_DATABASE_URL:jdbc:postgresql://localhost:5432/apv}
+    username: ${APV_DATABASE_USER:apv}
+    password: ${APV_DATABASE_PASSWORD:}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Never wipe a database from the application.
+    clean-disabled: true
+  jackson:
+    default-property-inclusion: always
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${APV_PORT:8080}
+  # Listen on this machine only unless told otherwise; a reverse proxy sits in front later.
+  address: ${APV_BIND_ADDRESS:127.0.0.1}
+  error:
+    whitelabel:
+      enabled: false
+    include-message: never
+    include-stacktrace: never

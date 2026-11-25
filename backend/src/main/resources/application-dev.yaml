@@ -1,0 +1,6 @@
+# Local development only. Loads fictional data at every start. Never use in production.
+apv:
+  fixtures:
+    path: ${APV_FIXTURES_PATH:../contract/fixtures/example.json}
+  media:
+    dev-root: ${APV_FIXTURES_MEDIA_ROOT:../contract/fixtures}
