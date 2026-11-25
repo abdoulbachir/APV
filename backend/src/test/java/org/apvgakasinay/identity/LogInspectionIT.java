@@ -100,9 +100,9 @@ class LogInspectionIT extends IdentityIntegration {
         assertThat(log).as("the capture is working and the log is verbose").contains("/api/auth/login").contains("DEBUG");
         // Never the value in a failure message: only what kind of value it was.
         List<String> found = new ArrayList<>();
-        for (String[] secret : secrets) {
-            if (secret[1] != null && log.contains(secret[1])) {
-                found.add(secret[0]);
+        for (String[] entry : secrets) {
+            if (entry[1] != null && log.contains(entry[1])) {
+                found.add(entry[0]);
             }
         }
         long replacedLogged = replaced.stream().filter(log::contains).count();
