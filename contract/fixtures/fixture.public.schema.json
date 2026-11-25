@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apv-gakasinay.invalid/contract/fixtures/fixture.public.schema.json",
+  "title": "APV-GAKASINAY shared fixture dataset, public projection",
+  "description": "What the frontend mock may bundle. Generated from the full fixture by contract/tools/project-public.mjs. No drafts, no private blocks, no hidden donors, no names of anonymous donors, no pictures without consent.",
+  "type": "object",
+  "required": [
+    "version",
+    "clock",
+    "timezone",
+    "categories",
+    "ledgerLabels",
+    "cases",
+    "ledger",
+    "updates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "clock": {
+      "description": "The instant both implementations treat as now.",
+      "$ref": "#/$defs/timestamp"
+    },
+    "timezone": {
+      "description": "IANA organization timezone, used for new deadlines.",
+      "type": "string"
+    },
+    "ledgerLabels": {
+      "description": "The display label for each ledger kind, so the mock and the real API produce identical text.",
+      "type": "object",
+      "required": [
+        "donation",
+        "donation_reversal",
+        "refund",
+        "transfer_in",
+        "transfer_out",
+        "transfer_in_reversal",
+        "transfer_out_reversal",
+        "disbursement",
+        "disbursement_reversal"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "donation": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "donation_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "refund": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_in": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_out": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_in_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "transfer_out_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "disbursement": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "disbursement_reversal": {
+          "$ref": "#/$defs/bothLanguages"
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ledgerEntry"
+      }
+    },
+    "updates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/update"
+      }
+    },
+    "categories": {
+      "description": "Dynamic categories. The six initial ones plus any added later.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/category"
+      }
+    }
+  },
+  "$defs": {
+    "cents": {
+      "description": "One movement or a goal.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000000000
+    },
+    "bothLanguages": {
+      "type": "object",
+      "required": [
+        "en",
+        "fr"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "anyLanguage": {
+      "description": "At least one language. A missing key tests fallback.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "en": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fr": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "picture": {
+      "type": "object",
+      "required": [
+        "file",
+        "alt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "description": "Path relative to the fixtures folder.",
+          "type": "string"
+        },
+        "alt": {
+          "$ref": "#/$defs/anyLanguage"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "code",
+        "kind",
+        "status",
+        "acceptsDonations",
+        "category",
+        "featuredRank",
+        "publicName",
+        "title",
+        "story",
+        "goal",
+        "deadline",
+        "deadlineTimezone",
+        "createdAt",
+        "cover",
+        "photos"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z]{2,8}(-[0-9]{1,6})?$"
+        },
+        "kind": {
+          "enum": [
+            "case",
+            "fund"
+          ]
+        },
+        "status": {
+          "enum": [
+            "active",
+            "funded",
+            "delivered",
+            "closed"
+          ]
+        },
+        "category": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/categoryId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "featuredRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "publicName": {
+          "type": "string"
+        },
+        "title": {
+          "$ref": "#/$defs/bothLanguages",
+          "description": "Both languages are required: a case cannot be published without them (pending owner approval)."
+        },
+        "story": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "goal": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/cents"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline": {
+          "description": "Date only, in the organization timezone.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "cover": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/picture"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "photos": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "file",
+              "alt",
+              "position"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "alt": {
+                "$ref": "#/$defs/anyLanguage"
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "acceptsDonations": {
+          "description": "The administrator's switch. False means gifts are paused whatever the status.",
+          "type": "boolean"
+        },
+        "deadlineTimezone": {
+          "description": "IANA zone the deadline was set in. Null exactly when deadline is null.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ledgerEntry": {
+      "type": "object",
+      "required": [
+        "id",
+        "caseCode",
+        "kind",
+        "amount",
+        "date",
+        "corrects",
+        "pairId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "caseCode": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "donation",
+            "donation_reversal",
+            "refund",
+            "transfer_in",
+            "transfer_out",
+            "transfer_in_reversal",
+            "transfer_out_reversal",
+            "disbursement",
+            "disbursement_reversal"
+          ]
+        },
+        "amount": {
+          "$ref": "#/$defs/cents"
+        },
+        "date": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "pairId": {
+          "description": "Shared by exactly two entries: the two sides of one transfer, or the two sides of one transfer reversal. Null on every other kind.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "donor": {
+          "description": "Only on donations whose visibility is named or anonymous.",
+          "type": "object",
+          "required": [
+            "listingId",
+            "name",
+            "avatarFile"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "listingId": {
+              "type": "string"
+            },
+            "name": {
+              "description": "Null for an anonymous donation.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "avatarFile": {
+              "description": "Null unless the donation is named and the donor consented.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "corrects": {
+          "description": "Id of the original entry this one corrects. Set on correction kinds only.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "update": {
+      "type": "object",
+      "required": [
+        "id",
+        "caseCode",
+        "text",
+        "date",
+        "author",
+        "authorAvatarFile",
+        "photo"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "caseCode": {
+          "type": "string"
+        },
+        "text": {
+          "$ref": "#/$defs/anyLanguage"
+        },
+        "date": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "author": {
+          "type": "string"
+        },
+        "authorAvatarFile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "photo": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/picture"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "categoryId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "category": {
+      "type": "object",
+      "required": [
+        "id",
+        "labels",
+        "position",
+        "active"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/categoryId"
+        },
+        "labels": {
+          "$ref": "#/$defs/bothLanguages"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

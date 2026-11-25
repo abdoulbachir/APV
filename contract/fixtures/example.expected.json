@@ -1,33 +1,262 @@
 {
-  "description": "Values every implementation must compute from example.json. Used to prove the financial definitions are understood the same way on both sides.",
-  "stats": { "received": 81000, "delivered": 30000, "available": 51000, "peopleHelped": 1 },
+  "description": "Values every implementation must compute from example.json. Checked by hand once, then enforced by contract/tools/check-fixtures.mjs. Directory keys are query strings for GET /cases with a page size of 48.",
+  "site": {
+    "timezone": "America/Chicago",
+    "categories": [
+      {
+        "id": "education",
+        "active": true
+      },
+      {
+        "id": "medical",
+        "active": true
+      },
+      {
+        "id": "housing",
+        "active": true
+      },
+      {
+        "id": "family",
+        "active": true
+      },
+      {
+        "id": "emergency",
+        "active": true
+      },
+      {
+        "id": "other",
+        "active": true
+      },
+      {
+        "id": "food",
+        "active": true
+      },
+      {
+        "id": "transport",
+        "active": false
+      }
+    ]
+  },
+  "stats": {
+    "received": 102500,
+    "delivered": 55000,
+    "available": 47500,
+    "peopleHelped": 2
+  },
   "cases": {
     "FUND": {
-      "received": 35000,
+      "acceptingDonations": true,
+      "deadlineEndsAt": null,
+      "received": 40000,
       "delivered": 0,
-      "financials": { "externalDonations": 50000, "transfersIn": 0, "transfersOut": 15000, "allocated": 35000, "delivered": 0, "available": 35000, "hasShortfall": false },
-      "counts": { "updates": 0, "donors": 1, "ledger": 2, "photos": 0 }
+      "financials": {
+        "externalDonations": 50000,
+        "transfersIn": 0,
+        "transfersOut": 10000,
+        "allocated": 40000,
+        "delivered": 0,
+        "available": 40000,
+        "hasShortfall": false
+      },
+      "counts": {
+        "updates": 0,
+        "donors": 1,
+        "ledger": 3,
+        "photos": 0
+      },
+      "donors": [
+        {
+          "id": "D1",
+          "name": "Sample Donor One",
+          "amount": 50000,
+          "hasAvatar": true
+        }
+      ],
+      "corrected": {
+        "L05": {
+          "correctedBy": [
+            "L10"
+          ],
+          "correctedAmount": 5000,
+          "netAmount": 10000
+        }
+      }
     },
     "HELP-901": {
-      "received": 46000,
+      "acceptingDonations": true,
+      "deadlineEndsAt": "2027-01-19T06:00:00Z",
+      "received": 38500,
       "delivered": 30000,
-      "financials": { "externalDonations": 31000, "transfersIn": 15000, "transfersOut": 0, "allocated": 46000, "delivered": 30000, "available": 16000, "hasShortfall": false },
-      "counts": { "updates": 1, "donors": 2, "ledger": 6, "photos": 1 },
+      "financials": {
+        "externalDonations": 28500,
+        "transfersIn": 10000,
+        "transfersOut": 0,
+        "allocated": 38500,
+        "delivered": 30000,
+        "available": 8500,
+        "hasShortfall": false
+      },
+      "counts": {
+        "updates": 1,
+        "donors": 2,
+        "ledger": 8,
+        "photos": 1
+      },
       "donors": [
-        { "id": "D3", "name": null, "amount": 6000, "avatarUrl": null },
-        { "id": "D2", "name": "Sample Donor Two", "amount": 20000, "avatarUrl": null }
-      ]
+        {
+          "id": "D3",
+          "name": null,
+          "amount": 3500,
+          "hasAvatar": false
+        },
+        {
+          "id": "D2",
+          "name": "Sample Donor Two",
+          "amount": 20000,
+          "hasAvatar": false
+        }
+      ],
+      "corrected": {
+        "L03": {
+          "correctedBy": [
+            "L08",
+            "L09"
+          ],
+          "correctedAmount": 6500,
+          "netAmount": 3500
+        },
+        "L06": {
+          "correctedBy": [
+            "L11"
+          ],
+          "correctedAmount": 5000,
+          "netAmount": 10000
+        }
+      }
     },
-    "HELP-902": "404 case_not_found"
+    "HELP-902": "404 case_not_found",
+    "HELP-903": {
+      "acceptingDonations": false,
+      "deadlineEndsAt": "2026-11-01T05:00:00Z",
+      "received": 24000,
+      "delivered": 25000,
+      "financials": {
+        "externalDonations": 24000,
+        "transfersIn": 0,
+        "transfersOut": 0,
+        "allocated": 24000,
+        "delivered": 25000,
+        "available": -1000,
+        "hasShortfall": true
+      },
+      "counts": {
+        "updates": 0,
+        "donors": 1,
+        "ledger": 3,
+        "photos": 0
+      },
+      "donors": [
+        {
+          "id": "D5",
+          "name": "Sample Donor Five",
+          "amount": 24000,
+          "hasAvatar": false
+        }
+      ],
+      "corrected": {
+        "L12": {
+          "correctedBy": [
+            "L14"
+          ],
+          "correctedAmount": 1000,
+          "netAmount": 24000
+        }
+      }
+    },
+    "HELP-904": {
+      "acceptingDonations": true,
+      "deadlineEndsAt": "2027-03-15T05:00:00Z",
+      "received": 0,
+      "delivered": 0,
+      "financials": {
+        "externalDonations": 0,
+        "transfersIn": 0,
+        "transfersOut": 0,
+        "allocated": 0,
+        "delivered": 0,
+        "available": 0,
+        "hasShortfall": false
+      },
+      "counts": {
+        "updates": 0,
+        "donors": 0,
+        "ledger": 0,
+        "photos": 0
+      },
+      "donors": [],
+      "corrected": {}
+    }
   },
   "directory": {
-    "status=active": ["HELP-901"],
-    "status=completed": []
+    "status=active": [
+      "HELP-904",
+      "HELP-901"
+    ],
+    "status=completed": [
+      "HELP-903"
+    ],
+    "status=active&sort=closest": [
+      "HELP-901",
+      "HELP-904"
+    ],
+    "status=active&sort=least": [
+      "HELP-904",
+      "HELP-901"
+    ],
+    "status=active&sort=featured": [
+      "HELP-901",
+      "HELP-904"
+    ],
+    "status=active&sort=deadline": [
+      "HELP-901",
+      "HELP-904"
+    ],
+    "status=active&category=food": [
+      "HELP-904"
+    ],
+    "status=completed&category=transport": [
+      "HELP-903"
+    ],
+    "status=active&q=rentree": [
+      "HELP-901"
+    ],
+    "status=active&q=%20HELP-90%20": [
+      "HELP-904",
+      "HELP-901"
+    ],
+    "status=active&q=household%20d": [
+      "HELP-904"
+    ]
   },
   "mustNeverAppearInAnyPublicResponse": [
-    "PRIVATE-REALNAME-901", "PRIVATE-CONTACT-901", "PRIVATE-NOTES-901",
-    "PRIVATE-REALNAME-902", "PRIVATE-CONTACT-902", "PRIVATE-NOTES-902",
-    "DRAFT-STORY-902", "BROUILLON-902",
-    "PRIVATE-ANONYMOUS-DONOR", "PRIVATE-HIDDEN-DONOR"
+    "BROUILLON-HISTOIRE-902",
+    "BROUILLON-TITRE-902",
+    "DRAFT-NAME-902",
+    "DRAFT-STORY-902",
+    "DRAFT-TITLE-902",
+    "PRIVATE-ANONYMOUS-DONOR",
+    "PRIVATE-CONTACT-901",
+    "PRIVATE-CONTACT-902",
+    "PRIVATE-CONTACT-903",
+    "PRIVATE-CONTACT-904",
+    "PRIVATE-HIDDEN-DONOR",
+    "PRIVATE-NOTES-901",
+    "PRIVATE-NOTES-902",
+    "PRIVATE-NOTES-903",
+    "PRIVATE-NOTES-904",
+    "PRIVATE-REALNAME-901",
+    "PRIVATE-REALNAME-902",
+    "PRIVATE-REALNAME-903",
+    "PRIVATE-REALNAME-904"
   ]
 }

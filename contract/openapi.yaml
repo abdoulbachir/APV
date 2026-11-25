@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: APV-GAKASINAY API
-  version: 0.1.0
+  version: 0.2.0
   summary: Public read endpoints (milestone 0).
   description: |
     Single source of truth for the API between the APV-GAKASINAY frontend and backend.
@@ -17,20 +17,35 @@ info:
     ## Conventions
 
     - **Base path.** Every path is relative to `/api`. Frontend and API are served from one origin.
-    - **Money.** Integer US cents. Never a decimal, never a string. Every value fits in a
-      JavaScript safe integer. See `contract/financial-terms.md` for the exact meaning of each field.
-    - **Timestamps.** RFC 3339 in UTC with a `Z` suffix, for example `2026-11-21T12:00:00Z`.
+    - **Money.** Integer US cents. Never a decimal, never a string. One movement is at most
+      10,000,000,000 cents. Every total is at most 1,000,000,000,000,000 cents in absolute
+      value, which is inside the JavaScript safe integer range. See
+      `contract/financial-terms.md` for the exact meaning of each field and for the bounds.
+    - **Timestamps.** RFC 3339 instants in UTC with a `Z` suffix and whole seconds, for example
+      `2026-11-21T12:00:00Z`. Clients display them in the browser's local timezone.
     - **Date-only values.** `YYYY-MM-DD` with no time and no zone. Only `deadline` uses this.
-      It is a calendar day in the organization timezone published by `GET /site`.
+      It is a calendar day in the zone named by `deadlineTimezone` on the same case.
     - **Language.** Send `Accept-Language`. Supported languages are `en` and `fr`.
       The response carries `Content-Language` and `Vary: Accept-Language`.
       See the `AcceptLanguage` parameter for the fallback rules.
     - **Errors.** Every error uses the `Error` schema. Clients decide what to show from
       `error.code`. `error.message` is English text for developers.
     - **Privacy.** Schemas in this file are public. They never contain draft cases, private
-      beneficiary details, hidden donors, or names and pictures of anonymous donors.
-    - **Unknown values.** Clients must ignore unknown object properties and must not fail on an
-      unknown `LedgerKind`; use `allocatedDelta` and `deliveredDelta` to compute totals.
+      beneficiary details, hidden donors, or names and pictures of anonymous donors. Every
+      object schema is closed (`additionalProperties: false`): a server response with a
+      property that is not listed here fails contract tests.
+    - **Forward compatibility.** Clients must nevertheless ignore object properties they do
+      not know, and must not fail on an unknown `LedgerKind` or category identifier. Use
+      `allocatedDelta` and `deliveredDelta` to compute totals.
+    - **Pictures.** Every picture address is a same-origin path under `/media/public/`. It is
+      never an absolute URL and never points at another site. See
+      `contract/media-and-privacy.md`.
+    - **Consistent reads.** Each response is computed from one database snapshot, so the
+      totals, breakdown, previews and counts inside one response always agree with each other.
+    - **Ordering of text.** Case codes and identifiers contain ASCII characters only. Wherever
+      this contract orders by `code` or `id`, strings are compared character by character
+      with no locale rules (PostgreSQL `COLLATE "C"`, JavaScript `<`, never `localeCompare`).
+      `HELP-10` therefore sorts before `HELP-9`.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -51,6 +66,13 @@ paths:
       tags: [Site]
       operationId: getSite
       summary: Site settings the frontend needs to display data correctly.
+      description: |
+        Not localized: category labels are returned in both languages, so the client can
+        switch language without asking again.
+
+        `categories` holds every active category, plus every inactive category that at least
+        one public case still uses, ordered by `position` ascending then `id` ascending.
+        A category used only by draft cases is not listed.
       responses:
         '200':
           description: Site settings.
@@ -58,11 +80,19 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Site' }
               example:
-                timezone: America/New_York
+                timezone: America/Chicago
                 currency: USD
                 locales: [en, fr]
                 defaultLocale: en
-                categories: [education, medical, housing, family, emergency, other]
+                categories:
+                  - { id: education, labels: { en: Education, fr: Éducation }, position: 1, active: true }
+                  - { id: medical, labels: { en: Medical, fr: Santé }, position: 2, active: true }
+                  - { id: housing, labels: { en: Housing, fr: Logement }, position: 3, active: true }
+                  - { id: family, labels: { en: Family, fr: Famille }, position: 4, active: true }
+                  - { id: emergency, labels: { en: Emergency, fr: Urgence }, position: 5, active: true }
+                  - { id: other, labels: { en: Other, fr: Autre }, position: 6, active: true }
+                  - { id: food, labels: { en: Food, fr: Alimentation }, position: 7, active: true }
+                  - { id: transport, labels: { en: Transport, fr: Transport }, position: 8, active: false }
                 fundCode: FUND
                 pagination: { defaultPageSize: 12, maxPageSize: 48 }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -82,10 +112,10 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Stats' }
               example:
-                received: 2847500
-                delivered: 2312000
-                available: 535500
-                peopleHelped: 18
+                received: 102500
+                delivered: 55000
+                available: 47500
+                peopleHelped: 2
                 asOf: '2026-11-24T12:00:00Z'
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -104,31 +134,59 @@ paths:
         - `active` returns cases whose status is `active` or `funded`.
         - `completed` returns cases whose status is `delivered` or `closed`.
 
+        This grouping is the working proposal and still needs the project owner's confirmation.
+
+        ## Category filter (`category`)
+
+        A category identifier from `GET /site`. An inactive category is still a valid filter,
+        so old links keep working; the frontend simply does not offer it in its filter list.
+        An identifier that does not exist returns 400 `validation_error` with field code
+        `invalid_value`.
+
         ## Search (`q`)
 
-        Both the query and the searched fields are normalized the same way:
+        Length limits, counted in Unicode code points (JavaScript `[...q].length`, Java
+        `codePointCount`), never in UTF-16 units or bytes:
+
+        1. The raw value is at most 200 code points.
+        2. After trimming, it is at most 80 code points.
+
+        A value over either limit returns 400 `validation_error` with field code `too_long`.
+        It is never silently cut. The limit is checked before normalization.
+
+        Both the query and the searched fields are then normalized the same way:
 
         1. Unicode NFD decomposition.
         2. Remove code points U+0300 to U+036F (combining marks).
-        3. Lower-case.
+        3. Lower-case with the locale-independent Unicode mapping (JavaScript `toLowerCase()`,
+           Java `toLowerCase(Locale.ROOT)`).
         4. Trim leading and trailing white space.
 
+        "White space" in trimming means exactly the ECMAScript `trim` set: U+0009 to U+000D,
+        U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and
+        U+FEFF. White space inside the text is kept as it is.
+
         A case matches when the normalized query is a substring of at least one of: the English
-        title, the French title, the public name, the case code. Both languages are searched
-        whatever `Accept-Language` says. Category labels are not searched; use `category`.
-        A query that is empty after trimming applies no filter. No other folding is applied
-        (for example `œ` does not match `oe`), so the mock and the real API behave identically.
+        title, the French title, the public name, the case code. Each field is tested on its
+        own. Both languages are searched whatever `Accept-Language` says. Category labels are
+        not searched; use `category`. A query that is empty after trimming applies no filter.
+        No other folding is applied (for example `œ` does not match `oe`).
+
+        The backend computes the normalized text in application code, not with database
+        functions, so the mock and the real API cannot differ.
 
         ## Sorting
 
-        Every sort ends with the same tie-breakers: `createdAt` descending, then `code` ascending.
-        The funding ratio is `max(received, 0) / goal`. Ratios are compared exactly, by integer
-        cross-multiplication, never with floating point.
+        Every sort ends with the same tie-breakers: `createdAt` descending, then `code`
+        ascending by code point. The funding ratio is `max(received, 0) / goal`. Ratios are
+        compared exactly by cross-multiplication with arbitrary-precision integers
+        (JavaScript `BigInt`, PostgreSQL `numeric`), never with floating point and never with
+        64-bit multiplication, which could overflow.
 
         | `sort` | Order |
         |---|---|
         | `newest` | `createdAt` descending. |
-        | `deadline` | `deadline` ascending. Cases with no deadline last. |
+        | `deadline` | `deadlineEndsAt` ascending. Cases with no deadline last. |
         | `closest` | First, cases with a goal that are below it, ratio descending. Then cases at or above their goal, ratio ascending. Then cases with no goal. |
         | `least` | Cases with a goal, ratio ascending. Then cases with no goal. |
         | `featured` | `featuredRank` ascending. Cases with no rank last, in `newest` order. |
@@ -144,12 +202,12 @@ paths:
           schema: { type: string, enum: [active, completed], default: active }
         - name: q
           in: query
-          description: Search text. At most 80 characters after trimming.
+          description: Search text. See the limits above.
           schema: { type: string, maxLength: 200 }
         - name: category
           in: query
           description: Omit for all categories.
-          schema: { $ref: '#/components/schemas/Category' }
+          schema: { $ref: '#/components/schemas/CategoryId' }
         - name: sort
           in: query
           schema: { type: string, enum: [newest, deadline, closest, least, featured], default: newest }
@@ -166,28 +224,32 @@ paths:
               schema: { $ref: '#/components/schemas/CasePage' }
               example:
                 items:
-                  - code: HELP-014
+                  - code: HELP-904
                     kind: case
                     status: active
-                    category: housing
-                    featuredRank: 1
-                    title: A safe home for a family of five
-                    publicName: Mariam D.
-                    story: "After a fire, Mariam and her children need help with a deposit and first month of rent."
-                    language: en
+                    acceptingDonations: true
+                    category: food
+                    featuredRank: null
+                    title: Groceries for a month
+                    titleLanguage: en
+                    publicName: Sample household D
+                    story: Fictional sample story in a category added after launch.
+                    storyLanguage: en
                     photoUrl: null
                     photoThumbnailUrl: null
                     photoAlt: null
-                    goal: 850000
-                    received: 567500
-                    delivered: 320000
-                    deadline: '2027-01-18'
-                    deadlineEndsAt: '2027-01-19T05:00:00Z'
-                    createdAt: '2026-10-04T15:00:00Z'
+                    photoAltLanguage: null
+                    goal: 60000
+                    received: 0
+                    delivered: 0
+                    deadline: '2027-03-14'
+                    deadlineTimezone: America/Chicago
+                    deadlineEndsAt: '2027-03-15T05:00:00Z'
+                    createdAt: '2026-11-15T15:00:00Z'
                 page: 1
-                pageSize: 12
-                totalItems: 200
-                totalPages: 17
+                pageSize: 1
+                totalItems: 2
+                totalPages: 2
         '400': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -201,6 +263,8 @@ paths:
         `updates`, `donors` and `ledger` hold the 10 newest entries of each. `counts` holds the
         full number of entries. Older entries are read from the three history endpoints, so the
         complete financial record of a case is always reachable.
+
+        Everything in the response comes from one database snapshot taken at `asOf`.
 
         A draft case, or a code that does not exist, returns 404 `case_not_found`. The two are
         indistinguishable on purpose.
@@ -221,55 +285,65 @@ paths:
                   code: HELP-901
                   kind: case
                   status: active
+                  acceptingDonations: true
                   category: education
                   featuredRank: 1
                   title: School supplies for a new term
+                  titleLanguage: en
                   publicName: Sample household A
                   story: Fictional sample story.
-                  language: en
-                  photoUrl: /media/public/3f9a1c/display.webp
-                  photoThumbnailUrl: /media/public/3f9a1c/thumb.webp
+                  storyLanguage: en
+                  photoUrl: /media/public/Zk3vQ9xT1bLw7RmN2cYp4A/display.webp
+                  photoThumbnailUrl: /media/public/Zk3vQ9xT1bLw7RmN2cYp4A/thumb.webp
                   photoAlt: Symbolic artwork of a school bag
+                  photoAltLanguage: en
                   goal: 100000
-                  received: 46000
+                  received: 38500
                   delivered: 30000
                   deadline: '2027-01-18'
-                  deadlineEndsAt: '2027-01-19T05:00:00Z'
+                  deadlineTimezone: America/Chicago
+                  deadlineEndsAt: '2027-01-19T06:00:00Z'
                   createdAt: '2026-10-04T15:00:00Z'
                 financials:
-                  externalDonations: 31000
-                  transfersIn: 15000
+                  externalDonations: 28500
+                  transfersIn: 10000
                   transfersOut: 0
-                  allocated: 46000
+                  allocated: 38500
                   delivered: 30000
-                  available: 16000
+                  available: 8500
                   hasShortfall: false
                 photos:
                   - id: photo-1
-                    url: /media/public/7b2e44/display.webp
-                    thumbnailUrl: /media/public/7b2e44/thumb.webp
+                    url: /media/public/h8Jd2LmQ5sXc0VbN6tYu1E/display.webp
+                    thumbnailUrl: /media/public/h8Jd2LmQ5sXc0VbN6tYu1E/thumb.webp
                     alt: Symbolic artwork of notebooks
+                    altLanguage: en
                     position: 1
                 updates:
                   - id: U1
                     caseCode: HELP-901
                     text: Sample update written in English only.
-                    language: en
+                    textLanguage: en
                     photoUrl: null
+                    photoAlt: null
+                    photoAltLanguage: null
                     date: '2026-11-19T17:30:00Z'
                     author: Sample Admin
                     authorAvatarUrl: null
                 donors:
-                  - { id: D3, name: null, amount: 6000, date: '2026-11-06T12:00:00Z', avatarUrl: null }
+                  - { id: D3, name: null, amount: 3500, date: '2026-11-06T12:00:00Z', avatarUrl: null }
                   - { id: D2, name: Sample Donor Two, amount: 20000, date: '2026-11-05T12:00:00Z', avatarUrl: null }
                 ledger:
-                  - { id: L8, kind: refund, amount: 4000, allocatedDelta: -4000, deliveredDelta: 0, date: '2026-11-10T12:00:00Z', label: Refund to donor, reverses: L3, reversedBy: null }
-                  - { id: L7, kind: disbursement, amount: 30000, allocatedDelta: 0, deliveredDelta: 30000, date: '2026-11-09T12:00:00Z', label: Delivered to the beneficiary, reverses: null, reversedBy: null }
-                  - { id: L6, kind: transfer_in, amount: 15000, allocatedDelta: 15000, deliveredDelta: 0, date: '2026-11-08T12:00:00Z', label: Transfer received, reverses: null, reversedBy: null }
-                  - { id: L4, kind: donation, amount: 5000, allocatedDelta: 5000, deliveredDelta: 0, date: '2026-11-07T12:00:00Z', label: Confirmed gift, reverses: null, reversedBy: null }
-                  - { id: L3, kind: donation, amount: 10000, allocatedDelta: 10000, deliveredDelta: 0, date: '2026-11-06T12:00:00Z', label: Confirmed gift, reverses: null, reversedBy: L8 }
-                  - { id: L2, kind: donation, amount: 20000, allocatedDelta: 20000, deliveredDelta: 0, date: '2026-11-05T12:00:00Z', label: Confirmed gift, reverses: null, reversedBy: null }
-                counts: { updates: 1, donors: 2, ledger: 6, photos: 1 }
+                  - { id: L11, kind: transfer_in_reversal, amount: 5000, allocatedDelta: -5000, deliveredDelta: 0, date: '2026-11-13T12:00:00Z', label: Received transfer cancelled, corrects: L06, correctedBy: [], correctedAmount: 0, netAmount: 5000, counterpartCaseCode: FUND }
+                  - { id: L09, kind: refund, amount: 2500, allocatedDelta: -2500, deliveredDelta: 0, date: '2026-11-12T12:00:00Z', label: Refund to donor, corrects: L03, correctedBy: [], correctedAmount: 0, netAmount: 2500, counterpartCaseCode: null }
+                  - { id: L08, kind: refund, amount: 4000, allocatedDelta: -4000, deliveredDelta: 0, date: '2026-11-10T12:00:00Z', label: Refund to donor, corrects: L03, correctedBy: [], correctedAmount: 0, netAmount: 4000, counterpartCaseCode: null }
+                  - { id: L07, kind: disbursement, amount: 30000, allocatedDelta: 0, deliveredDelta: 30000, date: '2026-11-09T12:00:00Z', label: Delivered to the beneficiary, corrects: null, correctedBy: [], correctedAmount: 0, netAmount: 30000, counterpartCaseCode: null }
+                  - { id: L06, kind: transfer_in, amount: 15000, allocatedDelta: 15000, deliveredDelta: 0, date: '2026-11-08T12:00:00Z', label: Transfer received, corrects: null, correctedBy: [L11], correctedAmount: 5000, netAmount: 10000, counterpartCaseCode: FUND }
+                  - { id: L04, kind: donation, amount: 5000, allocatedDelta: 5000, deliveredDelta: 0, date: '2026-11-07T12:00:00Z', label: Confirmed gift, corrects: null, correctedBy: [], correctedAmount: 0, netAmount: 5000, counterpartCaseCode: null }
+                  - { id: L03, kind: donation, amount: 10000, allocatedDelta: 10000, deliveredDelta: 0, date: '2026-11-06T12:00:00Z', label: Confirmed gift, corrects: null, correctedBy: [L08, L09], correctedAmount: 6500, netAmount: 3500, counterpartCaseCode: null }
+                  - { id: L02, kind: donation, amount: 20000, allocatedDelta: 20000, deliveredDelta: 0, date: '2026-11-05T12:00:00Z', label: Confirmed gift, corrects: null, correctedBy: [], correctedAmount: 0, netAmount: 20000, counterpartCaseCode: null }
+                counts: { updates: 1, donors: 2, ledger: 8, photos: 1 }
+                asOf: '2026-11-24T12:00:00Z'
         '404': { $ref: '#/components/responses/CaseNotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -279,7 +353,7 @@ paths:
       tags: [Case history]
       operationId: listCaseUpdates
       summary: Updates posted on a case, newest first.
-      description: Ordered by `date` descending, then `id` descending.
+      description: Ordered by `date` descending, then `id` descending by code point.
       parameters:
         - $ref: '#/components/parameters/CaseCode'
         - $ref: '#/components/parameters/AcceptLanguage'
@@ -299,8 +373,10 @@ paths:
                   - id: U1
                     caseCode: HELP-901
                     text: Sample update written in English only.
-                    language: en
+                    textLanguage: en
                     photoUrl: null
+                    photoAlt: null
+                    photoAltLanguage: null
                     date: '2026-11-19T17:30:00Z'
                     author: Sample Admin
                     authorAvatarUrl: null
@@ -319,9 +395,10 @@ paths:
       operationId: listCaseDonors
       summary: Publicly listed donors of a case, newest first.
       description: |
-        Contains confirmed donations whose visibility is `named` or `anonymous` and whose net
-        amount is above zero. Donations with visibility `hidden` are never listed. Ordered by
-        `date` descending, then `id` descending.
+        One entry per confirmed donation whose visibility is `named` or `anonymous` and whose
+        net amount is above zero. The net amount is the donation minus every refund and
+        reversal recorded against it. Donations with visibility `hidden` are never listed.
+        Ordered by `date` descending, then `id` descending by code point.
       parameters:
         - $ref: '#/components/parameters/CaseCode'
         - $ref: '#/components/parameters/Page'
@@ -334,7 +411,7 @@ paths:
               schema: { $ref: '#/components/schemas/PublicDonorPage' }
               example:
                 items:
-                  - { id: D3, name: null, amount: 6000, date: '2026-11-06T12:00:00Z', avatarUrl: null }
+                  - { id: D3, name: null, amount: 3500, date: '2026-11-06T12:00:00Z', avatarUrl: null }
                   - { id: D2, name: Sample Donor Two, amount: 20000, date: '2026-11-05T12:00:00Z', avatarUrl: null }
                 page: 1
                 pageSize: 12
@@ -353,12 +430,28 @@ paths:
       description: |
         The complete public financial record. Entries are never edited or removed; a correction
         is a new entry that points at the one it corrects. Ordered by `date` descending, then
-        `id` descending.
+        `id` descending by code point.
 
         For any case, over all pages:
 
         - the sum of `allocatedDelta` equals `Case.received`;
         - the sum of `deliveredDelta` equals `Case.delivered`.
+
+        ## Reading several pages while money moves
+
+        Paging uses offsets. Each page is its own snapshot, so a movement recorded between two
+        requests shifts later entries by one position: a client reading forward can then see
+        one entry twice, and its totals no longer match the first page.
+
+        Because the ledger only ever grows, `totalItems` changes whenever anything changed.
+        A client that needs an exact reconciliation therefore:
+
+        1. reads `GET /cases/{code}` and keeps `counts.ledger`;
+        2. reads every ledger page and checks that `totalItems` equals that number each time;
+        3. starts again if it ever differs.
+
+        `correctedBy`, `correctedAmount` and `netAmount` of an older entry change only when a
+        new entry is added, so the same check covers them.
       parameters:
         - $ref: '#/components/parameters/CaseCode'
         - $ref: '#/components/parameters/AcceptLanguage'
@@ -375,12 +468,12 @@ paths:
               schema: { $ref: '#/components/schemas/LedgerEntryPage' }
               example:
                 items:
-                  - { id: L8, kind: refund, amount: 4000, allocatedDelta: -4000, deliveredDelta: 0, date: '2026-11-10T12:00:00Z', label: Refund to donor, reverses: L3, reversedBy: null }
-                  - { id: L7, kind: disbursement, amount: 30000, allocatedDelta: 0, deliveredDelta: 30000, date: '2026-11-09T12:00:00Z', label: Delivered to the beneficiary, reverses: null, reversedBy: null }
+                  - { id: L11, kind: transfer_in_reversal, amount: 5000, allocatedDelta: -5000, deliveredDelta: 0, date: '2026-11-13T12:00:00Z', label: Received transfer cancelled, corrects: L06, correctedBy: [], correctedAmount: 0, netAmount: 5000, counterpartCaseCode: FUND }
+                  - { id: L09, kind: refund, amount: 2500, allocatedDelta: -2500, deliveredDelta: 0, date: '2026-11-12T12:00:00Z', label: Refund to donor, corrects: L03, correctedBy: [], correctedAmount: 0, netAmount: 2500, counterpartCaseCode: null }
                 page: 1
                 pageSize: 2
-                totalItems: 6
-                totalPages: 3
+                totalItems: 8
+                totalPages: 4
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/CaseNotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -396,10 +489,17 @@ components:
         header, honoring quality values and ignoring region subtags (`fr-CA` is `fr`). A missing
         header, or one with no supported language, means `en`.
 
-        Field fallback: when a localized field has no text in the chosen language, the other
-        language is returned for that field. Objects that can fall back carry a `language`
-        property naming the language actually returned, so the client can set the HTML `lang`
-        attribute. Personal names are never translated.
+        Which text can fall back:
+
+        - **Never falls back:** case titles and stories (a case cannot be published without
+          both languages, pending owner approval), category labels, ledger labels.
+        - **Can fall back:** update text and picture descriptions. When there is no text in
+          the chosen language, the other language is returned.
+        - **Never translated:** personal names, public names and author names.
+
+        Every localized field has a companion property naming the language actually returned
+        (`titleLanguage`, `storyLanguage`, `textLanguage`, `altLanguage`, `photoAltLanguage`),
+        so the client can set the HTML `lang` attribute on exactly that text.
       schema: { type: string, default: en }
       example: fr
     CaseCode:
@@ -473,37 +573,94 @@ components:
           example:
             error: { code: unavailable, message: Service unavailable, requestId: 5f0c1c9e2b7a4d1f }
   schemas:
-    Cents:
-      description: A non-negative amount in integer US cents.
-      type: integer
-      format: int64
-      minimum: 0
-      maximum: 9007199254740991
-    PositiveCents:
-      description: A strictly positive amount in integer US cents.
+    MovementCents:
+      description: |
+        The amount of one movement, or a goal, in integer US cents. Strictly positive and at
+        most 10,000,000,000 (one hundred million dollars).
       type: integer
       format: int64
       minimum: 1
-      maximum: 9007199254740991
-    SignedCents:
+      maximum: 10000000000
+    Cents:
       description: |
-        An amount in integer US cents that can be negative. Negative values appear only in the
-        exceptional shortfall situation described in `contract/financial-terms.md`.
+        A non-negative total in integer US cents. At most 1,000,000,000,000,000, which the
+        server guarantees by capping the sum of all movement amounts on the platform.
       type: integer
       format: int64
-      minimum: -9007199254740991
-      maximum: 9007199254740991
+      minimum: 0
+      maximum: 1000000000000000
+    SignedCents:
+      description: |
+        A total or a change in integer US cents that can be negative. Negative totals appear
+        only in the exceptional shortfall situation described in `contract/financial-terms.md`.
+      type: integer
+      format: int64
+      minimum: -1000000000000000
+      maximum: 1000000000000000
+    Timestamp:
+      description: RFC 3339 instant in UTC, whole seconds, `Z` suffix.
+      type: string
+      format: date-time
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
     Locale:
       type: string
       enum: [en, fr]
-    Category:
+    MediaPath:
+      description: |
+        Same-origin path of a public picture. Never an absolute URL. The second segment is a
+        random token that cannot be guessed; the last is the size variant.
       type: string
-      enum: [education, medical, housing, family, emergency, other]
+      pattern: '^/media/public/[A-Za-z0-9_-]{22,64}/[a-z0-9-]{1,32}\.(webp|jpg|png|avif)$'
+    CategoryId:
+      description: |
+        Stable identifier of a category. Chosen when the category is created, never changed
+        and never reused. The list of categories is data, not part of this contract: read it
+        from `GET /site`.
+      type: string
+      pattern: '^[a-z][a-z0-9-]{1,31}$'
+    Category:
+      description: |
+        A category managed by the super administrator. New categories appear here without any
+        change to the application. The frontend keeps its own look for the six initial
+        identifiers (`education`, `medical`, `housing`, `family`, `emergency`, `other`) and
+        uses a generic look for any other identifier.
+      type: object
+      additionalProperties: false
+      required: [id, labels, position, active]
+      properties:
+        id: { $ref: '#/components/schemas/CategoryId' }
+        labels:
+          description: Display label in every supported language. Both are always present.
+          type: object
+          additionalProperties: false
+          required: [en, fr]
+          properties:
+            en: { type: string, minLength: 1, maxLength: 40 }
+            fr: { type: string, minLength: 1, maxLength: 40 }
+        position:
+          description: Display order, ascending. Unique.
+          type: integer
+          minimum: 1
+        active:
+          description: |
+            False for a retired category. It still labels the cases that use it and still
+            works as a filter value, but the frontend does not offer it in its filter list and
+            administrators cannot choose it for a case.
+          type: boolean
     CaseKind:
       type: string
       enum: [case, fund]
     PublicCaseStatus:
-      description: Public statuses. `draft` exists only in administration schemas.
+      description: |
+        Public statuses. `draft` exists only in administration schemas.
+
+        - `active`: published and seeking funding.
+        - `funded`: the goal is reached; the help is not necessarily delivered yet.
+        - `delivered`: the intended help has been handed over. A case can reach this status
+          without ever reaching its goal.
+        - `closed`: finalized. Its financial history stays public.
+
+        Whether a case takes new gifts is a separate fact: see `acceptingDonations`.
       type: string
       enum: [active, funded, delivered, closed]
     ErrorCode:
@@ -519,6 +676,7 @@ components:
       properties:
         error:
           type: object
+          additionalProperties: false
           required: [code, message]
           properties:
             code: { $ref: '#/components/schemas/ErrorCode' }
@@ -530,6 +688,7 @@ components:
               type: array
               items:
                 type: object
+                additionalProperties: false
                 required: [name, code]
                 properties:
                   name: { type: string }
@@ -541,10 +700,14 @@ components:
               type: string
     Site:
       type: object
+      additionalProperties: false
       required: [timezone, currency, locales, defaultLocale, categories, fundCode, pagination]
       properties:
         timezone:
-          description: IANA name of the organization timezone. Deadlines are days in this zone.
+          description: |
+            IANA name of the organization timezone, used for new deadlines. A case keeps the
+            zone its deadline was set in: read `deadlineTimezone` on the case, not this value,
+            to interpret an existing deadline.
           type: string
         currency: { type: string, const: USD }
         locales:
@@ -552,18 +715,20 @@ components:
           items: { $ref: '#/components/schemas/Locale' }
         defaultLocale: { $ref: '#/components/schemas/Locale' }
         categories:
-          description: Every category, in display order.
+          description: See the operation description for which categories are listed and in what order.
           type: array
           items: { $ref: '#/components/schemas/Category' }
         fundCode: { type: string, const: FUND }
         pagination:
           type: object
+          additionalProperties: false
           required: [defaultPageSize, maxPageSize]
           properties:
             defaultPageSize: { type: integer }
             maxPageSize: { type: integer }
     Stats:
       type: object
+      additionalProperties: false
       required: [received, delivered, available, peopleHelped, asOf]
       properties:
         received:
@@ -578,44 +743,62 @@ components:
           description: '`received` minus `delivered`.'
           $ref: '#/components/schemas/SignedCents'
         peopleHelped:
-          description: Number of cases of kind `case` whose `delivered` is above zero.
+          description: |
+            Number of cases of kind `case` whose net `delivered` is above zero. It counts
+            cases, not human beings: one case can help a whole household, and one person can
+            have two cases. Display wording must say "cases" or equivalent.
           type: integer
           minimum: 0
         asOf:
-          type: string
-          format: date-time
+          description: The instant of the snapshot these totals were computed from.
+          $ref: '#/components/schemas/Timestamp'
     Case:
       description: Public view of a case or of the general fund.
       type: object
+      additionalProperties: false
       required:
         - code
         - kind
         - status
+        - acceptingDonations
         - category
         - featuredRank
         - title
+        - titleLanguage
         - publicName
         - story
-        - language
+        - storyLanguage
         - photoUrl
         - photoThumbnailUrl
         - photoAlt
+        - photoAltLanguage
         - goal
         - received
         - delivered
         - deadline
+        - deadlineTimezone
         - deadlineEndsAt
         - createdAt
       properties:
         code:
           description: Canonical upper-case code. `FUND` for the general fund.
           type: string
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
         kind: { $ref: '#/components/schemas/CaseKind' }
         status: { $ref: '#/components/schemas/PublicCaseStatus' }
+        acceptingDonations:
+          description: |
+            Whether a new gift can be reported for this case right now. Decided by the server;
+            clients must not work it out from `status` or `deadline`. Working rule, pending
+            owner confirmation: true when the status is `active` or `funded`, the
+            administrator has not paused gifts, and the deadline has not passed.
+          type: boolean
         category:
-          description: Always set for kind `case`. Always null for the fund.
+          description: |
+            Identifier of the case's category, to be looked up in `GET /site`. Always set for
+            kind `case`. Always null for the fund. Can name an inactive category.
           oneOf:
-            - $ref: '#/components/schemas/Category'
+            - $ref: '#/components/schemas/CategoryId'
             - type: 'null'
         featuredRank:
           description: Lower shows first. Null when not featured. Unique among public cases.
@@ -624,58 +807,82 @@ components:
         title:
           description: Localized.
           type: string
+        titleLanguage:
+          description: Language of `title` as returned.
+          $ref: '#/components/schemas/Locale'
         publicName:
           description: The name the person agreed to show. Never translated. Empty for the fund.
           type: string
         story:
           description: Localized plain text. Paragraphs are separated by a blank line.
           type: string
-        language:
-          description: Language of `title` and `story` as returned.
+        storyLanguage:
+          description: Language of `story` as returned.
           $ref: '#/components/schemas/Locale'
         photoUrl:
-          description: Main picture at display size. Same-origin path or absolute URL.
-          type: [string, 'null']
+          description: Main picture at display size.
+          oneOf:
+            - $ref: '#/components/schemas/MediaPath'
+            - type: 'null'
         photoThumbnailUrl:
           description: Main picture at card size.
-          type: [string, 'null']
+          oneOf:
+            - $ref: '#/components/schemas/MediaPath'
+            - type: 'null'
         photoAlt:
           description: Localized description of the main picture. Null when there is no picture.
           type: [string, 'null']
+        photoAltLanguage:
+          description: Language of `photoAlt` as returned. Null when `photoAlt` is null.
+          oneOf:
+            - $ref: '#/components/schemas/Locale'
+            - type: 'null'
         goal:
           description: Null for the fund and for cases with no goal. Never zero.
           oneOf:
-            - $ref: '#/components/schemas/PositiveCents'
+            - $ref: '#/components/schemas/MovementCents'
             - type: 'null'
         received:
           description: |
             Net funds allocated to this case: external donations plus transfers in minus
-            transfers out, each net of corrections. Equal to `financials.allocated`.
+            transfers out, each net of corrections. Equal to `financials.allocated`. Negative
+            only in an exceptional shortfall; show the real number and clamp the progress bar
+            at zero.
           $ref: '#/components/schemas/SignedCents'
         delivered:
           description: Net money handed over from this case.
           $ref: '#/components/schemas/Cents'
         deadline:
           description: |
-            Last calendar day of the appeal, inclusive, in the organization timezone.
-            Date only. Format it without any timezone conversion.
+            Last calendar day of the appeal, inclusive, in the zone named by
+            `deadlineTimezone`. Date only. Format it without any timezone conversion.
           type: [string, 'null']
           format: date
+        deadlineTimezone:
+          description: |
+            IANA zone in which `deadline` is a calendar day: the organization timezone at the
+            moment the deadline was set. It is stored with the case, so changing the
+            organization timezone later never moves an existing deadline. Null when `deadline`
+            is null.
+          type: [string, 'null']
         deadlineEndsAt:
           description: |
-            The first instant after the deadline day in the organization timezone (exclusive end).
-            Null when `deadline` is null.
-          type: [string, 'null']
-          format: date-time
+            The cutoff: the first instant of the day after `deadline` in `deadlineTimezone`
+            (exclusive end), computed with that zone's daylight saving rules and stored with
+            the case. The same instant for every visitor worldwide. Null when `deadline` is
+            null.
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
         createdAt:
           description: When the case was first published.
-          type: string
-          format: date-time
+          $ref: '#/components/schemas/Timestamp'
     CaseFinancials:
       description: |
         Breakdown of a case's money. `allocated = externalDonations + transfersIn - transfersOut`
         and `available = allocated - delivered` always hold.
       type: object
+      additionalProperties: false
       required: [externalDonations, transfersIn, transfersOut, allocated, delivered, available, hasShortfall]
       properties:
         externalDonations:
@@ -685,7 +892,9 @@ components:
           description: Money moved into this case from other cases or the fund, net of reversed transfers.
           $ref: '#/components/schemas/Cents'
         transfersOut:
-          description: Money moved out of this case, net of reversed transfers.
+          description: |
+            Money moved out of this case, net of reversed transfers. For the general fund this
+            is the net amount allocated to cases. It is not a delivery to a beneficiary.
           $ref: '#/components/schemas/Cents'
         allocated: { $ref: '#/components/schemas/SignedCents' }
         delivered: { $ref: '#/components/schemas/Cents' }
@@ -696,40 +905,60 @@ components:
     CasePhoto:
       description: An additional public picture of a case.
       type: object
-      required: [id, url, thumbnailUrl, alt, position]
+      additionalProperties: false
+      required: [id, url, thumbnailUrl, alt, altLanguage, position]
       properties:
         id: { type: string }
         url:
           description: Display size.
-          type: string
-        thumbnailUrl: { type: string }
+          $ref: '#/components/schemas/MediaPath'
+        thumbnailUrl: { $ref: '#/components/schemas/MediaPath' }
         alt:
           description: Localized description for screen readers.
           type: string
+        altLanguage:
+          description: Language of `alt` as returned.
+          $ref: '#/components/schemas/Locale'
         position:
           description: 1-based display order.
           type: integer
           minimum: 1
     CaseUpdate:
       type: object
-      required: [id, caseCode, text, language, photoUrl, date, author, authorAvatarUrl]
+      additionalProperties: false
+      required: [id, caseCode, text, textLanguage, photoUrl, photoAlt, photoAltLanguage, date, author, authorAvatarUrl]
       properties:
         id: { type: string }
         caseCode: { type: string }
         text:
-          description: Localized plain text.
+          description: Localized plain text. Can fall back to the other language.
           type: string
-        language: { $ref: '#/components/schemas/Locale' }
-        photoUrl: { type: [string, 'null'] }
-        date: { type: string, format: date-time }
+        textLanguage:
+          description: Language of `text` as returned.
+          $ref: '#/components/schemas/Locale'
+        photoUrl:
+          oneOf:
+            - $ref: '#/components/schemas/MediaPath'
+            - type: 'null'
+        photoAlt:
+          description: Localized description of the picture. Null when there is no picture.
+          type: [string, 'null']
+        photoAltLanguage:
+          oneOf:
+            - $ref: '#/components/schemas/Locale'
+            - type: 'null'
+        date: { $ref: '#/components/schemas/Timestamp' }
         author:
-          description: Display name of the administrator who posted it.
+          description: Display name of the administrator who posted it. Never translated.
           type: string
         authorAvatarUrl:
           description: Null unless the author allows public display of their picture.
-          type: [string, 'null']
+          oneOf:
+            - $ref: '#/components/schemas/MediaPath'
+            - type: 'null'
     PublicDonor:
       type: object
+      additionalProperties: false
       required: [id, name, amount, date, avatarUrl]
       properties:
         id:
@@ -739,27 +968,36 @@ components:
           description: Null for an anonymous donation.
           type: [string, 'null']
         amount:
-          description: Net confirmed amount of the donation.
-          $ref: '#/components/schemas/PositiveCents'
-        date: { type: string, format: date-time }
+          description: |
+            Net amount of the donation: the confirmed amount minus every refund and reversal
+            recorded against it. A donation whose net amount is zero is not listed.
+          $ref: '#/components/schemas/MovementCents'
+        date:
+          description: Date of the original donation. Later corrections do not change it.
+          $ref: '#/components/schemas/Timestamp'
         avatarUrl:
           description: |
             Null unless the donation is named and the donor has agreed to public display of their
             picture. Always null for an anonymous donation.
-          type: [string, 'null']
+          oneOf:
+            - $ref: '#/components/schemas/MediaPath'
+            - type: 'null'
     LedgerKind:
       description: |
-        | Kind | Effect |
-        |---|---|
-        | `donation` | allocated + |
-        | `donation_reversal` | allocated -, corrects a donation recorded in error |
-        | `refund` | allocated -, real money returned to a donor |
-        | `transfer_in` | allocated + |
-        | `transfer_out` | allocated - |
-        | `transfer_in_reversal` | allocated - |
-        | `transfer_out_reversal` | allocated + |
-        | `disbursement` | delivered + |
-        | `disbursement_reversal` | delivered - |
+        Four original kinds and five correction kinds. A correction always points at exactly
+        one original entry of the kind shown.
+
+        | Kind | Effect | Corrects |
+        |---|---|---|
+        | `donation` | allocated + | |
+        | `transfer_in` | allocated + | |
+        | `transfer_out` | allocated - | |
+        | `disbursement` | delivered + | |
+        | `donation_reversal` | allocated - | a `donation` recorded in error |
+        | `refund` | allocated - | a `donation` whose money went back to the donor |
+        | `transfer_in_reversal` | allocated - | a `transfer_in` |
+        | `transfer_out_reversal` | allocated + | a `transfer_out` |
+        | `disbursement_reversal` | delivered - | a `disbursement` |
       type: string
       enum:
         - donation
@@ -772,14 +1010,30 @@ components:
         - disbursement
         - disbursement_reversal
     LedgerEntry:
+      description: |
+        One movement of money on one case. See `contract/financial-terms.md` section 2 for the
+        correction rules.
       type: object
-      required: [id, kind, amount, allocatedDelta, deliveredDelta, date, label, reverses, reversedBy]
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - amount
+        - allocatedDelta
+        - deliveredDelta
+        - date
+        - label
+        - corrects
+        - correctedBy
+        - correctedAmount
+        - netAmount
+        - counterpartCaseCode
       properties:
         id: { type: string }
         kind: { $ref: '#/components/schemas/LedgerKind' }
         amount:
           description: Always positive. The direction is given by `kind` and by the two deltas.
-          $ref: '#/components/schemas/PositiveCents'
+          $ref: '#/components/schemas/MovementCents'
         allocatedDelta:
           description: Signed change to the case's `received`.
           $ref: '#/components/schemas/SignedCents'
@@ -788,19 +1042,40 @@ components:
           $ref: '#/components/schemas/SignedCents'
         date:
           description: When the movement took effect.
-          type: string
-          format: date-time
+          $ref: '#/components/schemas/Timestamp'
         label:
           description: Localized, ready to display. Never contains a donor name.
           type: string
-        reverses:
-          description: Identifier of the entry this one corrects.
+        corrects:
+          description: |
+            Identifier of the original entry this one corrects. Set on the five correction
+            kinds, null on the four original kinds. The original is always on the same case.
           type: [string, 'null']
-        reversedBy:
-          description: Identifier of the entry that corrected this one.
+        correctedBy:
+          description: |
+            Identifiers of every entry that corrects this one, oldest first. Empty when there
+            is none. Always empty on a correction entry, because a correction cannot itself be
+            corrected.
+          type: array
+          items: { type: string }
+        correctedAmount:
+          description: |
+            Sum of the amounts of the entries in `correctedBy`. Never more than `amount`. The
+            entry is partly corrected when this is between zero and `amount`, and fully
+            corrected when it equals `amount`.
+          $ref: '#/components/schemas/Cents'
+        netAmount:
+          description: '`amount` minus `correctedAmount`. What still stands of this movement.'
+          $ref: '#/components/schemas/Cents'
+        counterpartCaseCode:
+          description: |
+            On the four transfer kinds, the code of the case or fund at the other end. Null on
+            every other kind. The other end is always public, because no money can move to or
+            from a draft case.
           type: [string, 'null']
     HistoryCounts:
       type: object
+      additionalProperties: false
       required: [updates, donors, ledger, photos]
       properties:
         updates: { type: integer, minimum: 0 }
@@ -812,7 +1087,8 @@ components:
         photos: { type: integer, minimum: 0 }
     CaseDetail:
       type: object
-      required: [case, financials, photos, updates, donors, ledger, counts]
+      additionalProperties: false
+      required: [case, financials, photos, updates, donors, ledger, counts, asOf]
       properties:
         case: { $ref: '#/components/schemas/Case' }
         financials: { $ref: '#/components/schemas/CaseFinancials' }
@@ -837,50 +1113,71 @@ components:
           maxItems: 10
           items: { $ref: '#/components/schemas/LedgerEntry' }
         counts: { $ref: '#/components/schemas/HistoryCounts' }
-    PageMeta:
-      type: object
-      required: [page, pageSize, totalItems, totalPages]
-      properties:
-        page: { type: integer, minimum: 1 }
-        pageSize: { type: integer, minimum: 1, maximum: 48 }
-        totalItems: { type: integer, minimum: 0 }
-        totalPages:
-          description: At least 1, also when there are no items.
-          type: integer
-          minimum: 1
+        asOf:
+          description: The instant of the snapshot this whole response was computed from.
+          $ref: '#/components/schemas/Timestamp'
     CasePage:
-      allOf:
-        - $ref: '#/components/schemas/PageMeta'
-        - type: object
-          required: [items]
-          properties:
-            items:
-              type: array
-              items: { $ref: '#/components/schemas/Case' }
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Case' }
+        page: { $ref: '#/components/schemas/PageNumber' }
+        pageSize: { $ref: '#/components/schemas/PageSizeValue' }
+        totalItems: { $ref: '#/components/schemas/TotalItems' }
+        totalPages: { $ref: '#/components/schemas/TotalPages' }
     CaseUpdatePage:
-      allOf:
-        - $ref: '#/components/schemas/PageMeta'
-        - type: object
-          required: [items]
-          properties:
-            items:
-              type: array
-              items: { $ref: '#/components/schemas/CaseUpdate' }
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CaseUpdate' }
+        page: { $ref: '#/components/schemas/PageNumber' }
+        pageSize: { $ref: '#/components/schemas/PageSizeValue' }
+        totalItems: { $ref: '#/components/schemas/TotalItems' }
+        totalPages: { $ref: '#/components/schemas/TotalPages' }
     PublicDonorPage:
-      allOf:
-        - $ref: '#/components/schemas/PageMeta'
-        - type: object
-          required: [items]
-          properties:
-            items:
-              type: array
-              items: { $ref: '#/components/schemas/PublicDonor' }
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PublicDonor' }
+        page: { $ref: '#/components/schemas/PageNumber' }
+        pageSize: { $ref: '#/components/schemas/PageSizeValue' }
+        totalItems: { $ref: '#/components/schemas/TotalItems' }
+        totalPages: { $ref: '#/components/schemas/TotalPages' }
     LedgerEntryPage:
-      allOf:
-        - $ref: '#/components/schemas/PageMeta'
-        - type: object
-          required: [items]
-          properties:
-            items:
-              type: array
-              items: { $ref: '#/components/schemas/LedgerEntry' }
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LedgerEntry' }
+        page: { $ref: '#/components/schemas/PageNumber' }
+        pageSize: { $ref: '#/components/schemas/PageSizeValue' }
+        totalItems: { $ref: '#/components/schemas/TotalItems' }
+        totalPages: { $ref: '#/components/schemas/TotalPages' }
+    PageNumber:
+      description: The 1-based page that was returned.
+      type: integer
+      minimum: 1
+    PageSizeValue:
+      description: The page size that was applied.
+      type: integer
+      minimum: 1
+      maximum: 48
+    TotalItems:
+      description: Number of items over all pages.
+      type: integer
+      minimum: 0
+    TotalPages:
+      description: At least 1, also when there are no items.
+      type: integer
+      minimum: 1
