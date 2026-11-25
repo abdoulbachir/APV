@@ -9,6 +9,10 @@ const channelName='apv-session-events-v1';
 const changeSignal='session-changed';
 type SessionContextValue={
  store:SessionStore;
+ client:IdentityClient;
+ announce:()=>void;
+ notice:string|null;
+ setNotice:(notice:string|null)=>void;
  snapshot:SessionSnapshot;
  // Call at a confirmed or uncertain session-changing outcome. No data is sent
  // to other tabs; each tab independently reads the server's /me.
@@ -20,7 +24,9 @@ export function SessionProvider({children,client}:{children:ReactNode;client?:Id
  const {locale}=useI18n();
  const localeRef=useRef(locale);
  localeRef.current=locale;
- const [store]=useState(()=>createSessionStore(client??createIdentityClient()));
+ const [transport]=useState(()=>client??createIdentityClient());
+ const [store]=useState(()=>createSessionStore(transport));
+ const [notice,setNotice]=useState<string|null>(null);
  const snapshot=useSyncExternalStore(store.subscribe,store.getSnapshot,store.getSnapshot);
  const channel=useRef<BroadcastChannel|null>(null);
  const suspend=useCallback(()=>{
@@ -29,12 +35,13 @@ export function SessionProvider({children,client}:{children:ReactNode;client?:Id
   document.documentElement.dataset.identitySuspended='true';
   store.suspend();
  },[store]);
- const refresh=useCallback(async(announce=false)=>{
+ const announce=useCallback(()=>{channel.current?.postMessage(changeSignal);},[]);
+ const refresh=useCallback(async(notify=false)=>{
   document.documentElement.dataset.identitySuspended='true';
-  if(announce)channel.current?.postMessage(changeSignal);
+  if(notify)announce();
   if(document.visibilityState==='hidden'){store.suspend();return;}
   await store.refresh(localeRef.current);
- },[store]);
+ },[store,announce]);
 
  useEffect(()=>{
   try {
@@ -67,7 +74,7 @@ export function SessionProvider({children,client}:{children:ReactNode;client?:Id
   if(document.visibilityState!=='hidden' && snapshot.reading.status!=='checking')
    delete document.documentElement.dataset.identitySuspended;
  },[snapshot]);
- const value=useMemo(()=>({store,snapshot,refresh}),[store,snapshot,refresh]);
+ const value=useMemo(()=>({store,client:transport,snapshot,refresh,announce,notice,setNotice}),[store,transport,snapshot,refresh,announce,notice]);
  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

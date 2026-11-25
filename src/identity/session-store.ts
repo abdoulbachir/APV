@@ -26,11 +26,15 @@ function sameAuthority(left:IdentitySession,right:IdentitySession):boolean {
 export function createSessionStore(client:IdentityClient) {
  let snapshot:SessionSnapshot={generation:0,reading:{status:'checking'}};
  const listeners=new Set<()=>void>();
+ let prepared:FormLease|undefined;
+ let preparing:{generation:number;promise:Promise<FormLease>}|undefined;
  function publish(reading:SessionSnapshot['reading'],generation=snapshot.generation) {
   snapshot={generation,reading};
   for(const listener of listeners)listener();
  }
  function suspend() {
+  prepared=undefined;
+  preparing=undefined;
   publish({status:'checking'},snapshot.generation+1);
   return snapshot.generation;
  }
@@ -46,7 +50,19 @@ export function createSessionStore(client:IdentityClient) {
    if(generation===snapshot.generation)publish({status:'unavailable',error:asError(error)},generation);
   }
  }
- async function prepare(locale:Locale):Promise<FormLease> {
+ function prepare(locale:Locale):Promise<FormLease> {
+  const generation=snapshot.generation;
+  if(prepared && isCurrent(prepared.generation)) {
+   const lease=prepared; prepared=undefined; return Promise.resolve(lease);
+  }
+  if(preparing?.generation===generation)return preparing.promise;
+  const promise=prepareNew(locale);
+  preparing={generation,promise};
+  const clear=()=>{if(preparing?.promise===promise)preparing=undefined;};
+  void promise.then(clear,clear);
+  return promise;
+ }
+ async function prepareNew(locale:Locale):Promise<FormLease> {
   // Only call before exposing editable secret fields, never as a submission
   // fallback. A pending state has no account ID and is not proof of identity.
   const {generation,reading}=snapshot;
@@ -66,10 +82,21 @@ export function createSessionStore(client:IdentityClient) {
   publish(form.session,generation);
   return {...form,generation};
  }
+ // Reconciliation has already read /me. Publish exactly that result instead of
+ // sending a duplicate request. A newly issued CSRF token can seed the next
+ // screen's empty form once; never carry any submitted body across generations.
+ function reconcile(generation:number,reading:SessionReading,form?:PreparedIdentityForm) {
+  if(!isCurrent(generation))return false;
+  prepared=undefined;preparing=undefined;
+  const next=generation+1;
+  if(form && reading.status!=='unavailable')prepared={...form,generation:next};
+  publish(reading,next);
+  return true;
+ }
  return {
   subscribe(listener:()=>void){listeners.add(listener);return ()=>{listeners.delete(listener);};},
   getSnapshot:()=>snapshot,
-  suspend,refresh,prepare,isCurrent,
+  suspend,refresh,prepare,isCurrent,reconcile,
  };
 }
 export type SessionStore=ReturnType<typeof createSessionStore>;
