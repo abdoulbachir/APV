@@ -1,0 +1,23 @@
+[
+  {"name": "sign-up choosing a role", "operationId": "register", "patch": [{"op": "add", "path": "/role", "value": "super_admin"}]},
+  {"name": "sign-up choosing permissions", "operationId": "register", "patch": [{"op": "add", "path": "/permissions", "value": ["staff.manage"]}]},
+  {"name": "sign-up claiming a verified address", "operationId": "register", "patch": [{"op": "add", "path": "/emailVerified", "value": true}]},
+  {"name": "sign-up asking for the disbursement permission", "operationId": "register", "patch": [{"op": "add", "path": "/canDisburse", "value": true}]},
+  {"name": "sign-up choosing its own identifier", "operationId": "register", "patch": [{"op": "add", "path": "/id", "value": "acc_7Yk2mQ9xT1bLw4RmN8cYp3"}]},
+  {"name": "password of 14 characters", "operationId": "register", "patch": [{"op": "replace", "path": "/password", "value": "fourteen chars"}]},
+  {"name": "password of 129 characters", "operationId": "register", "patch": [{"op": "replace", "path": "/password", "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]},
+  {"name": "sign-up without a display name", "operationId": "register", "patch": [{"op": "remove", "path": "/displayName"}]},
+  {"name": "address without a domain", "operationId": "register", "patch": [{"op": "replace", "path": "/email", "value": "sample.donor"}]},
+  {"name": "address with a display name", "operationId": "register", "patch": [{"op": "replace", "path": "/email", "value": "Sample <sample.donor@example.org>"}]},
+  {"name": "address with a line break", "operationId": "login", "patch": [{"op": "replace", "path": "/email", "value": "sample.donor@example.org\nbcc: x@example.org"}]},
+  {"name": "sign-in with a remember-me flag", "operationId": "login", "patch": [{"op": "add", "path": "/rememberMe", "value": true}]},
+  {"name": "password as a number", "operationId": "login", "patch": [{"op": "replace", "path": "/password", "value": 123456789012345}]},
+  {"name": "password change without the current password", "operationId": "changePassword", "patch": [{"op": "remove", "path": "/currentPassword"}]},
+  {"name": "password change naming another account", "operationId": "changePassword", "patch": [{"op": "add", "path": "/accountId", "value": "acc_2Bd5fH8jK1mN4pQ7sT0vW3"}]},
+  {"name": "one-time credential that is too short", "operationId": "setPasswordWithCredential", "patch": [{"op": "replace", "path": "/credential", "value": "short"}]},
+  {"name": "one-time credential used to set a role", "operationId": "setPasswordWithCredential", "patch": [{"op": "add", "path": "/role", "value": "admin"}]},
+  {"name": "second-factor method that does not exist", "operationId": "verifyMfa", "patch": [{"op": "replace", "path": "/method", "value": "sms"}]},
+  {"name": "second factor skipped by a flag", "operationId": "verifyMfa", "patch": [{"op": "add", "path": "/trustThisDevice", "value": true}]},
+  {"name": "confirmation code with letters", "operationId": "confirmMfaEnrollment", "patch": [{"op": "replace", "path": "/code", "value": "12a456"}]},
+  {"name": "new recovery codes without the password", "operationId": "regenerateRecoveryCodes", "patch": [{"op": "remove", "path": "/currentPassword"}]}
+]

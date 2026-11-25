@@ -7,8 +7,11 @@
 | `openapi.yaml` | The contract. OpenAPI 3.1. |
 | `financial-terms.md` | Exact meaning of every money field, and the ledger rules. |
 | `media-and-privacy.md` | Picture addresses, caching, consent withdrawal, public-only responses. |
+| `identity-and-security.md` | Roles and permissions, accounts, passwords, sessions, second factor, CSRF, rate limits, audit. |
 | `fixtures/` | The shared bilingual test dataset: format, example, expected values, public projection. |
 | `tools/`, `tests/` | The validation scripts and the deliberately wrong inputs they must reject. |
+| `tests/security-acceptance.md` | The security tests milestone 1B must pass. |
+| `M1A-review.md` | Review status and decisions for the identity contract (version 0.3.0). |
 | `M0A-review.md` | Review status, decisions and the acceptance checklist for this version. |
 
 ## Validate everything
@@ -45,9 +48,9 @@ What it checks:
 
 `tools/lib.mjs` contains a small reference implementation of the read rules (totals, corrections, donor list, search, sorting, paging). It exists so examples and expected values are computed, not checked by eye. It is not production code, and the frontend mock and the backend are free to implement the rules their own way; the fixtures and golden results are what binds them.
 
-## Scope of version 0.2.0
+## Scope of version 0.3.0
 
-Public read endpoints only:
+Public read endpoints, unchanged since 0.2.0:
 
 - `GET /api/site`
 - `GET /api/stats`
@@ -57,7 +60,11 @@ Public read endpoints only:
 - `GET /api/cases/{code}/donors`
 - `GET /api/cases/{code}/ledger`
 
-Authentication, donation reporting, uploads, profiles, category management and administration are added by later contract pull requests.
+Identity endpoints, added in 0.3.0 and not implemented yet: `GET /api/auth/csrf`, `POST /api/auth/register`, `/login`, `/logout`, `/change-password`, `/set-password`, four under `/api/auth/mfa/`, and `GET /api/me`. Their rules are in `identity-and-security.md`.
+
+Every schema declares an `x-audience` (`public`, `shared`, `account`, `request` or `credential`), and `npm run validate` fails if private data could reach a public response.
+
+Donation reporting, uploads, profiles, category management and administration are added by later contract pull requests.
 
 ## Categories are data
 

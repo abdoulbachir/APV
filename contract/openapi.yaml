@@ -1,18 +1,22 @@
 openapi: 3.1.0
 info:
   title: APV-GAKASINAY API
-  version: 0.2.0
-  summary: Public read endpoints (milestone 0).
+  version: 0.3.0
+  summary: Public read endpoints (milestone 0) and identity (milestone 1).
   description: |
     Single source of truth for the API between the APV-GAKASINAY frontend and backend.
 
-    Every endpoint in this version is public and needs no authentication, which is what the
-    empty root `security` list states. Later versions declare a session scheme and set it on
-    each protected operation.
+    Two groups of endpoints:
 
-    This version covers the public read endpoints only. Write endpoints, authentication,
-    administration, uploads and profiles are added in later milestones through their own
-    contract pull requests.
+    - **Public read** (tags Site, Cases, Case history). No authentication, which is what the
+      empty root `security` list states. Unchanged from version 0.2.0.
+    - **Identity** (tags Authentication, Account). Sign-up, sign-in, the signed-in person's own
+      account, and the second factor for staff. Operations that need a signed-in session say
+      so with the `sessionCookie` security requirement.
+
+    Donation reporting, administration, uploads and profile editing are added in later
+    milestones through their own contract pull requests. The security rules behind the
+    identity endpoints are in `contract/identity-and-security.md`.
 
     ## Conventions
 
@@ -42,6 +46,27 @@ info:
       `contract/media-and-privacy.md`.
     - **Consistent reads.** Each response is computed from one database snapshot, so the
       totals, breakdown, previews and counts inside one response always agree with each other.
+    - **Sessions.** Authentication is a server-side session named by a cookie the browser
+      sends by itself. There is no token for the frontend to store. The cookie is `HttpOnly`,
+      so scripts cannot read it.
+    - **CSRF.** Every request that is not `GET` needs the header `X-XSRF-TOKEN`, whose value
+      comes from `GET /auth/csrf`. This includes sign-up and sign-in. Fetch a new token after
+      any response that changes the session: sign-in, second-factor verification, sign-out,
+      and after any 403 `csrf_invalid`.
+    - **Request bodies.** JSON only, `Content-Type: application/json`, at most 16 KiB. A body
+      with a property that is not in the schema is refused with field code `unknown_field`;
+      it is never silently ignored.
+    - **Caching.** Public read responses are `Cache-Control: no-cache` with an `ETag` and never
+      depend on who is asking. Every identity response is `Cache-Control: no-store` and has no
+      `ETag`.
+    - **401 and 403.** A request that needs a session and has none gets 401, never a redirect
+      and never HTML. A signed-in request that is not permitted gets 403. A known path with
+      an unsupported method gets 405 with an `Allow` header. An unknown path gets 404.
+    - **Audiences.** Every schema declares `x-audience`. `public` and `shared` schemas may
+      appear in public read responses. `account` schemas hold the signed-in person's own data.
+      `request` schemas are sent by the client and never returned. `credential` schemas carry
+      a one-time secret and are returned only by the operations named for it.
+      `npm run validate` enforces these boundaries.
     - **Ordering of text.** Case codes and identifiers contain ASCII characters only. Wherever
       this contract orders by `code` or `id`, strings are compared character by character
       with no locale rules (PostgreSQL `COLLATE "C"`, JavaScript `<`, never `localeCompare`).
@@ -54,6 +79,10 @@ servers:
     description: Same origin as the frontend.
 security: []
 tags:
+  - name: Authentication
+    description: Sign-up, sign-in, sign-out, CSRF token, second factor and one-time credentials.
+  - name: Account
+    description: The signed-in person's own account.
   - name: Site
     description: Settings and platform-wide totals.
   - name: Cases
@@ -95,6 +124,7 @@ paths:
                   - { id: transport, labels: { en: Transport, fr: Transport }, position: 8, active: false }
                 fundCode: FUND
                 pagination: { defaultPageSize: 12, maxPageSize: 48 }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -117,6 +147,7 @@ paths:
                 available: 47500
                 peopleHelped: 2
                 asOf: '2026-11-24T12:00:00Z'
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -251,6 +282,7 @@ paths:
                 totalItems: 2
                 totalPages: 2
         '400': { $ref: '#/components/responses/ValidationError' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -345,6 +377,7 @@ paths:
                 counts: { updates: 1, donors: 2, ledger: 8, photos: 1 }
                 asOf: '2026-11-24T12:00:00Z'
         '404': { $ref: '#/components/responses/CaseNotFound' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -386,6 +419,7 @@ paths:
                 totalPages: 1
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/CaseNotFound' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -419,6 +453,7 @@ paths:
                 totalPages: 1
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/CaseNotFound' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -476,11 +511,485 @@ paths:
                 totalPages: 4
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/CaseNotFound' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/csrf:
+    get:
+      tags: [Authentication]
+      operationId: getCsrfToken
+      summary: Obtain the CSRF token to send with every request that is not GET.
+      description: |
+        Returns the token and sets the matching cookie. Send the token in the header named by
+        `headerName` on every `POST`. Works with or without a session.
+
+        The token stops being valid whenever the session changes. Call this again after
+        sign-in, after second-factor verification, after sign-out, and after any 403
+        `csrf_invalid`; then repeat the refused request once.
+      x-returns-credential: true
+      responses:
+        '200':
+          description: The token. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsrfToken' }
+              example:
+                headerName: X-XSRF-TOKEN
+                token: 5pZbJ3mQ0cR8sT1uV4wX7yZ9aB2dE6fG
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/register:
+    post:
+      tags: [Authentication]
+      operationId: register
+      summary: Create an ordinary donor account.
+      description: |
+        Always creates a donor. The request has no role or permission property, and sending
+        one is refused as an unknown field.
+
+        The answer is the same whether or not the address was already registered, and takes
+        the same time: 202 with no account data. No session is created. The person then
+        signs in. If an account already existed, it is untouched and its password is not
+        changed.
+
+        The email address is not verified in this milestone, because the site does not send
+        email yet. `emailVerified` stays false.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            example:
+              email: sample.donor@example.org
+              password: correct horse battery staple 42
+              displayName: Sample Donor
+              locale: en
+      responses:
+        '202':
+          description: The request was accepted. Says nothing about whether an account was created.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegistrationAccepted' }
+              example:
+                status: accepted
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Sign in with email and password.
+      description: |
+        A wrong password, an unknown address and a disabled account all give the same 401
+        `invalid_credentials`, after the same amount of work.
+
+        On success the session identifier is replaced, so an identifier known before sign-in
+        is worthless afterwards. `status` says what the session can do:
+
+        - `authenticated`: signed in. `account` is present.
+        - `mfa_required`: the password was right, and this account must now prove its second
+          factor with `POST /auth/mfa/verify`. The session has no permission until then.
+        - `mfa_enrollment_required`: a staff account that has not set up its second factor.
+          It must do so with `POST /auth/mfa/enroll` and `POST /auth/mfa/confirm`. The session
+          has no permission until then.
+
+        Fetch a new CSRF token after this call.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              email: sample.donor@example.org
+              password: correct horse battery staple 42
+      responses:
+        '200':
+          description: The password was correct.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+              example:
+                status: authenticated
+                account:
+                  id: acc_7Yk2mQ9xT1bLw4RmN8cYp3
+                  email: sample.donor@example.org
+                  emailVerified: false
+                  displayName: Sample Donor
+                  role: donor
+                  permissions: [account.read_own, account.change_password]
+                  mfa: { required: false, enrolled: false, recoveryCodesRemaining: null }
+                  locale: en
+                  createdAt: '2026-11-24T12:00:00Z'
+                  session: { idleExpiresAt: '2026-11-24T14:00:00Z', absoluteExpiresAt: '2026-11-25T12:00:00Z' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: End the current session.
+      description: |
+        Deletes the session on the server and clears the cookie. Succeeds also when there was
+        no session, so it can always be called. Fetch a new CSRF token afterwards.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: Signed out.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/change-password:
+    post:
+      tags: [Authentication]
+      operationId: changePassword
+      summary: Change the signed-in person's own password.
+      description: |
+        Needs the current password. On success every other session of the account is ended,
+        and the identifier of this session is replaced. A wrong current password is 401
+        `invalid_credentials` and counts toward the sign-in rate limit.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+            example:
+              currentPassword: correct horse battery staple 42
+              newPassword: an even longer passphrase for 2027
+      responses:
+        '204':
+          description: The password was changed.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/set-password:
+    post:
+      tags: [Authentication]
+      operationId: setPasswordWithCredential
+      summary: Set a password with a one-time credential (staff activation or password reset).
+      description: |
+        The credential is issued by the operator, expires quickly and works once. It only lets
+        its holder choose a password: it does not sign anyone in, and it never replaces the
+        second factor. After success every session of the account is ended and the person
+        signs in normally.
+
+        A wrong, expired or already used credential gives the same 400 `credential_invalid`.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetPasswordRequest' }
+            example:
+              credential: q3Zr8vT1nK5xW0bM7cJ2fH9dL4sP6gY1aE8uR3tV0oI
+              newPassword: an even longer passphrase for 2027
+      responses:
+        '204':
+          description: The password was set. Sign in next.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/mfa/verify:
+    post:
+      tags: [Authentication]
+      operationId: verifyMfa
+      summary: Complete sign-in with the second factor.
+      description: |
+        Only for a session whose sign-in answered `mfa_required`. Accepts a six-digit code from
+        the authenticator application, or one recovery code. A code works once. After five
+        wrong codes the pending sign-in is cancelled and the person starts again with the
+        password.
+
+        On success the session identifier is replaced again and the session becomes
+        `authenticated`. Fetch a new CSRF token afterwards.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaVerifyRequest' }
+            example:
+              method: totp
+              code: '492039'
+      responses:
+        '200':
+          description: The second factor was accepted.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+              example:
+                status: authenticated
+                account:
+                  id: acc_2Bd5fH8jK1mN4pQ7sT0vW3
+                  email: sample.admin@example.org
+                  emailVerified: false
+                  displayName: Sample Admin
+                  role: admin
+                  permissions: [account.read_own, account.change_password]
+                  mfa: { required: true, enrolled: true, recoveryCodesRemaining: 9 }
+                  locale: fr
+                  createdAt: '2026-11-24T12:00:00Z'
+                  session: { idleExpiresAt: '2026-11-24T12:30:00Z', absoluteExpiresAt: '2026-11-25T00:00:00Z' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/MfaCodeInvalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/mfa/enroll:
+    post:
+      tags: [Authentication]
+      operationId: beginMfaEnrollment
+      summary: Start setting up the authenticator application.
+      description: |
+        Only for a session whose sign-in answered `mfa_enrollment_required`. Returns the secret
+        to add to an authenticator application, once. Calling it again replaces the pending
+        secret. Nothing is active until `POST /auth/mfa/confirm` succeeds.
+      x-returns-credential: true
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: The pending secret. Shown once, never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollment' }
+              example:
+                secret: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+                otpauthUri: otpauth://totp/APV-GAKASINAY:sample.admin%40example.org?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=APV-GAKASINAY&algorithm=SHA1&digits=6&period=30
+                expiresAt: '2026-11-24T12:10:00Z'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/mfa/confirm:
+    post:
+      tags: [Authentication]
+      operationId: confirmMfaEnrollment
+      summary: Finish setting up the authenticator application.
+      description: |
+        Proves the authenticator application works by sending one code from it. On success the
+        second factor is active, the session becomes `authenticated` with a new identifier,
+        and ten recovery codes are returned, once. Read `GET /me` next, and fetch a new CSRF
+        token.
+      x-returns-credential: true
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaConfirmRequest' }
+            example:
+              code: '492039'
+      responses:
+        '200':
+          description: The second factor is active. The recovery codes are shown once.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+              example:
+                codes:
+                  - ABCD-EFGH-JKLM-NPQR
+                  - STUV-WXYZ-2345-67AB
+                  - CDEF-GHJK-LMNP-QRST
+                  - UVWX-YZ23-4567-ABCD
+                  - EFGH-JKLM-NPQR-STUV
+                  - WXYZ-2345-67AB-CDEF
+                  - GHJK-LMNP-QRST-UVWX
+                  - YZ23-4567-ABCD-EFGH
+                  - JKLM-NPQR-STUV-WXYZ
+                  - 2345-67AB-CDEF-GHJK
+                generatedAt: '2026-11-24T12:05:00Z'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/MfaCodeInvalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /auth/mfa/recovery-codes:
+    post:
+      tags: [Authentication]
+      operationId: regenerateRecoveryCodes
+      summary: Replace all recovery codes.
+      description: |
+        For a fully signed-in staff account. Needs the current password and a fresh code from
+        the authenticator application, even though the session is already signed in. Every old
+        recovery code stops working. A recovery code cannot be used to obtain new ones.
+      x-returns-credential: true
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecoveryCodesRequest' }
+            example:
+              currentPassword: correct horse battery staple 42
+              code: '492039'
+      responses:
+        '200':
+          description: Ten new recovery codes, shown once.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodes' }
+              example:
+                codes:
+                  - ABCD-EFGH-JKLM-NPQR
+                  - STUV-WXYZ-2345-67AB
+                  - CDEF-GHJK-LMNP-QRST
+                  - UVWX-YZ23-4567-ABCD
+                  - EFGH-JKLM-NPQR-STUV
+                  - WXYZ-2345-67AB-CDEF
+                  - GHJK-LMNP-QRST-UVWX
+                  - YZ23-4567-ABCD-EFGH
+                  - JKLM-NPQR-STUV-WXYZ
+                  - 2345-67AB-CDEF-GHJK
+                generatedAt: '2026-11-24T12:05:00Z'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /me:
+    get:
+      tags: [Account]
+      operationId: getMyAccount
+      summary: The signed-in person's own account.
+      description: |
+        The frontend calls this when it loads, to learn whether someone is signed in. The 401
+        code says which state the browser is in:
+
+        - `unauthenticated`: nobody is signed in.
+        - `mfa_required`: the password was accepted and the second factor is still owed.
+        - `mfa_enrollment_required`: a staff account must set up its second factor first.
+
+        `permissions` is what the server will allow this account to do. Use it to decide what
+        to show. It is not a security boundary: the server checks every request itself.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The account. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+              example:
+                id: acc_7Yk2mQ9xT1bLw4RmN8cYp3
+                email: sample.donor@example.org
+                emailVerified: false
+                displayName: Sample Donor
+                role: donor
+                permissions: [account.read_own, account.change_password]
+                mfa: { required: false, enrolled: false, recoveryCodesRemaining: null }
+                locale: en
+                createdAt: '2026-11-24T12:00:00Z'
+                session: { idleExpiresAt: '2026-11-24T14:00:00Z', absoluteExpiresAt: '2026-11-25T12:00:00Z' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-apv_session
+      description: |
+        The server-side session. Set by `POST /auth/login`. `HttpOnly`, `Secure`,
+        `SameSite=Lax`, `Path=/`, no `Domain`. On a developer's machine over plain HTTP the
+        cookie is named `apv_session` and is not `Secure`; that form is refused outside the
+        development profile.
   parameters:
+    CsrfHeader:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: The token from `GET /auth/csrf`. Required on every request that is not `GET`.
+      schema: { type: string, minLength: 16, maxLength: 512 }
+      example: 5pZbJ3mQ0cR8sT1uV4wX7yZ9aB2dE6fG
     AcceptLanguage:
       name: Accept-Language
       in: header
@@ -521,6 +1030,12 @@ components:
       in: query
       schema: { type: integer, minimum: 1, maximum: 48, default: 12 }
   headers:
+    NoStore:
+      description: Always `no-store`. The response must not be kept by any cache, and has no `ETag`.
+      schema: { type: string, const: no-store }
+    Allow:
+      description: The methods this path supports.
+      schema: { type: string }
     ContentLanguage:
       description: The language chosen for the response, `en` or `fr`.
       schema: { $ref: '#/components/schemas/Locale' }
@@ -531,6 +1046,73 @@ components:
       description: Seconds to wait before retrying.
       schema: { type: integer, minimum: 1 }
   responses:
+    Unauthenticated:
+      description: |
+        No fully signed-in session. The code is `unauthenticated`, `mfa_required` or
+        `mfa_enrollment_required`. On `POST /auth/change-password` and
+        `POST /auth/mfa/recovery-codes` it can also be `invalid_credentials` or
+        `mfa_code_invalid`, when the password or code sent to confirm the action is wrong.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: unauthenticated, message: Sign-in required, requestId: 5f0c1c9e2b7a4d1f }
+    InvalidCredentials:
+      description: The address and password do not match an account that can sign in. Deliberately says no more.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: invalid_credentials, message: Invalid credentials, requestId: 5f0c1c9e2b7a4d1f }
+    MfaCodeInvalid:
+      description: |
+        The code is wrong, expired or already used: `mfa_code_invalid`. Also `unauthenticated`
+        when the session is not waiting for a second factor.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: mfa_code_invalid, message: Invalid code, requestId: 5f0c1c9e2b7a4d1f }
+    Forbidden:
+      description: |
+        `csrf_invalid` when the CSRF header is missing or does not match: fetch a new token and
+        repeat once. `forbidden` when the signed-in account is not allowed to do this.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: csrf_invalid, message: Missing or invalid CSRF token, requestId: 5f0c1c9e2b7a4d1f }
+    MethodNotAllowed:
+      description: The path exists and does not support this method.
+      headers:
+        Allow: { $ref: '#/components/headers/Allow' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: method_not_allowed, message: Method not allowed, requestId: 5f0c1c9e2b7a4d1f }
+    UnsupportedMediaType:
+      description: The request body is not `application/json`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: unsupported_media_type, message: Content-Type must be application/json, requestId: 5f0c1c9e2b7a4d1f }
+    PayloadTooLarge:
+      description: The request body is larger than 16 KiB.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: payload_too_large, message: Request body too large, requestId: 5f0c1c9e2b7a4d1f }
     ValidationError:
       description: A query parameter is invalid.
       content:
@@ -574,6 +1156,7 @@ components:
             error: { code: unavailable, message: Service unavailable, requestId: 5f0c1c9e2b7a4d1f }
   schemas:
     MovementCents:
+      x-audience: shared
       description: |
         The amount of one movement, or a goal, in integer US cents. Strictly positive and at
         most 10,000,000,000 (one hundred million dollars).
@@ -582,6 +1165,7 @@ components:
       minimum: 1
       maximum: 10000000000
     Cents:
+      x-audience: shared
       description: |
         A non-negative total in integer US cents. At most 1,000,000,000,000,000, which the
         server guarantees by capping the sum of all movement amounts on the platform.
@@ -590,6 +1174,7 @@ components:
       minimum: 0
       maximum: 1000000000000000
     SignedCents:
+      x-audience: shared
       description: |
         A total or a change in integer US cents that can be negative. Negative totals appear
         only in the exceptional shortfall situation described in `contract/financial-terms.md`.
@@ -598,20 +1183,24 @@ components:
       minimum: -1000000000000000
       maximum: 1000000000000000
     Timestamp:
+      x-audience: shared
       description: RFC 3339 instant in UTC, whole seconds, `Z` suffix.
       type: string
       format: date-time
       pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
     Locale:
+      x-audience: shared
       type: string
       enum: [en, fr]
     MediaPath:
+      x-audience: shared
       description: |
         Same-origin path of a public picture. Never an absolute URL. The second segment is a
         random token that cannot be guessed; the last is the size variant.
       type: string
       pattern: '^/media/public/[A-Za-z0-9_-]{22,64}/[a-z0-9-]{1,32}\.(webp|jpg|png|avif)$'
     CategoryId:
+      x-audience: public
       description: |
         Stable identifier of a category. Chosen when the category is created, never changed
         and never reused. The list of categories is data, not part of this contract: read it
@@ -619,6 +1208,7 @@ components:
       type: string
       pattern: '^[a-z][a-z0-9-]{1,31}$'
     Category:
+      x-audience: public
       description: |
         A category managed by the super administrator. New categories appear here without any
         change to the application. The frontend keeps its own look for the six initial
@@ -648,9 +1238,11 @@ components:
             administrators cannot choose it for a case.
           type: boolean
     CaseKind:
+      x-audience: public
       type: string
       enum: [case, fund]
     PublicCaseStatus:
+      x-audience: public
       description: |
         Public statuses. `draft` exists only in administration schemas.
 
@@ -664,12 +1256,31 @@ components:
       type: string
       enum: [active, funded, delivered, closed]
     ErrorCode:
+      x-audience: shared
       description: |
         Codes used by the endpoints in this version. Later milestones add codes; clients must
         treat an unknown code as a generic failure for its HTTP status.
       type: string
-      enum: [validation_error, case_not_found, not_found, rate_limited, internal_error, unavailable]
+      enum:
+        - validation_error
+        - case_not_found
+        - not_found
+        - rate_limited
+        - internal_error
+        - unavailable
+        - unauthenticated
+        - mfa_required
+        - mfa_enrollment_required
+        - invalid_credentials
+        - mfa_code_invalid
+        - credential_invalid
+        - forbidden
+        - csrf_invalid
+        - method_not_allowed
+        - unsupported_media_type
+        - payload_too_large
     Error:
+      x-audience: shared
       type: object
       required: [error]
       additionalProperties: false
@@ -694,11 +1305,12 @@ components:
                   name: { type: string }
                   code:
                     type: string
-                    enum: [required, invalid_type, invalid_value, out_of_range, too_long]
+                    enum: [required, invalid_type, invalid_value, out_of_range, too_long, too_short, invalid_format, unknown_field, compromised, same_as_current]
             requestId:
               description: Identifier to quote when reporting a problem.
               type: string
     Site:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [timezone, currency, locales, defaultLocale, categories, fundCode, pagination]
@@ -727,6 +1339,7 @@ components:
             defaultPageSize: { type: integer }
             maxPageSize: { type: integer }
     Stats:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [received, delivered, available, peopleHelped, asOf]
@@ -753,6 +1366,7 @@ components:
           description: The instant of the snapshot these totals were computed from.
           $ref: '#/components/schemas/Timestamp'
     Case:
+      x-audience: public
       description: Public view of a case or of the general fund.
       type: object
       additionalProperties: false
@@ -878,6 +1492,7 @@ components:
           description: When the case was first published.
           $ref: '#/components/schemas/Timestamp'
     CaseFinancials:
+      x-audience: public
       description: |
         Breakdown of a case's money. `allocated = externalDonations + transfersIn - transfersOut`
         and `available = allocated - delivered` always hold.
@@ -903,6 +1518,7 @@ components:
           description: True when `available` is negative.
           type: boolean
     CasePhoto:
+      x-audience: public
       description: An additional public picture of a case.
       type: object
       additionalProperties: false
@@ -924,6 +1540,7 @@ components:
           type: integer
           minimum: 1
     CaseUpdate:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [id, caseCode, text, textLanguage, photoUrl, photoAlt, photoAltLanguage, date, author, authorAvatarUrl]
@@ -957,6 +1574,7 @@ components:
             - $ref: '#/components/schemas/MediaPath'
             - type: 'null'
     PublicDonor:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [id, name, amount, date, avatarUrl]
@@ -983,6 +1601,7 @@ components:
             - $ref: '#/components/schemas/MediaPath'
             - type: 'null'
     LedgerKind:
+      x-audience: public
       description: |
         Four original kinds and five correction kinds. A correction always points at exactly
         one original entry of the kind shown.
@@ -1010,6 +1629,7 @@ components:
         - disbursement
         - disbursement_reversal
     LedgerEntry:
+      x-audience: public
       description: |
         One movement of money on one case. See `contract/financial-terms.md` section 2 for the
         correction rules.
@@ -1074,6 +1694,7 @@ components:
             from a draft case.
           type: [string, 'null']
     HistoryCounts:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [updates, donors, ledger, photos]
@@ -1086,6 +1707,7 @@ components:
         ledger: { type: integer, minimum: 0 }
         photos: { type: integer, minimum: 0 }
     CaseDetail:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [case, financials, photos, updates, donors, ledger, counts, asOf]
@@ -1117,6 +1739,7 @@ components:
           description: The instant of the snapshot this whole response was computed from.
           $ref: '#/components/schemas/Timestamp'
     CasePage:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [items, page, pageSize, totalItems, totalPages]
@@ -1129,6 +1752,7 @@ components:
         totalItems: { $ref: '#/components/schemas/TotalItems' }
         totalPages: { $ref: '#/components/schemas/TotalPages' }
     CaseUpdatePage:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [items, page, pageSize, totalItems, totalPages]
@@ -1141,6 +1765,7 @@ components:
         totalItems: { $ref: '#/components/schemas/TotalItems' }
         totalPages: { $ref: '#/components/schemas/TotalPages' }
     PublicDonorPage:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [items, page, pageSize, totalItems, totalPages]
@@ -1153,6 +1778,7 @@ components:
         totalItems: { $ref: '#/components/schemas/TotalItems' }
         totalPages: { $ref: '#/components/schemas/TotalPages' }
     LedgerEntryPage:
+      x-audience: public
       type: object
       additionalProperties: false
       required: [items, page, pageSize, totalItems, totalPages]
@@ -1165,19 +1791,275 @@ components:
         totalItems: { $ref: '#/components/schemas/TotalItems' }
         totalPages: { $ref: '#/components/schemas/TotalPages' }
     PageNumber:
+      x-audience: shared
       description: The 1-based page that was returned.
       type: integer
       minimum: 1
     PageSizeValue:
+      x-audience: shared
       description: The page size that was applied.
       type: integer
       minimum: 1
       maximum: 48
     TotalItems:
+      x-audience: shared
       description: Number of items over all pages.
       type: integer
       minimum: 0
     TotalPages:
+      x-audience: shared
       description: At least 1, also when there are no items.
       type: integer
       minimum: 1
+    AccountId:
+      x-audience: account
+      description: |
+        Opaque identifier of an account. Assigned once, never changed, never reused, and not
+        derived from the email address. Never appears in a public response.
+      type: string
+      pattern: '^acc_[A-Za-z0-9]{22}$'
+    EmailAddress:
+      x-audience: account
+      description: |
+        An email address, at most 254 characters, ASCII only in this version. The server
+        trims it and lower-cases it; two addresses that are equal after that are the same
+        account. Nothing else is folded: dots and "+tags" are kept as written.
+      type: string
+      minLength: 6
+      maxLength: 254
+      pattern: '^[A-Za-z0-9.!#$%&''*+/=?^_`{|}~-]+@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+    DisplayName:
+      x-audience: account
+      description: The name the person chose for their account. Not shown publicly by this milestone.
+      type: string
+      minLength: 1
+      maxLength: 80
+    Role:
+      x-audience: account
+      description: |
+        Stored role of an account. A visitor who is not signed in has no account and no role.
+        Sign-up always creates `donor`.
+      type: string
+      enum: [donor, admin, super_admin]
+    Permission:
+      x-audience: account
+      description: |
+        What the server will allow. Only the two `account.` permissions are operational in
+        milestone 1; the others are listed so their names are fixed before the features exist.
+        See the permission matrix in `contract/identity-and-security.md`.
+      type: string
+      enum:
+        - account.read_own
+        - account.change_password
+        - donations.read_own
+        - cases.manage
+        - case_updates.post
+        - donation_reports.read
+        - disbursements.record
+        - donations.confirm
+        - funds.transfer
+        - payment_methods.manage
+        - staff.manage
+        - contact_messages.read
+        - audit.read
+    NewPassword:
+      x-audience: request
+      description: |
+        A password being chosen. 15 to 128 Unicode code points. Any characters, including
+        spaces. Never trimmed and never cut: a longer value is refused. Refused with field
+        code `compromised` when it is on the list of known breached or obvious passwords.
+      type: string
+      minLength: 15
+      maxLength: 128
+    ExistingPassword:
+      x-audience: request
+      description: A password being checked. Only its maximum length is validated.
+      type: string
+      minLength: 1
+      maxLength: 128
+    TotpCode:
+      x-audience: request
+      description: Six digits from the authenticator application.
+      type: string
+      pattern: '^[0-9]{6}$'
+    OneTimeCredential:
+      x-audience: request
+      description: A single-use credential issued by the operator for activation or password reset.
+      type: string
+      pattern: '^[A-Za-z0-9_-]{43}$'
+    RegisterRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [email, password, displayName]
+      properties:
+        email: { $ref: '#/components/schemas/EmailAddress' }
+        password: { $ref: '#/components/schemas/NewPassword' }
+        displayName: { $ref: '#/components/schemas/DisplayName' }
+        locale:
+          description: Preferred language. Defaults to English.
+          $ref: '#/components/schemas/Locale'
+    LoginRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { $ref: '#/components/schemas/EmailAddress' }
+        password: { $ref: '#/components/schemas/ExistingPassword' }
+    ChangePasswordRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { $ref: '#/components/schemas/ExistingPassword' }
+        newPassword: { $ref: '#/components/schemas/NewPassword' }
+    SetPasswordRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [credential, newPassword]
+      properties:
+        credential: { $ref: '#/components/schemas/OneTimeCredential' }
+        newPassword: { $ref: '#/components/schemas/NewPassword' }
+    MfaVerifyRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [method, code]
+      properties:
+        method:
+          type: string
+          enum: [totp, recovery_code]
+        code:
+          description: Six digits for `totp`. For `recovery_code`, the code as shown, with or without dashes.
+          type: string
+          minLength: 6
+          maxLength: 19
+    MfaConfirmRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { $ref: '#/components/schemas/TotpCode' }
+    RecoveryCodesRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [currentPassword, code]
+      properties:
+        currentPassword: { $ref: '#/components/schemas/ExistingPassword' }
+        code: { $ref: '#/components/schemas/TotpCode' }
+    RegistrationAccepted:
+      x-audience: account
+      description: The same for a new address and for one that already had an account.
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, const: accepted }
+    Account:
+      x-audience: account
+      description: |
+        The signed-in person's own account, and only what they and the frontend need. It
+        never holds a password, a hash, a secret, a session identifier, sign-in counters or
+        another person's data.
+      type: object
+      additionalProperties: false
+      required: [id, email, emailVerified, displayName, role, permissions, mfa, locale, createdAt, session]
+      properties:
+        id: { $ref: '#/components/schemas/AccountId' }
+        email:
+          description: As the person typed it at sign-up.
+          $ref: '#/components/schemas/EmailAddress'
+        emailVerified:
+          description: False until the person has proved they control the address. Always false in this milestone.
+          type: boolean
+        displayName: { $ref: '#/components/schemas/DisplayName' }
+        role: { $ref: '#/components/schemas/Role' }
+        permissions:
+          description: Computed by the server from the role and the disbursement permission. For display decisions only.
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        mfa:
+          type: object
+          additionalProperties: false
+          required: [required, enrolled, recoveryCodesRemaining]
+          properties:
+            required:
+              description: True for administrators and super administrators.
+              type: boolean
+            enrolled:
+              type: boolean
+            recoveryCodesRemaining:
+              description: Null when not enrolled.
+              type: [integer, 'null']
+              minimum: 0
+              maximum: 10
+        locale: { $ref: '#/components/schemas/Locale' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        session:
+          description: When this session ends. Activity moves the first instant, never the second.
+          type: object
+          additionalProperties: false
+          required: [idleExpiresAt, absoluteExpiresAt]
+          properties:
+            idleExpiresAt: { $ref: '#/components/schemas/Timestamp' }
+            absoluteExpiresAt: { $ref: '#/components/schemas/Timestamp' }
+    LoginResult:
+      x-audience: account
+      type: object
+      additionalProperties: false
+      required: [status, account]
+      properties:
+        status:
+          type: string
+          enum: [authenticated, mfa_required, mfa_enrollment_required]
+        account:
+          description: Present only when `status` is `authenticated`.
+          oneOf:
+            - $ref: '#/components/schemas/Account'
+            - type: 'null'
+    CsrfToken:
+      x-audience: credential
+      type: object
+      additionalProperties: false
+      required: [headerName, token]
+      properties:
+        headerName: { type: string, const: X-XSRF-TOKEN }
+        token: { type: string, minLength: 16, maxLength: 512 }
+    MfaEnrollment:
+      x-audience: credential
+      description: The pending authenticator secret. Returned once; the server never shows it again.
+      type: object
+      additionalProperties: false
+      required: [secret, otpauthUri, expiresAt]
+      properties:
+        secret:
+          description: Base32, for typing into an authenticator application by hand.
+          type: string
+          pattern: '^[A-Z2-7]{32}$'
+        otpauthUri:
+          description: The same secret as a standard `otpauth://` address, for a QR code drawn by the frontend. Never send it to another site to draw it.
+          type: string
+          pattern: '^otpauth://totp/'
+        expiresAt:
+          description: Confirm before this instant, or start again.
+          $ref: '#/components/schemas/Timestamp'
+    MfaRecoveryCodes:
+      x-audience: credential
+      description: Ten single-use recovery codes. Returned once; the server keeps only their hashes.
+      type: object
+      additionalProperties: false
+      required: [codes, generatedAt]
+      properties:
+        codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+            pattern: '^[A-Z2-7]{4}(-[A-Z2-7]{4}){3}$'
+        generatedAt: { $ref: '#/components/schemas/Timestamp' }
