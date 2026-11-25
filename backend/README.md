@@ -106,7 +106,7 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_TRUSTED_PROXIES` | empty | Comma-separated addresses of reverse proxies whose `X-Forwarded-For` (right-most entry) is believed. Empty: the connection's address is used. |
 | `APV_ALLOWED_ORIGINS` | empty | The exact origins accepted on state-changing requests, comma-separated. Empty: the origin must equal the scheme, host and port the request was addressed to. **Set it in production behind a TLS-terminating proxy** (`https://your.site`), where the backend itself sees plain HTTP. |
 | `APV_ARGON2_MEMORY_KIB` / `APV_ARGON2_ITERATIONS` | `19456` / `2` | Argon2id cost. May be raised, never lowered: lower values refuse to start. Existing hashes are upgraded at the next sign-in. |
-| `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once: 1 to 4. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. The backend refuses to start with more than 4 at once or a longer wait, in every profile. |
+| `APV_HASH_CONCURRENCY` | `4` | Password hashes computed at once: 1 to 4, on their own threads so the rest of the server keeps answering. A request waiting more than 2 seconds gets 503 with `Retry-After: 5`. The backend refuses to start with more than 4 at once or a longer wait, in every profile. |
 | `APV_PASSWORD_BLOCKLIST_PATH` | empty | A local file of blocked passwords, one per line, added to the small built-in list. Never fetched from the network. |
 
 Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`.
