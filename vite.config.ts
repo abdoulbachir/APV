@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { documentPolicy, productionHeaders } from './security/content-policy.mjs';
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, '.', 'VITE_');
@@ -13,6 +14,13 @@ export default defineConfig(({ command, mode }) => {
   return {
     define: { 'import.meta.env.VITE_API_MODE': JSON.stringify(apiMode) },
     plugins: [react(), {
+      name: 'apv-document-security-policy',
+      apply: 'build',
+      transformIndexHtml: { order: 'pre', handler: () => [
+        { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: documentPolicy }, injectTo: 'head-prepend' },
+        { tag: 'meta', attrs: { name: 'referrer', content: 'no-referrer' }, injectTo: 'head-prepend' },
+      ] },
+    }, {
       name: 'apv-real-build-fixture-boundary',
       apply: 'build',
       generateBundle(_options, bundle) {
@@ -34,10 +42,10 @@ export default defineConfig(({ command, mode }) => {
       fs: { strict: true, deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/contract/**', '**/backend/**', '**/docs/**', '**/dataset*.tmp'] },
       proxy: { '/api': 'http://127.0.0.1:8080', '/media/public': 'http://127.0.0.1:8080' },
     },
-    preview: { proxy: { '/api': 'http://127.0.0.1:8080', '/media/public': 'http://127.0.0.1:8080' } },
+    preview: { headers: productionHeaders, proxy: { '/api': 'http://127.0.0.1:8080', '/media/public': 'http://127.0.0.1:8080' } },
     build: {
       // Keep illustrations independently cacheable instead of embedding SVGs in JS.
-      assetsInlineLimit: (filePath) => /\.(svg|webp)$/i.test(filePath) ? false : undefined,
+      assetsInlineLimit: 0,
     },
   };
 });
