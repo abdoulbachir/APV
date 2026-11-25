@@ -118,6 +118,7 @@ const fr = {
     },
     stats: { aria: 'Totaux de la communauté', received: 'Reçu', delivered: 'Remis', helped: 'Cas aidés', receivedNote: 'dons confirmés', deliveredNote: 'remis aux personnes', helpedNote: 'jusqu’ici' },
     caseCard: { received: 'reçu', delivered: 'remis', ofGoal: 'de l’objectif', openCase: 'Ouvrir le cas de {name}' },
+    publicRead: { fundDonations: 'Dons externes', fundAllocated: 'Montant net affecté aux cas', available: 'Solde disponible', shortfall: 'Déficit de financement', unavailableGiving: 'Ce cas ne reçoit plus de nouveaux dons.', givingNotOpen: 'Les dons ne sont pas encore ouverts.', more: 'Afficher la suite', retryHistory: 'Impossible de charger la suite. Réessayez.', gallery: 'Photos du cas', tooLong: 'La recherche doit contenir au plus 80 caractères après suppression des espaces aux extrémités.', corrected: 'Corrigé', net: 'Montant net', historyChanged: 'Le registre a changé. Rechargez ce cas.', allocated: 'Affecté' },
     casePage: {
       back: 'Tous les cas actifs',
       supportLabel: 'Une histoire. Un besoin clair.',

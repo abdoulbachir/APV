@@ -6,7 +6,7 @@ type InputCase = {code:string; kind:Case['kind']; status:Case['status']; accepts
 type InputEntry = {id:string;caseCode:string;kind:LedgerKind;amount:number;date:string;corrects:string|null;pairId:string|null;donor?:{listingId:string;name:string|null;avatarFile:string|null}};
 type InputUpdate = {id:string;caseCode:string;text:Text;date:string;author:string;authorAvatarFile:string|null;photo:Picture|null};
 export interface PublicFixture {clock:string;timezone:string;categories:Category[];ledgerLabels:Record<LedgerKind,Record<Locale,string>>;cases:InputCase[];ledger:InputEntry[];updates:InputUpdate[]}
-export class ModelError extends Error { constructor(public code:string, public status:number,message:string){super(message)} }
+export class ModelError extends Error { code:string; status:number; constructor(code:string,status:number,message:string){super(message);this.code=code;this.status=status;} }
 const cmp=(a:string,b:string)=>a<b?-1:a>b?1:0;
 const newest=<T extends {date:string;id:string}>(a:T,b:T)=>cmp(b.date,a.date)||cmp(b.id,a.id);
 const local=(text:Text,locale:Locale):[string,Locale]=>text[locale]!==undefined?[text[locale]!,locale]:[text[locale==='en'?'fr':'en']!,locale==='en'?'fr':'en'];
