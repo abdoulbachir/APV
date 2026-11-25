@@ -3,7 +3,6 @@ package org.apvgakasinay.identity.internal;
 import java.time.Duration;
 import java.time.Instant;
 import org.apvgakasinay.shared.ApiException;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -51,9 +50,9 @@ public class Throttle {
 
     private final JdbcClient jdbc;
     private final Keys keys;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    public Throttle(JdbcClient jdbc, Keys keys, AppClock clock) {
+    public Throttle(JdbcClient jdbc, Keys keys, IdentityClock clock) {
         this.jdbc = jdbc;
         this.keys = keys;
         this.clock = clock;

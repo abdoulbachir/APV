@@ -67,7 +67,7 @@ It reads one hash per line (anything after a colon is ignored), refuses a line t
 Three layers:
 
 1. **Transport.** The download is made by the publisher's tool from the publisher's service over HTTPS.
-2. **Build.** The manifest records the SHA-256 of the file as built. Copy that value into the deployment notes, kept apart from the server, so a later replacement of both file and manifest can be noticed.
+2. **Build.** The manifest records the SHA-256 of the file as built. Copy that value into the deployment notes, kept apart from the server, and set it as `APV_PASSWORD_BLOCKLIST_SHA256` in the backend's configuration. The manifest sits beside the file, so whoever can replace one can replace both, and every other check would pass. With the setting, the server and the operator command refuse a list whose manifest states a different digest (the server then also checks the file against the manifest, as always). The setting is optional; without it this replacement can only be noticed by comparing with the deployment notes by hand. A value that is not 64 hexadecimal characters is refused, not ignored.
 3. **Every start, and on demand.** The server recomputes the SHA-256 at start-up and refuses a mismatch. At any time:
    ```bash
    java -jar apv-backend.jar blocklist verify /var/lib/apv/breached-sha1.bin
@@ -92,7 +92,7 @@ New breaches are added to the corpus over time. Update on a schedule the owner s
 1. Download the current corpus as above.
 2. Build it to a **new** file name, for example `breached-sha1-2027-03.bin`. The build verifies it.
 3. Record its SHA-256, entry count, date and downloader version in the deployment notes.
-4. Point `APV_PASSWORD_BLOCKLIST_PATH` at the new file and restart the backend. If the new file is refused the backend does not start and says why; point back at the previous file, which is still in place, and investigate.
+4. Point `APV_PASSWORD_BLOCKLIST_PATH` at the new file, set `APV_PASSWORD_BLOCKLIST_SHA256` to the new file's digest if you use it, and restart the backend. If the new file is refused the backend does not start and says why; point back at the previous file, which is still in place, and investigate.
 5. When the backend runs on the new file, delete the old file, its manifest and the downloaded text.
 
 Do not overwrite the file in use: the running server holds it open, and a partly written file would be refused at the next start.

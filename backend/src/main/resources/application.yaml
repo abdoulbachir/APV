@@ -58,3 +58,5 @@ apv:
     # The comprehensive local breached-password list (docs/backend-password-blocklist.md).
     # Required outside the dev and test profiles: without a suitable one the application does not start.
     password-blocklist-path: ${APV_PASSWORD_BLOCKLIST_PATH:}
+    # Optional: the SHA-256 recorded when that list was built. When set, a list whose manifest states another is refused.
+    password-blocklist-sha256: ${APV_PASSWORD_BLOCKLIST_SHA256:}

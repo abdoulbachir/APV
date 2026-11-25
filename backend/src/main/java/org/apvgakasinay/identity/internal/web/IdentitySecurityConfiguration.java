@@ -6,7 +6,7 @@ import org.apvgakasinay.identity.internal.AccountRepository;
 import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.Sessions;
 import org.apvgakasinay.identity.internal.Throttle;
-import org.apvgakasinay.shared.AppClock;
+import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -99,7 +99,7 @@ class IdentitySecurityConfiguration {
     @Bean
     SecurityFilterChain apiFilterChain(HttpSecurity http, CsrfTokenRepository csrfTokens, SecurityContextRepository contexts,
                                        ObjectProvider<RequestMappingHandlerMapping> mappings, IdentityProperties properties,
-                                       AppClock clock, Throttle throttle, AccountRepository accounts, AuditService audit) throws Exception {
+                                       IdentityClock clock, Throttle throttle, AccountRepository accounts, AuditService audit) throws Exception {
         AuthorizationManagerFactory<RequestAuthorizationContext> factors = AuthorizationManagerFactories
                 .<RequestAuthorizationContext>multiFactor()
                 .when(IdentitySecurityConfiguration::isStaff)
@@ -112,7 +112,7 @@ class IdentitySecurityConfiguration {
         };
 
         http
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens).csrfTokenRequestHandler(new CsrfTokenHandler()))
                 .securityContext(context -> context.securityContextRepository(contexts))
                 .addFilterBefore(new BeforeCsrfFilter(new Routes(mappings), properties, clock), CsrfFilter.class)
                 .addFilterAfter(new AfterCsrfFilter(throttle, accounts, properties, audit, clock), CsrfFilter.class)

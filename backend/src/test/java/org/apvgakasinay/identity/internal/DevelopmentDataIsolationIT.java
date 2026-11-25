@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.apvgakasinay.fixtures.FixtureException;
 import org.apvgakasinay.fixtures.FixtureImporter;
 import org.apvgakasinay.identity.DatabasePurpose;
-import org.apvgakasinay.shared.AppClock;
 import org.apvgakasinay.support.Json;
 import org.apvgakasinay.support.Repo;
 import org.apvgakasinay.support.TestMedia;
@@ -63,7 +62,7 @@ class DevelopmentDataIsolationIT {
     Keys keys;
 
     @Autowired
-    AppClock clock;
+    IdentityClock clock;
 
     private long count(String sql) {
         return jdbc.sql(sql).query(Long.class).single();

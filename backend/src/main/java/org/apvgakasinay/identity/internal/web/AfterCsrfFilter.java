@@ -18,7 +18,7 @@ import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.SessionState;
 import org.apvgakasinay.identity.internal.Sessions;
 import org.apvgakasinay.identity.internal.Throttle;
-import org.apvgakasinay.shared.AppClock;
+import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.apvgakasinay.shared.RequestIdFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -47,9 +47,9 @@ class AfterCsrfFilter extends OncePerRequestFilter {
     private final AccountRepository accounts;
     private final IdentityProperties properties;
     private final AuditService audit;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    AfterCsrfFilter(Throttle throttle, AccountRepository accounts, IdentityProperties properties, AuditService audit, AppClock clock) {
+    AfterCsrfFilter(Throttle throttle, AccountRepository accounts, IdentityProperties properties, AuditService audit, IdentityClock clock) {
         this.throttle = throttle;
         this.accounts = accounts;
         this.properties = properties;

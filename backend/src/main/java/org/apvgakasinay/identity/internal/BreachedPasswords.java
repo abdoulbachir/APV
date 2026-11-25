@@ -87,7 +87,8 @@ public class BreachedPasswords implements AutoCloseable {
             this.source = "none";
             return;
         }
-        Opened opened = open(Path.of(configured), properties.development() ? 1 : MIN_PRODUCTION_ENTRIES, !properties.development(), verifyDigest);
+        Opened opened = open(Path.of(configured), properties.development() ? 1 : MIN_PRODUCTION_ENTRIES, !properties.development(), verifyDigest,
+                properties.blocklistSha256());
         this.channel = opened.channel();
         this.entries = opened.entries();
         this.source = opened.source();
@@ -106,7 +107,12 @@ public class BreachedPasswords implements AutoCloseable {
 
     /** Opens and checks a list with explicit requirements. The production requirements are fixed in the constructor above. */
     static BreachedPasswords opened(Path file, long minimumEntries, boolean requireKnownPasswords, boolean verifyDigest) {
-        return new BreachedPasswords(open(file, minimumEntries, requireKnownPasswords, verifyDigest));
+        return new BreachedPasswords(open(file, minimumEntries, requireKnownPasswords, verifyDigest, ""));
+    }
+
+    /** The same, with the SHA-256 the deployment recorded when the list was built (APV_PASSWORD_BLOCKLIST_SHA256). */
+    static BreachedPasswords opened(Path file, long minimumEntries, boolean requireKnownPasswords, boolean verifyDigest, String recordedSha256) {
+        return new BreachedPasswords(open(file, minimumEntries, requireKnownPasswords, verifyDigest, recordedSha256));
     }
 
     private record Opened(FileChannel channel, long entries, String source) {
@@ -120,7 +126,7 @@ public class BreachedPasswords implements AutoCloseable {
         return file.resolveSibling(file.getFileName() + ".manifest");
     }
 
-    private static Opened open(Path file, long minimumEntries, boolean requireKnownPasswords, boolean verifyDigest) {
+    private static Opened open(Path file, long minimumEntries, boolean requireKnownPasswords, boolean verifyDigest, String recordedSha256) {
         if (!Files.isRegularFile(file) || !Files.isReadable(file)) {
             throw refused("the configured file does not exist or cannot be read.");
         }
@@ -146,6 +152,18 @@ public class BreachedPasswords implements AutoCloseable {
         String digest = manifest.getProperty("sha256", "").trim().toLowerCase();
         if (!digest.matches("[0-9a-f]{64}")) {
             throw refused("the manifest holds no SHA-256 of the file.");
+        }
+        // The manifest sits beside the file, so whoever can replace one can replace both. A digest
+        // recorded elsewhere when the list was built, and given in the configuration, closes that:
+        // the manifest must state exactly it, and the file is then checked against the manifest.
+        String recorded = recordedSha256 == null ? "" : recordedSha256.trim().toLowerCase();
+        if (!recorded.isEmpty()) {
+            if (!recorded.matches("[0-9a-f]{64}")) {
+                throw refused("APV_PASSWORD_BLOCKLIST_SHA256 is set but is not a SHA-256 (64 hexadecimal characters).");
+            }
+            if (!recorded.equals(digest)) {
+                throw refused("the SHA-256 in its manifest is not the one recorded in APV_PASSWORD_BLOCKLIST_SHA256: the list and its manifest were replaced, or the setting was not updated with the list.");
+            }
         }
         FileChannel channel = null;
         try {

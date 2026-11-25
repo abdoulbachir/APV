@@ -2,7 +2,6 @@ package org.apvgakasinay.identity.internal;
 
 import org.apvgakasinay.audit.AuditService;
 import org.apvgakasinay.identity.DatabasePurpose;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
@@ -16,7 +15,7 @@ import org.springframework.context.annotation.Import;
  * ignores it.
  */
 @EnableAutoConfiguration
-@Import({IdentityProperties.class, OperatorConfiguration.RequiredConfiguration.class, AppClock.class, AccountRepository.class, SessionStore.class, Audit.class, StaffAdministration.class,
+@Import({IdentityProperties.class, OperatorConfiguration.RequiredConfiguration.class, IdentityClock.class, AccountRepository.class, SessionStore.class, Audit.class, StaffAdministration.class,
         OperatorCommands.class, DatabasePurpose.class})
 @ComponentScan(basePackageClasses = AuditService.class)
 public class OperatorConfiguration {

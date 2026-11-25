@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import org.apvgakasinay.audit.AuditService.Outcome;
 import org.apvgakasinay.shared.ApiException;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,11 +40,11 @@ public class MfaService {
     private final Throttle throttle;
     private final Sessions sessions;
     private final Audit audit;
-    private final AppClock clock;
+    private final IdentityClock clock;
     private final TransactionTemplate transaction;
 
     public MfaService(AccountRepository accounts, Keys keys, PasswordHasher hasher, Throttle throttle, Sessions sessions,
-                      Audit audit, AppClock clock, PlatformTransactionManager transactions) {
+                      Audit audit, IdentityClock clock, PlatformTransactionManager transactions) {
         this.accounts = accounts;
         this.keys = keys;
         this.hasher = hasher;

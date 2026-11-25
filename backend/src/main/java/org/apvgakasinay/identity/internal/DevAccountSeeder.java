@@ -3,7 +3,6 @@ package org.apvgakasinay.identity.internal;
 import java.time.Instant;
 import java.util.Locale;
 import org.apvgakasinay.identity.DatabasePurpose;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -25,12 +24,12 @@ class DevAccountSeeder implements ApplicationRunner {
     private final PasswordHasher hasher;
     private final Keys keys;
     private final DatabasePurpose purpose;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
     private final String databaseUrl;
     private final String allowedHosts;
 
-    DevAccountSeeder(AccountRepository accounts, PasswordHasher hasher, Keys keys, DatabasePurpose purpose, AppClock clock,
+    DevAccountSeeder(AccountRepository accounts, PasswordHasher hasher, Keys keys, DatabasePurpose purpose, IdentityClock clock,
                      @org.springframework.beans.factory.annotation.Value("${spring.datasource.url:}") String databaseUrl,
                      @org.springframework.beans.factory.annotation.Value("${apv.fixtures.allowed-hosts:localhost,127.0.0.1,[::1]}") String allowedHosts) {
         this.databaseUrl = databaseUrl;

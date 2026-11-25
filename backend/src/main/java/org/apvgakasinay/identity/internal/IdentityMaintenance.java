@@ -1,7 +1,6 @@
 package org.apvgakasinay.identity.internal;
 
 import java.time.Duration;
-import org.apvgakasinay.shared.AppClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
@@ -31,9 +30,9 @@ public class IdentityMaintenance {
 
     private final Throttle throttle;
     private final AccountRepository accounts;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    public IdentityMaintenance(Throttle throttle, AccountRepository accounts, AppClock clock) {
+    public IdentityMaintenance(Throttle throttle, AccountRepository accounts, IdentityClock clock) {
         this.throttle = throttle;
         this.accounts = accounts;
         this.clock = clock;

@@ -35,6 +35,6 @@ class DevFixtureLoader implements ApplicationRunner {
         }
         Path file = Path.of(path).toAbsolutePath().normalize();
         importer.replaceAllData(file);
-        log.warn("DEVELOPMENT DATA: replaced all data with fictional fixture {}. The clock is pinned to the fixture's clock.", file);
+        log.warn("DEVELOPMENT DATA: replaced all data with fictional fixture {}. Public read responses use the fixture's clock; sign-in, sessions and rate limits use the real time.", file);
     }
 }

@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.apvgakasinay.audit.AuditService.Outcome;
 import org.apvgakasinay.shared.ApiException;
-import org.apvgakasinay.shared.AppClock;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -42,11 +41,11 @@ public class IdentityService {
     private final Keys keys;
     private final Sessions sessions;
     private final Audit audit;
-    private final AppClock clock;
+    private final IdentityClock clock;
     private final TransactionTemplate transaction;
 
     public IdentityService(AccountRepository accounts, PasswordPolicy policy, PasswordHasher hasher, Throttle throttle, Keys keys,
-                           Sessions sessions, Audit audit, AppClock clock, PlatformTransactionManager transactions) {
+                           Sessions sessions, Audit audit, IdentityClock clock, PlatformTransactionManager transactions) {
         this.accounts = accounts;
         this.policy = policy;
         this.hasher = hasher;

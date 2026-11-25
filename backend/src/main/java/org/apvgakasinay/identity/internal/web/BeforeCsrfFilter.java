@@ -10,7 +10,7 @@ import java.io.InputStream;
 import java.util.Set;
 import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.Sessions;
-import org.apvgakasinay.shared.AppClock;
+import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,9 +36,9 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
 
     private final Routes routes;
     private final IdentityProperties properties;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    BeforeCsrfFilter(Routes routes, IdentityProperties properties, AppClock clock) {
+    BeforeCsrfFilter(Routes routes, IdentityProperties properties, IdentityClock clock) {
         this.routes = routes;
         this.properties = properties;
         this.clock = clock;

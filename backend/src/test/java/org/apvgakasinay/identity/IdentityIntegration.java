@@ -12,10 +12,12 @@ import org.apvgakasinay.identity.internal.Totp;
 import org.apvgakasinay.shared.AppClock;
 import org.apvgakasinay.support.Contract;
 import org.apvgakasinay.support.SharedPostgres;
+import org.apvgakasinay.support.TestTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -30,6 +32,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@Import(TestTime.class)
 abstract class IdentityIntegration {
 
     static final String PASSWORD = "a long harmless passphrase 2026";
@@ -48,8 +51,13 @@ abstract class IdentityIntegration {
     @Autowired
     JdbcClient jdbc;
 
+    /** The time identity runs on. The application uses the real time; these tests move it. */
     @Autowired
-    AppClock clock;
+    TestTime clock;
+
+    /** The clock of the public read responses, which the fixture loader pins. */
+    @Autowired
+    AppClock publicClock;
 
     @Autowired
     StaffAdministration staffAdministration;
@@ -70,6 +78,7 @@ abstract class IdentityIntegration {
                 """).update();
         jdbc.sql("insert into identity_guard default values").update();
         clock.pin(START);
+        publicClock.pin(START);
         Browser.RECORDED.clear();
     }
 
@@ -147,7 +156,7 @@ abstract class IdentityIntegration {
         }
     }
 
-    /** Moves the application clock forward. */
+    /** Moves identity's time forward. */
     void advance(Duration duration) {
         clock.pin(clock.now().plus(duration));
     }

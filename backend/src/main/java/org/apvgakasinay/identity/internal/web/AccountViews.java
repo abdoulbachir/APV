@@ -6,7 +6,7 @@ import org.apvgakasinay.identity.internal.Account;
 import org.apvgakasinay.identity.internal.AccountRepository;
 import org.apvgakasinay.identity.internal.Permissions;
 import org.apvgakasinay.identity.internal.Sessions;
-import org.apvgakasinay.shared.AppClock;
+import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.Timestamps;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +15,9 @@ import org.springframework.stereotype.Component;
 class AccountViews {
 
     private final AccountRepository accounts;
-    private final AppClock clock;
+    private final IdentityClock clock;
 
-    AccountViews(AccountRepository accounts, AppClock clock) {
+    AccountViews(AccountRepository accounts, IdentityClock clock) {
         this.accounts = accounts;
         this.clock = clock;
     }

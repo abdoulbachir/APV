@@ -15,10 +15,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
-import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
-import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Component;
 
@@ -59,16 +57,16 @@ public class Sessions {
                            boolean boundToThisIdentifier) {
     }
 
-    private final SessionAuthenticationStrategy rotateIdentifierThenToken;
+    private final SessionAuthenticationStrategy rotateIdentifier;
+    private final CsrfTokenRepository csrfTokens;
     private final SecurityContextRepository contexts;
     private final SessionStore store;
     private final AccountRepository accounts;
 
     public Sessions(CsrfTokenRepository csrfTokens, SecurityContextRepository contexts, SessionStore store, AccountRepository accounts) {
         this.accounts = accounts;
-        this.rotateIdentifierThenToken = new CompositeSessionAuthenticationStrategy(List.of(
-                new ChangeSessionIdAuthenticationStrategy(),
-                new CsrfAuthenticationStrategy(csrfTokens)));
+        this.rotateIdentifier = new ChangeSessionIdAuthenticationStrategy();
+        this.csrfTokens = csrfTokens;
         this.contexts = contexts;
         this.store = store;
     }
@@ -125,7 +123,12 @@ public class Sessions {
 
         // The identifier can only be changed on a session that exists.
         request.getSession(true);
-        rotateIdentifierThenToken.onAuthentication(authentication, request, response);
+        rotateIdentifier.onAuthentication(authentication, request, response);
+        // The new token is created and stored now, with the rest of this session change, not
+        // when it is first asked for. A session that exists therefore always has its token,
+        // and two requests asking for it at the same moment read the same stored value;
+        // neither has anything to write, so neither can fail or receive a token the other replaces.
+        csrfTokens.saveToken(csrfTokens.generateToken(request), request, response);
 
         HttpSession session = request.getSession(true);
         session.setMaxInactiveInterval((int) idle.toSeconds());

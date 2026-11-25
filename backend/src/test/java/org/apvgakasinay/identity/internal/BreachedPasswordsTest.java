@@ -61,6 +61,14 @@ class BreachedPasswordsTest {
         return file;
     }
 
+    private static String manifestDigest(Path file) throws Exception {
+        java.util.Properties manifest = new java.util.Properties();
+        try (java.io.Reader reader = Files.newBufferedReader(TestBlocklist.manifestOf(file))) {
+            manifest.load(reader);
+        }
+        return manifest.getProperty("sha256");
+    }
+
     private static void refusedInProduction(Path file, String because) {
         // The server and the operator command refuse alike.
         assertThatThrownBy(() -> new BreachedPasswords(new IdentityProperties(production(file == null ? null : file.toString()))))
@@ -224,5 +232,48 @@ class BreachedPasswordsTest {
         assertThat(exit).isEqualTo(1);
         assertThat(printed.toString(StandardCharsets.UTF_8)).contains("Refused").contains("at least 100000000");
         assertThat(BlocklistTool.run(new String[] {"nonsense"}, new PrintStream(printed, true, StandardCharsets.UTF_8))).isEqualTo(2);
+    }
+
+    /**
+     * The manifest sits beside the file, so replacing both passes every check above. With the
+     * digest recorded at build time given as APV_PASSWORD_BLOCKLIST_SHA256, it does not.
+     */
+    @Test
+    void a2_9_aRecordedDigestCatchesAListReplacedTogetherWithItsManifest() throws Exception {
+        Path installed = list("installed.bin", 5000, KNOWN);
+        String recorded = manifestDigest(installed);
+        assertThat(recorded).matches("[0-9a-f]{64}");
+
+        // The recorded digest matches: accepted, by the server and by the operator command, however it is written.
+        BreachedPasswords.opened(installed, 5000, true, true, recorded).close();
+        BreachedPasswords.opened(installed, 5000, true, false, "  " + recorded.toUpperCase() + " ").close();
+        // Not set: as before.
+        BreachedPasswords.opened(installed, 5000, true, true, "").close();
+        BreachedPasswords.opened(installed, 5000, true, true, null).close();
+
+        // Another list, valid in itself, put in its place together with its own manifest.
+        Path other = list("other.bin", 5001, KNOWN);
+        Files.copy(other, installed, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(TestBlocklist.manifestOf(other), TestBlocklist.manifestOf(installed), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        // Without the setting nothing can notice.
+        BreachedPasswords.opened(installed, 5000, true, true).close();
+        // With it, the server and the operator command both refuse.
+        assertThatThrownBy(() -> BreachedPasswords.opened(installed, 5000, true, true, recorded))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("APV_PASSWORD_BLOCKLIST_SHA256");
+        assertThatThrownBy(() -> BreachedPasswords.opened(installed, 5000, true, false, recorded))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("APV_PASSWORD_BLOCKLIST_SHA256");
+        // A setting that is not a digest is refused, not ignored.
+        assertThatThrownBy(() -> BreachedPasswords.opened(other, 5000, true, true, "sha256:abc"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("is not a SHA-256");
+
+        // The same through the configuration, as the application reads it.
+        MockEnvironment pinned = development(installed.toString()).withProperty("apv.identity.password-blocklist-sha256", recorded);
+        assertThatThrownBy(() -> new BreachedPasswords(new IdentityProperties(pinned)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("APV_PASSWORD_BLOCKLIST_SHA256");
+        assertThatThrownBy(() -> BreachedPasswords.forOperator(new IdentityProperties(pinned)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("APV_PASSWORD_BLOCKLIST_SHA256");
+        MockEnvironment current = development(installed.toString())
+                .withProperty("apv.identity.password-blocklist-sha256", manifestDigest(installed));
+        new BreachedPasswords(new IdentityProperties(current)).close();
     }
 }

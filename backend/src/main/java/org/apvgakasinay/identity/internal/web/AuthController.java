@@ -15,7 +15,7 @@ import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.IdentityService;
 import org.apvgakasinay.identity.internal.MfaService;
 import org.apvgakasinay.identity.internal.Sessions;
-import org.apvgakasinay.shared.AppClock;
+import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.Timestamps;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -39,10 +39,10 @@ class AuthController {
     private final MfaService mfa;
     private final AccountViews views;
     private final IdentityProperties properties;
-    private final AppClock clock;
+    private final IdentityClock clock;
     private final JsonMapper json;
 
-    AuthController(IdentityService identity, MfaService mfa, AccountViews views, IdentityProperties properties, AppClock clock, JsonMapper json) {
+    AuthController(IdentityService identity, MfaService mfa, AccountViews views, IdentityProperties properties, IdentityClock clock, JsonMapper json) {
         this.identity = identity;
         this.mfa = mfa;
         this.views = views;
