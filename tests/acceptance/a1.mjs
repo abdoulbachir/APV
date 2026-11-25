@@ -83,9 +83,9 @@ await check('1.1', ENV, 'Sign up with a new address in the real UI, then sign in
   const t = Date.now(); await signIn(page, D2.email, D2.password); const login = P.posts(t)[0]; assert.equal(login.status, 200); assert.equal(login.body.status, 'authenticated'); assert.equal(login.body.account.email, D2.email);
   await waitHeading(page, 'My account'); const m = P.log.responses.filter(r => r.path === '/api/me' && r.status === 200).at(-1).body;
   assert.equal(m.role, 'donor'); assert.equal(m.emailVerified, false); assert.match(await page.locator('dl.identity-account').innerText(), /Donor[\s\S]*Not verified/);
-  const idle = (Date.parse(m.session.idleExpiresAt) - PINNED * 1000) / 3600000, abs = (Date.parse(m.session.absoluteExpiresAt) - PINNED * 1000) / 3600000;
-  assert.equal(idle, 2); assert.equal(abs, 24);
-  return 'donor lifetimes reported as 2 h idle and 24 h absolute (measured from the dev profile\'s pinned clock)';
+  const idle = (Date.parse(m.session.idleExpiresAt) - Date.now()) / 3600000, abs = (Date.parse(m.session.absoluteExpiresAt) - Date.now()) / 3600000;
+  assert.ok(idle > 1.98 && idle <= 2.001, 'idle hours ' + idle); assert.ok(abs > 23.98 && abs <= 24.001, 'absolute hours ' + abs);
+  return 'donor lifetimes reported as 2 h idle and 24 h absolute from the real time';
 });
 await check('3.11', ENV, 'Dev cookie: HttpOnly, SameSite=Lax, host-only, not readable by page scripts (not Secure on plain HTTP, by design of the dev profile)', async () => {
   const c = await P.cookie(); assert.equal(c.name, 'apv_session'); assert.equal(c.httpOnly, true); assert.equal(c.sameSite, 'Lax'); assert.equal(await page.evaluate(() => document.cookie), '');
@@ -130,7 +130,9 @@ await check('dev-clock', ENV, 'Dev profile: a staff member can complete the chal
   const t = Date.now(); await fill(page, { code: totpAt(admin[2], Date.now() / 1000) }); await submit(page); await settle(page);
   assert.equal(P.posts(t)[0].status, 200, `the code for the real current time was answered ${P.posts(t)[0].status} ${P.posts(t)[0].body?.error?.code}; only a code computed for the pinned instant 2026-11-24T12:00Z is accepted`);
 });
-await fill(page, { code: totpAt(admin[2], PINNED) }); await submit(page); await waitHeading(page, 'My account'); await waitForm(page);
+// Before the correction of finding 5 only a code for the fixture's instant was accepted.
+if (await page.locator('#code').count()) { await fill(page, { code: totpAt(admin[2], PINNED) }); await submit(page); }
+await waitHeading(page, 'My account'); await waitForm(page);
 sweeps.push(await sweep(P, page, 'account (staff)', { allowSame: ['dev.owner@example.test', 'Dev'] }));
 await page.goto(origin + '/account/recovery-codes'); await waitHeading(page, 'Generate new recovery codes'); await waitForm(page);
 fieldChecks.push(await fields(page, 'recovery-code regeneration', { currentPassword: 'current-password', code: 'one-time-code' })); keys.push(await keyboard(page, 'recovery-code regeneration')); sweeps.push(await sweep(P, page, 'recovery-code regeneration')); await waitForm(page);
