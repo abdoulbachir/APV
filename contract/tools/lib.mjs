@@ -188,6 +188,7 @@ export function validateIntegrity(fixture, { maxPlatformGross = MAX_PLATFORM_GRO
     const owner = caseByCode.get(entry.caseCode);
     if (!owner) fail('unknown-case', `${entry.id}: unknown case ${entry.caseCode}`);
     else if (owner.status === 'draft') fail('ledger-on-draft', `${entry.id}: money cannot move on draft case ${entry.caseCode}`);
+    if (owner?.kind === 'fund' && (entry.kind === 'disbursement' || entry.kind === 'disbursement_reversal')) fail('fund-disbursement', `${entry.id}: general fund money must be allocated to a case before delivery`);
     if ((entry.kind === 'donation') !== (entry.donor !== undefined)) fail('donor-kind', `${entry.id}: a donor block belongs on donations and only there`);
     if (Boolean(rule.pairedWith) !== (entry.pairId !== null)) fail('transfer-pair', `${entry.id}: pairId belongs on transfer kinds and only there`);
 

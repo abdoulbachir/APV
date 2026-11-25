@@ -12,6 +12,13 @@ for (const [file, value] of [['fixture.schema.json', fixture], ['fixture.public.
   assert.ok(validate(value), JSON.stringify(validate.errors));
 }
 assert.deepEqual(validateIntegrity(fixture), []);
+// The fund has sufficient available funds; rejection must be for the movement kind, not overspending.
+const forbiddenFundDelivery = structuredClone(fixture);
+forbiddenFundDelivery.ledger.push({id:'NEG-FUND-DELIVERY',caseCode:'FUND',kind:'disbursement',amount:100,date:'2026-11-24T12:00:00Z',corrects:null,pairId:null});
+const fundErrors = validateIntegrity(forbiddenFundDelivery);
+assert.ok(fundErrors.some(e=>e.code==='fund-disbursement'), 'direct fund delivery must be rejected');
+assert.ok(!fundErrors.some(e=>e.code==='overspend'), 'fund test must have sufficient available money');
+
 assert.ok(sameValue(projection, projectPublic(fixture)), 'public projection drift');
 assert.deepEqual(stats(projection), stats(fixture));
 const markers = forbiddenMarkers(fixture);
