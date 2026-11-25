@@ -20,6 +20,9 @@ services:
     volumes:
       # PostgreSQL 18 images keep their data under /var/lib/postgresql.
       - apv-dev-postgres:/var/lib/postgresql
+      # Runs once, when the development database is first created: marks it disposable, which is
+      # what allows fictional data and development accounts in it. Never used for a real database.
+      - ./backend/dev/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U apv -d apv"]
       interval: 5s

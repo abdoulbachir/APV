@@ -14,7 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Gives every request an identifier (quoted in error bodies and logs) and sets the caching
- * rule of public API responses: reusable only after checking with the server.
+ * rule: public API responses are reusable only after checking with the server, identity
+ * responses are never stored.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -32,7 +33,11 @@ public class RequestIdFilter extends OncePerRequestFilter {
         String requestId = HexFormat.of().formatHex(bytes);
         request.setAttribute(ATTRIBUTE, requestId);
         response.setHeader("X-Request-Id", requestId);
-        if (request.getRequestURI().startsWith("/api/")) {
+        String path = request.getRequestURI();
+        if (ApiPaths.isIdentity(path)) {
+            // Every identity answer, errors included: never stored by any cache.
+            response.setHeader("Cache-Control", "no-store");
+        } else if (path.startsWith("/api/")) {
             response.setHeader("Cache-Control", "no-cache");
         }
         chain.doFilter(request, response);

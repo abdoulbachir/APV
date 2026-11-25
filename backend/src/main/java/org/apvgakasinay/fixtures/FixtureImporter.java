@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apvgakasinay.identity.DatabasePurpose;
 import org.apvgakasinay.shared.AppClock;
 import org.apvgakasinay.shared.Deadlines;
 import org.apvgakasinay.shared.SearchText;
@@ -46,25 +47,31 @@ public class FixtureImporter {
     private final AppClock clock;
     private final JsonMapper json;
     private final String databaseUrl;
+    private final DatabasePurpose purpose;
     private final String allowedHosts;
 
     public FixtureImporter(
             JdbcClient jdbc,
             AppClock clock,
             JsonMapper json,
+            DatabasePurpose purpose,
             @Value("${spring.datasource.url}") String databaseUrl,
             @Value("${apv.fixtures.allowed-hosts:" + DatabaseTarget.LOCAL_HOSTS + "}") String allowedHosts) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.json = json;
         this.databaseUrl = databaseUrl;
+        this.purpose = purpose;
         this.allowedHosts = allowedHosts;
     }
 
     /**
-     * DESTRUCTIVE: the import deletes everything in the database first. Two independent checks
+     * DESTRUCTIVE: the import deletes case, ledger and picture data first. It never touches
+     * accounts, credentials, sessions, rate limits or the audit log. Three independent checks
      * stand in the way of doing that to anything but a disposable development or test database.
      *
+     * 0. The database must have been explicitly marked disposable when it was created, and never
+     *    used by the operator command (identity-and-security.md, 10.2).
      * 1. The database must be on this machine (or on a host explicitly listed in
      *    apv.fixtures.allowed-hosts, for a container network).
      * 2. The database must be empty, or its content must itself have come from a fixture. A
@@ -74,6 +81,10 @@ public class FixtureImporter {
         if (!DatabaseTarget.isAllowed(databaseUrl, allowedHosts)) {
             throw new FixtureException("refusing to load a fixture: the database at " + DatabaseTarget.host(databaseUrl)
                     + " is not on this machine and is not listed in apv.fixtures.allowed-hosts");
+        }
+        if (!purpose.disposable()) {
+            throw new FixtureException("refusing to load a fixture: this database was not explicitly marked disposable when it was created, "
+                    + "or the operator command has been used on it. An unmarked database is refused even when it is empty.");
         }
         String origin = jdbc.sql("select data_origin from organization_settings").query(String.class).single();
         long cases = jdbc.sql("select count(*) from aid_case").query(Long.class).single();

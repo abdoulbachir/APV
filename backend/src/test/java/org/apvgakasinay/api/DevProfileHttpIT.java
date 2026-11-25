@@ -91,8 +91,10 @@ class DevProfileHttpIT {
 
         for (String method : new String[] {"POST", "PUT", "PATCH", "DELETE"}) {
             HttpResponse<String> refused = call(method, "/api/cases/HELP-901");
-            assertThat(refused.statusCode()).as(method).isEqualTo(404);
-            assertThat(Json.parse(refused.body()).at("/error/code").asText()).isEqualTo("not_found");
+            // A known path with an unsupported method: 405 since contract 0.3.0.
+            assertThat(refused.statusCode()).as(method).isEqualTo(405);
+            assertThat(Json.parse(refused.body()).at("/error/code").asText()).isEqualTo("method_not_allowed");
+            assertThat(refused.headers().firstValue("Allow")).contains("GET, HEAD");
         }
         assertThat(call("GET", "/").statusCode()).isEqualTo(404);
         assertThat(call("GET", "/actuator").statusCode()).isEqualTo(404);

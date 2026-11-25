@@ -11,6 +11,14 @@ spring:
     locations: classpath:db/migration
     # Never wipe a database from the application.
     clean-disabled: true
+  autoconfigure:
+    exclude:
+      # No built-in user and no generated password: accounts come only from the identity module.
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  session:
+    jdbc:
+      # The session tables are created by a Flyway migration, never by Spring Session itself.
+      initialize-schema: never
   jackson:
     default-property-inclusion: always
   threads:
@@ -26,3 +34,25 @@ server:
       enabled: false
     include-message: never
     include-stacktrace: never
+
+# Identity. Secrets come from the environment only; there are no defaults for them.
+apv:
+  identity:
+    # Closed until the site can verify an email address (approved owner decision 1).
+    registration-open: ${APV_REGISTRATION_OPEN:false}
+    session-cookie:
+      name: ${APV_SESSION_COOKIE_NAME:__Host-apv_session}
+      secure: ${APV_SESSION_COOKIE_SECURE:true}
+    # 32 random bytes each, Base64. Required outside the dev and test profiles.
+    mfa-encryption-key: ${APV_MFA_ENCRYPTION_KEY:}
+    hash-key: ${APV_HASH_KEY:}
+    # Addresses of the reverse proxy whose X-Forwarded-For is believed. Empty: none.
+    trusted-proxies: ${APV_TRUSTED_PROXIES:}
+    # The site's own origin(s), when it differs from what the server sees. Empty: derived from the request.
+    allowed-origins: ${APV_ALLOWED_ORIGINS:}
+    argon2:
+      # May be raised after measuring on the production machine; never below these.
+      memory-kib: ${APV_ARGON2_MEMORY_KIB:19456}
+      iterations: ${APV_ARGON2_ITERATIONS:2}
+    hash-concurrency: ${APV_HASH_CONCURRENCY:4}
+    password-blocklist-path: ${APV_PASSWORD_BLOCKLIST_PATH:}

@@ -1,0 +1,9 @@
+# Integration tests. A disposable PostgreSQL started by Testcontainers.
+apv:
+  identity:
+    session-cookie:
+      name: apv_session
+      secure: false
+    registration-open: true
+    # Lets a test choose the client address it appears to come from.
+    trusted-proxies: 127.0.0.1

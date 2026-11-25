@@ -7,7 +7,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 public final class SharedPostgres {
 
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer(System.getProperty("apv.postgres.image", "postgres:18.7"));
+            new PostgreSQLContainer(System.getProperty("apv.postgres.image", "postgres:18.7"))
+                    // The test database is explicitly marked disposable when it is created.
+                    .withInitScript("disposable-database.sql");
 
     static {
         POSTGRES.start();

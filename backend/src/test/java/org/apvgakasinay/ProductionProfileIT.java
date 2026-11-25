@@ -33,6 +33,9 @@ class ProductionProfileIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // Outside dev and test the keys must be supplied: these are throwaway test values.
+        registry.add("apv.identity.mfa-encryption-key", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+        registry.add("apv.identity.hash-key", () -> "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=");
     }
 
     @Autowired
@@ -56,7 +59,7 @@ class ProductionProfileIT {
         assertThat(jdbc.sql("select count(*) from aid_case").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select count(*) from ledger_entry").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select version from flyway_schema_history order by installed_rank desc limit 1").query(String.class).single())
-                .isEqualTo("2");
+                .isEqualTo("3");
         assertThat(jdbc.sql("select data_origin from organization_settings").query(String.class).single()).isEqualTo("real");
         assertThat(jdbc.sql("select version()").query(String.class).single()).startsWith("PostgreSQL 18.");
         // The six approved categories and the default timezone come from the migration.

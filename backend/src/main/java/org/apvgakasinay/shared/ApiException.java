@@ -10,12 +10,29 @@ public class ApiException extends RuntimeException {
     private final String fieldName;
     private final String fieldCode;
 
+    private final java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+
     private ApiException(HttpStatus status, String code, String message, String fieldName, String fieldCode) {
         super(message);
         this.status = status;
         this.code = code;
         this.fieldName = fieldName;
         this.fieldCode = fieldCode;
+    }
+
+    /** Any other error of the contract: a status, a machine-readable code and a developer message. */
+    public static ApiException of(HttpStatus status, String code, String message) {
+        return new ApiException(status, code, message, null, null);
+    }
+
+    /** Adds a response header, for example Retry-After or Allow. */
+    public ApiException header(String name, String value) {
+        headers.put(name, value);
+        return this;
+    }
+
+    public java.util.Map<String, String> headers() {
+        return headers;
     }
 
     /** 400 validation_error naming one query parameter. */

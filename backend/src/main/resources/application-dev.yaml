@@ -8,3 +8,10 @@ apv:
     path: ${APV_FIXTURES_PATH:../contract/fixtures/dataset.json}
   media:
     dev-root: ${APV_FIXTURES_MEDIA_ROOT:../contract/fixtures}
+  identity:
+    # Development only. Plain HTTP on loopback cannot carry a Secure, __Host- cookie.
+    session-cookie:
+      name: apv_session
+      secure: false
+    # Sign-up is open here so it can be built and tested. It is closed in production.
+    registration-open: true
