@@ -1,0 +1,387 @@
+{
+  "version": 2,
+  "clock": "2026-11-24T12:00:00Z",
+  "timezone": "America/Chicago",
+  "categories": [
+    {
+      "id": "education",
+      "labels": {
+        "en": "Education",
+        "fr": "Éducation"
+      },
+      "position": 1,
+      "active": true
+    },
+    {
+      "id": "medical",
+      "labels": {
+        "en": "Medical",
+        "fr": "Santé"
+      },
+      "position": 2,
+      "active": true
+    },
+    {
+      "id": "housing",
+      "labels": {
+        "en": "Housing",
+        "fr": "Logement"
+      },
+      "position": 3,
+      "active": true
+    },
+    {
+      "id": "family",
+      "labels": {
+        "en": "Family",
+        "fr": "Famille"
+      },
+      "position": 4,
+      "active": true
+    },
+    {
+      "id": "emergency",
+      "labels": {
+        "en": "Emergency",
+        "fr": "Urgence"
+      },
+      "position": 5,
+      "active": true
+    },
+    {
+      "id": "other",
+      "labels": {
+        "en": "Other",
+        "fr": "Autre"
+      },
+      "position": 6,
+      "active": true
+    },
+    {
+      "id": "food",
+      "labels": {
+        "en": "Food",
+        "fr": "Alimentation"
+      },
+      "position": 7,
+      "active": true
+    },
+    {
+      "id": "transport",
+      "labels": {
+        "en": "Transport",
+        "fr": "Transport"
+      },
+      "position": 8,
+      "active": false
+    }
+  ],
+  "ledgerLabels": {
+    "donation": {
+      "en": "Confirmed gift",
+      "fr": "Don confirmé"
+    },
+    "donation_reversal": {
+      "en": "Gift entry corrected",
+      "fr": "Écriture de don corrigée"
+    },
+    "refund": {
+      "en": "Refund to donor",
+      "fr": "Remboursement au donateur"
+    },
+    "transfer_in": {
+      "en": "Transfer received",
+      "fr": "Transfert reçu"
+    },
+    "transfer_out": {
+      "en": "Transfer sent",
+      "fr": "Transfert envoyé"
+    },
+    "transfer_in_reversal": {
+      "en": "Received transfer cancelled",
+      "fr": "Transfert reçu annulé"
+    },
+    "transfer_out_reversal": {
+      "en": "Sent transfer cancelled",
+      "fr": "Transfert envoyé annulé"
+    },
+    "disbursement": {
+      "en": "Delivered to the beneficiary",
+      "fr": "Remis au bénéficiaire"
+    },
+    "disbursement_reversal": {
+      "en": "Delivery entry corrected",
+      "fr": "Écriture de remise corrigée"
+    }
+  },
+  "cases": [
+    {
+      "code": "FUND",
+      "kind": "fund",
+      "status": "active",
+      "acceptsDonations": true,
+      "category": null,
+      "featuredRank": null,
+      "publicName": "",
+      "title": {
+        "en": "General fund",
+        "fr": "Fonds général"
+      },
+      "story": {
+        "en": "Sample fund that tops up cases.",
+        "fr": "Fonds fictif qui complète les dossiers."
+      },
+      "goal": null,
+      "deadline": null,
+      "deadlineTimezone": null,
+      "createdAt": "2026-01-02T12:00:00Z",
+      "cover": null,
+      "photos": []
+    },
+    {
+      "code": "HELP-901",
+      "kind": "case",
+      "status": "active",
+      "acceptsDonations": true,
+      "category": "education",
+      "featuredRank": 1,
+      "publicName": "Sample household A",
+      "title": {
+        "en": "School supplies for a new term",
+        "fr": "Des fournitures pour la rentrée"
+      },
+      "story": {
+        "en": "Fictional sample story.",
+        "fr": "Histoire fictive d'exemple."
+      },
+      "goal": 100000,
+      "deadline": "2027-01-18",
+      "deadlineTimezone": "America/Chicago",
+      "createdAt": "2026-10-04T15:00:00Z",
+      "cover": {
+        "file": "images/sample-cover.webp",
+        "alt": {
+          "en": "Symbolic artwork of a school bag",
+          "fr": "Illustration symbolique d'un cartable"
+        }
+      },
+      "photos": [
+        {
+          "id": "photo-1",
+          "file": "images/sample-gallery-1.webp",
+          "alt": {
+            "en": "Symbolic artwork of notebooks"
+          },
+          "position": 1
+        }
+      ]
+    },
+    {
+      "code": "HELP-903",
+      "kind": "case",
+      "status": "delivered",
+      "acceptsDonations": true,
+      "category": "transport",
+      "featuredRank": null,
+      "publicName": "Sample household C",
+      "title": {
+        "en": "A bus pass to reach work",
+        "fr": "Un abonnement de bus pour aller travailler"
+      },
+      "story": {
+        "en": "Fictional sample story. Delivered below its goal, in a category that was later retired.",
+        "fr": "Histoire fictive d'exemple. Remis sans atteindre l'objectif, dans une catégorie retirée depuis."
+      },
+      "goal": 40000,
+      "deadline": "2026-10-31",
+      "deadlineTimezone": "America/Chicago",
+      "createdAt": "2026-09-01T15:00:00Z",
+      "cover": null,
+      "photos": []
+    },
+    {
+      "code": "HELP-904",
+      "kind": "case",
+      "status": "active",
+      "acceptsDonations": true,
+      "category": "food",
+      "featuredRank": null,
+      "publicName": "Sample household D",
+      "title": {
+        "en": "Groceries for a month",
+        "fr": "Des courses pour un mois"
+      },
+      "story": {
+        "en": "Fictional sample story in a category added after launch.",
+        "fr": "Histoire fictive d'exemple dans une catégorie ajoutée après le lancement."
+      },
+      "goal": 60000,
+      "deadline": "2027-03-14",
+      "deadlineTimezone": "America/Chicago",
+      "createdAt": "2026-11-15T15:00:00Z",
+      "cover": null,
+      "photos": []
+    }
+  ],
+  "ledger": [
+    {
+      "id": "L01",
+      "caseCode": "FUND",
+      "kind": "donation",
+      "amount": 50000,
+      "date": "2026-11-01T12:00:00Z",
+      "corrects": null,
+      "pairId": null,
+      "donor": {
+        "listingId": "D1",
+        "name": "Sample Donor One",
+        "avatarFile": "images/sample-avatar-1.webp"
+      }
+    },
+    {
+      "id": "L02",
+      "caseCode": "HELP-901",
+      "kind": "donation",
+      "amount": 20000,
+      "date": "2026-11-05T12:00:00Z",
+      "corrects": null,
+      "pairId": null,
+      "donor": {
+        "listingId": "D2",
+        "name": "Sample Donor Two",
+        "avatarFile": null
+      }
+    },
+    {
+      "id": "L03",
+      "caseCode": "HELP-901",
+      "kind": "donation",
+      "amount": 10000,
+      "date": "2026-11-06T12:00:00Z",
+      "corrects": null,
+      "pairId": null,
+      "donor": {
+        "listingId": "D3",
+        "name": null,
+        "avatarFile": null
+      }
+    },
+    {
+      "id": "L04",
+      "caseCode": "HELP-901",
+      "kind": "donation",
+      "amount": 5000,
+      "date": "2026-11-07T12:00:00Z",
+      "corrects": null,
+      "pairId": null
+    },
+    {
+      "id": "L05",
+      "caseCode": "FUND",
+      "kind": "transfer_out",
+      "amount": 15000,
+      "date": "2026-11-08T12:00:00Z",
+      "corrects": null,
+      "pairId": "T1"
+    },
+    {
+      "id": "L06",
+      "caseCode": "HELP-901",
+      "kind": "transfer_in",
+      "amount": 15000,
+      "date": "2026-11-08T12:00:00Z",
+      "corrects": null,
+      "pairId": "T1"
+    },
+    {
+      "id": "L07",
+      "caseCode": "HELP-901",
+      "kind": "disbursement",
+      "amount": 30000,
+      "date": "2026-11-09T12:00:00Z",
+      "corrects": null,
+      "pairId": null
+    },
+    {
+      "id": "L08",
+      "caseCode": "HELP-901",
+      "kind": "refund",
+      "amount": 4000,
+      "date": "2026-11-10T12:00:00Z",
+      "corrects": "L03",
+      "pairId": null
+    },
+    {
+      "id": "L09",
+      "caseCode": "HELP-901",
+      "kind": "refund",
+      "amount": 2500,
+      "date": "2026-11-12T12:00:00Z",
+      "corrects": "L03",
+      "pairId": null
+    },
+    {
+      "id": "L10",
+      "caseCode": "FUND",
+      "kind": "transfer_out_reversal",
+      "amount": 5000,
+      "date": "2026-11-13T12:00:00Z",
+      "corrects": "L05",
+      "pairId": "T2"
+    },
+    {
+      "id": "L11",
+      "caseCode": "HELP-901",
+      "kind": "transfer_in_reversal",
+      "amount": 5000,
+      "date": "2026-11-13T12:00:00Z",
+      "corrects": "L06",
+      "pairId": "T2"
+    },
+    {
+      "id": "L12",
+      "caseCode": "HELP-903",
+      "kind": "donation",
+      "amount": 25000,
+      "date": "2026-10-10T12:00:00Z",
+      "corrects": null,
+      "pairId": null,
+      "donor": {
+        "listingId": "D5",
+        "name": "Sample Donor Five",
+        "avatarFile": null
+      }
+    },
+    {
+      "id": "L13",
+      "caseCode": "HELP-903",
+      "kind": "disbursement",
+      "amount": 25000,
+      "date": "2026-11-02T12:00:00Z",
+      "corrects": null,
+      "pairId": null
+    },
+    {
+      "id": "L14",
+      "caseCode": "HELP-903",
+      "kind": "refund",
+      "amount": 1000,
+      "date": "2026-11-20T12:00:00Z",
+      "corrects": "L12",
+      "pairId": null
+    }
+  ],
+  "updates": [
+    {
+      "id": "U1",
+      "caseCode": "HELP-901",
+      "text": {
+        "en": "Sample update written in English only."
+      },
+      "date": "2026-11-19T17:30:00Z",
+      "author": "Sample Admin",
+      "photo": null,
+      "authorAvatarFile": null
+    }
+  ]
+}

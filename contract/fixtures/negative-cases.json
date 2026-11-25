@@ -1,0 +1,59 @@
+[
+  { "name": "private field outside the private block", "expect": "schema", "patch": [{ "op": "add", "path": "/cases/1/realName", "value": "Someone" }] },
+  { "name": "published case without a French title", "expect": "schema", "patch": [{ "op": "remove", "path": "/cases/1/title/fr" }] },
+  { "name": "movement above the single-movement bound", "expect": "schema", "patch": [{ "op": "replace", "path": "/ledger/0/amount", "value": 10000000001 }] },
+  { "name": "zero amount", "expect": "schema", "patch": [{ "op": "replace", "path": "/ledger/0/amount", "value": 0 }] },
+  { "name": "timestamp with fractional seconds", "expect": "schema", "patch": [{ "op": "replace", "path": "/ledger/0/date", "value": "2026-11-01T12:00:00.500Z" }] },
+  { "name": "timestamp with a local offset", "expect": "schema", "patch": [{ "op": "replace", "path": "/ledger/0/date", "value": "2026-11-01T07:00:00-05:00" }] },
+  { "name": "category without a French label", "expect": "schema", "patch": [{ "op": "remove", "path": "/categories/6/labels/fr" }] },
+  { "name": "category identifier that is not a slug", "expect": "schema", "patch": [{ "op": "replace", "path": "/categories/6/id", "value": "Food & Drink" }] },
+
+  { "name": "duplicate ledger identifier", "expect": "duplicate-id", "patch": [{ "op": "replace", "path": "/ledger/8/id", "value": "L08" }] },
+  { "name": "duplicate category identifier", "expect": "duplicate-id", "patch": [{ "op": "replace", "path": "/categories/6/id", "value": "education" }] },
+  { "name": "duplicate case code", "expect": "duplicate-id", "patch": [{ "op": "replace", "path": "/cases/4/code", "value": "HELP-901" }] },
+  { "name": "duplicate donor listing identifier", "expect": "duplicate-id", "patch": [{ "op": "replace", "path": "/ledger/1/donor/listingId", "value": "D1" }] },
+
+  { "name": "case in a category that does not exist", "expect": "unknown-category", "patch": [{ "op": "replace", "path": "/cases/4/category", "value": "sports" }] },
+  { "name": "case in a category that was removed from the list", "expect": "unknown-category", "patch": [{ "op": "remove", "path": "/categories/7" }] },
+  { "name": "case without a category", "expect": "category-kind", "patch": [{ "op": "replace", "path": "/cases/1/category", "value": null }] },
+  { "name": "fund with a category", "expect": "category-kind", "patch": [{ "op": "replace", "path": "/cases/0/category", "value": "other" }] },
+  { "name": "two categories at the same position", "expect": "category-position", "patch": [{ "op": "replace", "path": "/categories/6/position", "value": 1 }] },
+
+  { "name": "refund of an entry that does not exist", "expect": "correction-target", "patch": [{ "op": "replace", "path": "/ledger/7/corrects", "value": "L99" }] },
+  { "name": "refund that names no original", "expect": "correction-reference", "patch": [{ "op": "replace", "path": "/ledger/7/corrects", "value": null }] },
+  { "name": "original movement that claims to correct another", "expect": "correction-reference", "patch": [{ "op": "replace", "path": "/ledger/6/corrects", "value": "L02" }] },
+  { "name": "refund of a disbursement", "expect": "correction-kind", "patch": [{ "op": "replace", "path": "/ledger/7/corrects", "value": "L07" }] },
+  { "name": "correction of a correction", "expect": "correction-kind", "patch": [{ "op": "replace", "path": "/ledger/8/corrects", "value": "L08" }] },
+  { "name": "refund of a donation made to another case", "expect": "correction-case", "patch": [{ "op": "replace", "path": "/ledger/13/corrects", "value": "L03" }] },
+  { "name": "refund dated before the donation", "expect": "correction-date", "patch": [{ "op": "replace", "path": "/ledger/7/date", "value": "2026-11-01T12:00:00Z" }] },
+  { "name": "two partial refunds that together exceed the donation", "expect": "correction-limit", "patch": [{ "op": "replace", "path": "/ledger/8/amount", "value": 6001 }] },
+  { "name": "the same refund recorded twice", "expect": "correction-limit", "patch": [
+    { "op": "add", "path": "/ledger/-", "value": { "id": "L15", "caseCode": "HELP-901", "kind": "refund", "amount": 4000, "date": "2026-11-10T12:00:00Z", "corrects": "L03", "pairId": null } }
+  ] },
+
+  { "name": "transfer whose two sides differ in amount", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/5/amount", "value": 14000 }] },
+  { "name": "transfer with only one side", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/4/pairId", "value": "T9" }] },
+  { "name": "transfer from a case to itself", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/4/caseCode", "value": "HELP-901" }] },
+  { "name": "transfer reversal applied to one side only", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/10/amount", "value": 4000 }] },
+  { "name": "transfer without a pair identifier", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/5/pairId", "value": null }] },
+  { "name": "pair identifier on a donation", "expect": "transfer-pair", "patch": [{ "op": "replace", "path": "/ledger/1/pairId", "value": "T1" }] },
+
+  { "name": "money recorded on a draft case", "expect": "ledger-on-draft", "patch": [{ "op": "replace", "path": "/ledger/3/caseCode", "value": "HELP-902" }] },
+  { "name": "movement on a case that does not exist", "expect": "unknown-case", "patch": [{ "op": "replace", "path": "/ledger/3/caseCode", "value": "HELP-999" }] },
+  { "name": "update on a case that does not exist", "expect": "unknown-case", "patch": [{ "op": "replace", "path": "/updates/0/caseCode", "value": "HELP-999" }] },
+  { "name": "donor attached to a disbursement", "expect": "donor-kind", "patch": [
+    { "op": "add", "path": "/ledger/6/donor", "value": { "listingId": "D9", "visibility": "named", "name": "Sample", "avatarConsent": false, "avatarFile": null } }
+  ] },
+  { "name": "donation without a donor block", "expect": "donor-kind", "patch": [{ "op": "remove", "path": "/ledger/1/donor" }] },
+  { "name": "disbursement larger than what the case holds", "expect": "overspend", "patch": [{ "op": "replace", "path": "/ledger/6/amount", "value": 60000 }] },
+  { "name": "new disbursement from a case that has a shortfall", "expect": "overspend", "patch": [
+    { "op": "add", "path": "/ledger/-", "value": { "id": "L15", "caseCode": "HELP-903", "kind": "disbursement", "amount": 100, "date": "2026-11-21T12:00:00Z", "corrects": null, "pairId": null } }
+  ] },
+
+  { "name": "deadline without its timezone", "expect": "deadline", "patch": [{ "op": "replace", "path": "/cases/1/deadlineTimezone", "value": null }] },
+  { "name": "deadline in a timezone that does not exist", "expect": "deadline", "patch": [{ "op": "replace", "path": "/cases/1/deadlineTimezone", "value": "Mars/Olympus" }] },
+  { "name": "organization timezone that does not exist", "expect": "timezone", "patch": [{ "op": "replace", "path": "/timezone", "value": "Central" }] },
+  { "name": "two cases with the same featured rank", "expect": "featured-rank", "patch": [{ "op": "replace", "path": "/cases/4/featuredRank", "value": 1 }] },
+  { "name": "gallery positions with a gap", "expect": "photo-position", "patch": [{ "op": "replace", "path": "/cases/1/photos/0/position", "value": 2 }] },
+  { "name": "second fund", "expect": "fund", "patch": [{ "op": "replace", "path": "/cases/4/kind", "value": "fund" }] }
+]

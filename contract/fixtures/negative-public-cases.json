@@ -1,0 +1,9 @@
+[
+  { "name": "private block left on a case", "expect": "schema", "patch": [{ "op": "add", "path": "/cases/1/private", "value": { "realName": "x", "contact": "x", "notes": "x" } }] },
+  { "name": "draft case left in", "expect": "schema", "patch": [{ "op": "replace", "path": "/cases/1/status", "value": "draft" }] },
+  { "name": "donor visibility left in", "expect": "schema", "patch": [{ "op": "add", "path": "/ledger/1/donor/visibility", "value": "named" }] },
+  { "name": "donor consent flag left in", "expect": "schema", "patch": [{ "op": "add", "path": "/ledger/1/donor/avatarConsent", "value": false }] },
+  { "name": "author consent flag left in", "expect": "schema", "patch": [{ "op": "add", "path": "/updates/0/authorAvatarConsent", "value": false }] },
+  { "name": "name of an anonymous donor left in", "expect": "marker", "patch": [{ "op": "replace", "path": "/ledger/2/donor/name", "value": "PRIVATE-ANONYMOUS-DONOR" }] },
+  { "name": "private note pasted into a story", "expect": "marker", "patch": [{ "op": "replace", "path": "/cases/1/story/en", "value": "See PRIVATE-NOTES-901" }] }
+]
