@@ -2,13 +2,13 @@
 
 Real browser, real production frontend build, real Spring Boot, real PostgreSQL. No identity response was mocked.
 
-**This is not acceptance of milestone 1B.** Four defects were confirmed; three are in the backend and are still open. Independent review by Traycer has not happened. Nothing here was merged into `main`.
+**This is not acceptance of milestone 1B.** The first run confirmed four defects; they and the later ones are followed in the update just below, which is the current state. Nothing here was merged into `main`.
 
 ## Update: corrections verified at `bfb1abb` (2026-11-25, later the same day)
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and wait for the reviewer's re-check (see "Second round" below).
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1, still open (see "Independent re-check" below).
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -46,10 +46,37 @@ The backend corrected D1, D2, D4, D5 and D6 in `2f03320`, `eaaeed7` and `9d49d27
 - **Left open by the backend, stated in its report:** the second factor and the password change racing a sign-out could still answer 500 (they fail closed; the reviewer saw no error there); the application's database role owns the tables and could drop the TRUNCATE trigger, which is a deployment decision; the backend's D2, D5 and most D4 tests were not run against the uncorrected code.
 - **Not yet done:** the independent reviewer's targeted re-check of these five corrections.
 
+### Independent re-check at `1d5a766`
+
+The same reviewer re-checked the second round with its own environment and inputs (report kept outside the repository: "M1B Independent Re-check Report (1d5a766)"). `1d5a766` has the application code of `28515a6`. The reviewer did not run the backend's test suite and used neither it nor `tests/acceptance/` as evidence.
+
+| Item | Result |
+|---|---|
+| D2 | Corrected. No session row, token row or cookie after a refused `POST`, on all nine operations, with no cookie, an unknown cookie and a session whose token row was deleted; 300 simultaneous refused sign-ins left nothing. |
+| D1 | Corrected in both orders: 300 rounds, no 5xx, no refused sign-in recorded as a success. A stale or replayed cookie could not end another session. |
+| D5 | Corrected for the seven protected tables, directly and through `CASCADE` from all 26 tables, as a non-superuser owning role. This also settles the ledger half the coordinator had not confirmed. |
+| D4 | Corrected. No HTML or framework body under `/api`; the generic 500 for failures inside the filters; malformed `X-Forwarded-For` no longer 500; `TRACE` echoes nothing; no other method became reachable. |
+| D6 | Corrected at INFO, DEBUG and TRACE. None of the 8,438 secret values the reviewer's clients saw is in any log. |
+| Second factor or password change racing sign-out | No 500 in 244 rounds. One new defect, R1. |
+| Regression | Findings 2 to 5 still corrected; 22 of 22 checks through the real frontend, including enrollment over HTTPS under production rules. |
+
+**R1 (low, open).** A sign-out that races a password change of the same session can answer 204 while the session stays signed in under the identifier the password change issued (25 of 210 rounds, sign-out sent 52 to 74 ms after the change). The sign-out request is refused the session at step 6 because the security version changed, finds no session, and never reaches the successor lookup added for D1. The session belongs to the same person; it needs two actions of one session within milliseconds. It breaks the rule stated for D1: after a sign-out answered 204 nobody is left signed in.
+
+Stated by the reviewer, no action required for this milestone:
+
+- The role that owns the tables can disable or drop the TRUNCATE trigger; a non-owning application role cannot. This is a deployment decision.
+- Tables without a row-level rule (for example `account_password`, `auth_throttle`) can still be truncated; `DELETE` could already empty them.
+- On a real database where the operator command has never run, the application's role can add the marker schema and then truncate. After the first operator command this is refused.
+- A second factor racing a sign-out answers 200 `authenticated` for a session that no longer exists; the next request answers 401.
+- A password change can answer 500 and still have changed the password if the session store fails at that instant.
+- The forwarded-address check accepts strings that are not addresses from the trusted proxy.
+
+Reviewer's verdict: acceptable from its side, with R1 to be fixed or accepted by the owner; not a statement of production readiness. Not tested there: D3, real-time expiry, other browsers, screen reader, password manager.
+
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
-- The independent reviewer's targeted re-check of the second-round corrections.
+- R1 (below): fix by the backend, or acceptance by the owner as a known limitation.
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
