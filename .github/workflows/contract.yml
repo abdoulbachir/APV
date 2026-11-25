@@ -3,12 +3,14 @@ on:
   pull_request:
     paths:
       - contract/**
+      - src/api/**
       - .nvmrc
       - .github/workflows/contract.yml
   push:
     branches: [main]
     paths:
       - contract/**
+      - src/api/**
       - .nvmrc
       - .github/workflows/contract.yml
 permissions:

@@ -1,16 +1,17 @@
 import { APP_CONFIG } from '../config';
-import type { Case, CaseDetail, CaseQuery, CaseUpdate, LedgerEntry, Locale, Page, PageQuery, PublicDonor, Site, Stats } from './public-types';
+import { publicReadPaths, type PublicReadOperations } from './generated/public-api';
+import type { CaseQuery, Locale, PageQuery } from './public-types';
 export class ApiError extends Error {
   constructor(public code:string,message:string,public status:number){super(message);}
 }
 export interface ApiClient {
-  getSite(locale:Locale):Promise<Site>;
-  getStats(locale:Locale):Promise<Stats>;
-  getCases(query:CaseQuery,locale:Locale):Promise<Page<Case>>;
-  getCase(code:string,locale:Locale):Promise<CaseDetail>;
-  getUpdates(code:string,query:PageQuery,locale:Locale):Promise<Page<CaseUpdate>>;
-  getDonors(code:string,query:PageQuery,locale:Locale):Promise<Page<PublicDonor>>;
-  getLedger(code:string,query:PageQuery,locale:Locale):Promise<Page<LedgerEntry>>;
+  getSite(locale:Locale):Promise<PublicReadOperations['getSite']['response']>;
+  getStats(locale:Locale):Promise<PublicReadOperations['getStats']['response']>;
+  getCases(query:CaseQuery,locale:Locale):Promise<PublicReadOperations['listCases']['response']>;
+  getCase(code:string,locale:Locale):Promise<PublicReadOperations['getCase']['response']>;
+  getUpdates(code:string,query:PageQuery,locale:Locale):Promise<PublicReadOperations['listCaseUpdates']['response']>;
+  getDonors(code:string,query:PageQuery,locale:Locale):Promise<PublicReadOperations['listCaseDonors']['response']>;
+  getLedger(code:string,query:PageQuery,locale:Locale):Promise<PublicReadOperations['listCaseLedger']['response']>;
 }
 function params(query:CaseQuery|PageQuery){const p=new URLSearchParams();for(const [key,value] of Object.entries(query))if(value!==undefined&&value!=='')p.set(key,String(value));return p.size?'?'+p:'';}
 async function request<T>(path:string,locale:Locale):Promise<T>{
@@ -18,10 +19,10 @@ async function request<T>(path:string,locale:Locale):Promise<T>{
  if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(body?.error?.code??'unknown',body?.error?.message??response.statusText,response.status);}
  return response.json() as Promise<T>;
 }
-const casePath=(code:string)=>'/cases/'+encodeURIComponent(code);
+const casePath=(template:string,code:string)=>template.replace('{code}',encodeURIComponent(code));
 const realClient:ApiClient={
- getSite:l=>request('/site',l),getStats:l=>request('/stats',l),getCases:(q,l)=>request('/cases'+params(q),l),getCase:(c,l)=>request(casePath(c),l),
- getUpdates:(c,q,l)=>request(casePath(c)+'/updates'+params(q),l),getDonors:(c,q,l)=>request(casePath(c)+'/donors'+params(q),l),getLedger:(c,q,l)=>request(casePath(c)+'/ledger'+params(q),l),
+ getSite:l=>request(publicReadPaths.getSite,l),getStats:l=>request(publicReadPaths.getStats,l),getCases:(q,l)=>request(publicReadPaths.listCases+params(q),l),getCase:(c,l)=>request(casePath(publicReadPaths.getCase,c),l),
+ getUpdates:(c,q,l)=>request(casePath(publicReadPaths.listCaseUpdates,c)+params(q),l),getDonors:(c,q,l)=>request(casePath(publicReadPaths.listCaseDonors,c)+params(q),l),getLedger:(c,q,l)=>request(casePath(publicReadPaths.listCaseLedger,c)+params(q),l),
 };
 async function loadMock(){return (await import('./mock-client')).mockClient;}
 export const api:ApiClient=APP_CONFIG.apiMode==='real'?realClient:{

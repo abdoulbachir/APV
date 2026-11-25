@@ -12,9 +12,11 @@
     "check:openapi": "node tools/check-openapi.mjs",
     "check:fixtures": "node tools/check-fixtures.mjs",
     "project": "node tools/project-public.mjs",
-    "validate": "npm run lint && npm run check:openapi && npm run check:fixtures && npm run check:dataset && npm run check:frontend-parity",
+    "validate": "npm run lint && npm run check:openapi && npm run check:fixtures && npm run check:dataset && npm run check:frontend-parity && npm run check:types",
     "check:dataset": "node tools/check-dataset.mjs",
-    "check:frontend-parity": "node --experimental-strip-types tools/check-frontend-parity.mjs"
+    "check:frontend-parity": "node --experimental-strip-types tools/check-frontend-parity.mjs",
+    "generate:types": "node tools/generate-public-types.mjs",
+    "check:types": "node tools/generate-public-types.mjs --check"
   },
   "devDependencies": {
     "@redocly/cli": "2.83.0",
