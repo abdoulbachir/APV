@@ -14,6 +14,7 @@ import org.apvgakasinay.identity.internal.IdentityClock;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -26,6 +27,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * It then ends a session that has passed its absolute deadline, so that the CSRF check that
  * follows sees a session that does not exist. Public read requests never touch a session.
+ *
+ * Last, it gives step 4's answer itself in the one case where there is nothing to compare a
+ * token with: a request that changes something and arrives with no session, or with a session
+ * that holds no token. Spring Security's filter would refuse it too, but only after creating a
+ * session and a token for it. A refused request must leave nothing behind: anonymous sessions
+ * are created by the token endpoint only, which is rate-limited (identity-and-security.md, 4.1).
  */
 class BeforeCsrfFilter extends OncePerRequestFilter {
 
@@ -37,11 +44,13 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
     private final Routes routes;
     private final IdentityProperties properties;
     private final IdentityClock clock;
+    private final CsrfTokenRepository csrfTokens;
 
-    BeforeCsrfFilter(Routes routes, IdentityProperties properties, IdentityClock clock) {
+    BeforeCsrfFilter(Routes routes, IdentityProperties properties, IdentityClock clock, CsrfTokenRepository csrfTokens) {
         this.routes = routes;
         this.properties = properties;
         this.clock = clock;
+        this.csrfTokens = csrfTokens;
     }
 
     @Override
@@ -100,6 +109,13 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
                 session.invalidate();
                 SecurityContextHolder.clearContext();
             }
+        }
+
+        // Step 4, when no token is stored for this request to be compared with. Reading the
+        // stored token never creates a session; the framework's check that follows would.
+        if (!SAFE_METHODS.contains(method) && csrfTokens.loadToken(request) == null) {
+            ErrorWriter.write(request, response, 403, "csrf_invalid", IdentitySecurityConfiguration.CSRF_REFUSAL);
+            return;
         }
         chain.doFilter(forwarded, response);
     }

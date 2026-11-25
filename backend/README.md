@@ -169,7 +169,7 @@ First start of a real site: set the database variables and the two keys, build t
 
 ### Logging
 
-Logs never contain a session identifier (live, replaced or expired, in the stored form or as the cookie carries it), a password hash or a raw request, at any level. This does not depend on the logging configuration: a filter installed with the logging system (`SensitiveLogFilter`, `logback-spring.xml`) drops everything below INFO from the loggers that print raw requests, cookies, bound SQL values or a replaced session identifier (the embedded server, the database driver, Spring's SQL parameter logger, the session fixation strategy), and replaces identifier shapes and Argon2 hashes in every other message with `[redacted-id]` and `[redacted-hash]`. The exception attached to a log line is treated the same way: its message and those of its causes are searched (a database error quotes the row it failed on), and when something is replaced the stack trace is printed from a redacted copy, shown as `SensitiveLogFilter$Redacted: <original class>: <message>` with the original frames. Setting those loggers to DEBUG or TRACE has no effect. Passwords, codes and one-time credentials have no recognisable shape; they are kept out by never being given to a logger. The default level, INFO, is the one to run with.
+Logs never contain a session identifier (live, replaced or expired, in the stored form or as the cookie carries it), a password hash or a raw request, at any level. This does not depend on the logging configuration: a filter installed with the logging system (`SensitiveLogFilter`, `logback-spring.xml`) drops everything below INFO from the loggers that print raw requests, cookies, bound SQL values or a replaced session identifier (the embedded server, the database driver, Spring's SQL parameter logger, the session fixation strategy), and replaces identifier shapes and Argon2 hashes in every other message with `[redacted-id]` and `[redacted-hash]`. The exception attached to a log line is treated the same way: its message and those of its causes are searched (a database error quotes the row it failed on), and when something is replaced the stack trace is printed from a redacted copy, shown as `SensitiveLogFilter$Redacted: <original class>: <message>` with the original frames. Bytes written as a hexadecimal literal (`'\x…'::bytea`, which is how the database driver quotes a stored session attribute when a write fails) are replaced whole with `[redacted-bytes]`, whatever they hold. Setting those loggers to DEBUG or TRACE has no effect. Passwords, codes and one-time credentials have no recognisable shape; they are kept out by never being given to a logger. The default level, INFO, is the one to run with.
 
 ### What the server keeps
 
@@ -191,6 +191,9 @@ Sessions are rows in PostgreSQL (`spring_session`), so they survive a backend re
 - Send `Accept-Language: en` or `fr`. Read `Content-Language` if you need to know what was chosen.
 - Every response matches `contract/openapi.yaml` exactly; the backend tests validate each one against it.
 - Errors always look like `{ "error": { "code", "message", "requestId" } }`, plus `fields` on a 400.
+- That holds for every error under `/api`, including the ones the application never sees: a path the server or the security firewall refuses (an encoded slash, a semicolon, a doubled slash, `..`) is 400 `validation_error` with no `fields`, a failure inside a filter is 500 `internal_error`, and any method the path does not have, `TRACE` included, is 405 `method_not_allowed` with `Allow`. There is no HTML error page and no `/error` route.
+- A `POST` sent with no session, or before a token was read, is 403 `csrf_invalid` and sets no cookie. Only `GET /api/auth/csrf` starts a session.
+- A sign-in can be answered 403 `csrf_invalid` when the same browser signed out while it was being checked. Treat it like every other `csrf_invalid`.
 - A method other than `GET`, or a path that is not in the contract, answers 404 `not_found`.
 - Start the frontend against it with `VITE_API_MODE=real VITE_SAMPLE_DATA=true npm run dev`.
 - Sample pictures are served from `contract/fixtures/images/` in the `dev` profile, with `Cache-Control: public, max-age=300`. The display and thumbnail addresses return the same original file for now; resized copies come with the real storage service in a later milestone.
@@ -226,7 +229,7 @@ Key rules and where they live:
 
 ### What the database enforces by itself
 
-`src/main/resources/db/migration/`: `V1` creates the schema, `V2` adds the corrections from the milestone 0B review. These hold whatever the application does:
+`src/main/resources/db/migration/`: `V1` creates the schema, `V2` adds the corrections from the milestone 0B review, `V3` and `V4` the identity and audit tables, `V5` the TRUNCATE rule. These hold whatever the application does:
 
 - The ledger is append-only: no update, no delete.
 - A correction points at one original of the right kind, on the same case, not earlier, and the corrections of one entry never total more than it.
@@ -237,6 +240,8 @@ Key rules and where they live:
 - One movement is at most 10^10 cents; the sum of all movements at most 10^15. The sum is kept in one counter row that every ledger insert updates, so inserts take its lock one after the other and the bound holds when two cases are written at the same time. The cost is that ledger inserts are serialized platform-wide, which is acceptable at this size.
 - Both languages are required for the title and story of a published case.
 - Category identifiers never change. Adding a category is inserting a row.
+- The audit log is append-only, accounts and the identity guard are never deleted, and a bootstrapped site always keeps a usable super administrator.
+- `TRUNCATE` is refused on the ledger, the audit log, accounts, second factors and the guard, directly or through `CASCADE`, unless the database is disposable (marked when created, operator command never used). That is how the fixture loader and the tests reset; on a real database nothing is truncated. The application's role owns these tables, so this stops a statement, not an owner who drops the trigger first.
 
 ### What is deliberately not here yet
 
@@ -280,6 +285,7 @@ Integration tests never use an in-memory database. They cover:
 - `ProductionProfileIT`: without a development profile there is no fixture loader and no fictional data.
 - `DevProfileHttpIT`: the application started in the `dev` profile on a real port, called over HTTP.
 - `JointAcceptanceFindingsIT`, `DevProfileIdentityClockIT`: regression tests for the defects the first real-browser run found: any token of valid shape on every `POST` is 403 `csrf_invalid`; simultaneous first token reads after a session change give one token and no error; a real database error naming a session is logged without its identifier; in the `dev` profile identity runs on the real time while the public responses keep the fixture's clock.
+- `IndependentReviewFindingsIT`, with `ApiErrorReportValveTest` and parts of `RealDatabaseIT`, `SensitiveLogFilterTest` and `ClientAddressTest`: regression tests for the defects the independent review found: a refused `POST` creates no session; a sign-in racing a sign-out is refused and not recorded as a success; `TRUNCATE` is refused on a real database; malformed paths, errors inside filters and `TRACE` are answered in the contract's shape; hexadecimal byte literals never reach the log.
 - `identity.*IT`: the identity operations over real HTTP with one cookie jar per simulated browser, against PostgreSQL. Each test method is named after the scenario of `contract/tests/security-acceptance.md` it covers (`a6_7_...` is scenario 6.7). After every test, every identity response it received is validated against the contract's closed schemas and checked for `no-store`. `RealDatabaseIT` and `OperatorModeIT` run without a development profile on a database that was never marked disposable.
 
 `docs/m1b-backend-acceptance-coverage.md` maps all 220 scenarios to these tests, and says which ones need a browser or are not automated.

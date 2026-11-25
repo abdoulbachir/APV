@@ -30,8 +30,11 @@ public class IdentityService {
 
     static final Duration ENROLLMENT_WINDOW = Duration.ofMinutes(60);
 
-    /** The outcome of a successful password check. */
-    public record SignIn(SessionState state, Account account, Instant pendingExpiresAt) {
+    /**
+     * The outcome of a successful password check. {@code attempted} is the keyed hash under
+     * which the audit log names the address that was typed.
+     */
+    public record SignIn(SessionState state, Account account, Instant pendingExpiresAt, String attempted) {
     }
 
     private final AccountRepository accounts;
@@ -63,6 +66,11 @@ public class IdentityService {
 
     static ApiException unauthenticated() {
         return ApiException.of(HttpStatus.UNAUTHORIZED, "unauthenticated", "Sign-in required");
+    }
+
+    /** The answer a request gets when its session, and so the token it sent, no longer exists. */
+    static ApiException sessionEnded() {
+        return ApiException.of(HttpStatus.FORBIDDEN, "csrf_invalid", "Missing or invalid CSRF token");
     }
 
     static ApiException credentialInvalid() {
@@ -108,6 +116,9 @@ public class IdentityService {
     /**
      * Password sign-in. A wrong password, an unknown address, a disabled account and a staff
      * account that is not activated all end in the same refusal after the same work.
+     *
+     * On success the session of this request has been changed in memory and nothing more: it
+     * is stored, and the sign-in recorded, by {@link #confirmSignIn}.
      */
     public SignIn login(String email, String password, HttpServletRequest request, HttpServletResponse response, Caller caller) {
         String normalizedEmail = email.toLowerCase(Locale.ROOT);
@@ -171,13 +182,39 @@ public class IdentityService {
                 : hasFactor ? SessionState.MFA_REQUIRED : SessionState.MFA_ENROLLMENT_REQUIRED;
         // The session is issued for the account as it was under the lock, with that security version.
         sessions.establish(request, response, current, state, now);
-        audit.event("session.sign_in", Outcome.SUCCESS, current.id(), caller, Map.of("state", state.code(), "email_hash", attempted));
-        return new SignIn(state, current, state.pending() ? now.plus(Sessions.PENDING) : null);
+        return new SignIn(state, current, state.pending() ? now.plus(Sessions.PENDING) : null, attempted);
+    }
+
+    /**
+     * Completes a sign-in: stores the session, and only then records the sign-in as a success.
+     *
+     * Verifying a password takes time, and the session the request arrived with can be ended
+     * meanwhile, by a sign-out sent at the same moment. A session that no longer exists
+     * cannot be signed in. That is found out here, before anything is answered: the request
+     * is refused exactly as it would have been had it arrived just after the sign-out, 403
+     * csrf_invalid, because the token it sent belonged to a session that is gone. Nobody is
+     * signed in, no cookie is issued, and the audit log says refused, not success.
+     */
+    public void confirmSignIn(SignIn signIn, HttpServletRequest request, HttpServletResponse response, Caller caller) {
+        if (!sessions.storeNow(request, response)) {
+            audit.event("session.sign_in", Outcome.REFUSED, signIn.account().id(), caller,
+                    Map.of("reason", "session_ended", "email_hash", signIn.attempted()));
+            throw sessionEnded();
+        }
+        audit.event("session.sign_in", Outcome.SUCCESS, signIn.account().id(), caller,
+                Map.of("state", signIn.state().code(), "email_hash", signIn.attempted()));
     }
 
     public void logout(HttpServletRequest request, Caller caller) {
-        Sessions.Identity identity = Sessions.identity(request.getSession(false));
+        HttpSession session = request.getSession(false);
+        String identifier = session == null ? null : session.getId();
+        Sessions.Identity identity = Sessions.identity(session);
         Sessions.end(request);
+        if (identifier != null) {
+            // The other order of the same race: a sign-in on this session finished first and gave
+            // it a new identifier, so ending it by the identifier this request holds ended nothing.
+            sessions.endSuccessorOf(identifier);
+        }
         if (identity != null) {
             audit.event("session.sign_out", Outcome.SUCCESS, identity.accountId(), caller);
         }

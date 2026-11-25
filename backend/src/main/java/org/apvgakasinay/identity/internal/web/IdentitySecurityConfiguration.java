@@ -25,6 +25,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.firewall.HttpFirewall;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
@@ -49,6 +50,9 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @Configuration
 @EnableWebSecurity
 class IdentitySecurityConfiguration {
+
+    /** The one message of every 403 csrf_invalid, whichever part of step 4 gives it. */
+    static final String CSRF_REFUSAL = "Missing or invalid CSRF token";
 
     private static boolean has(Authentication authentication, String authority) {
         return authentication != null && authentication.isAuthenticated()
@@ -77,12 +81,26 @@ class IdentitySecurityConfiguration {
      * the path. The accepted public behavior is that any malformed case code answers 404
      * case_not_found; refusing that one encoding with a bare 400 would change it. Encoded
      * slashes, path traversal sequences and everything else stay refused.
+     *
+     * The firewall does not judge the method. Step 1 of the request order does, for every
+     * method there is: the application serves GET, HEAD and POST on the paths it declares and
+     * answers anything else, TRACE included, 405 method_not_allowed with Allow, or 404.
      */
     @Bean
     HttpFirewall httpFirewall() {
         StrictHttpFirewall firewall = new StrictHttpFirewall();
         firewall.setAllowUrlEncodedPercent(true);
+        firewall.setUnsafeAllowAnyHttpMethod(true);
         return firewall;
+    }
+
+    /**
+     * What the firewall refuses (a path with a semicolon, an encoded slash, a doubled slash, a
+     * traversal sequence) is answered in the contract's shape, not with the framework's error body.
+     */
+    @Bean
+    RequestRejectedHandler requestRejectedHandler() {
+        return (request, response, rejected) -> ErrorWriter.write(request, response, 400, "validation_error", "Malformed request");
     }
 
     @Bean
@@ -114,7 +132,7 @@ class IdentitySecurityConfiguration {
         http
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens).csrfTokenRequestHandler(new CsrfTokenHandler()))
                 .securityContext(context -> context.securityContextRepository(contexts))
-                .addFilterBefore(new BeforeCsrfFilter(new Routes(mappings), properties, clock), CsrfFilter.class)
+                .addFilterBefore(new BeforeCsrfFilter(new Routes(mappings), properties, clock, csrfTokens), CsrfFilter.class)
                 .addFilterAfter(new AfterCsrfFilter(throttle, accounts, properties, audit, clock), CsrfFilter.class)
                 .headers(headers -> headers
                         // Caching is set per path by RequestIdFilter: no-cache for public reads, no-store for identity.
@@ -142,7 +160,7 @@ class IdentitySecurityConfiguration {
                                 ErrorWriter.write(request, response, 401, "unauthenticated", "Sign-in required"))
                         .accessDeniedHandler((request, response, denied) -> {
                             if (denied instanceof CsrfException) {
-                                ErrorWriter.write(request, response, 403, "csrf_invalid", "Missing or invalid CSRF token");
+                                ErrorWriter.write(request, response, 403, "csrf_invalid", CSRF_REFUSAL);
                             } else {
                                 ErrorWriter.write(request, response, 403, "forbidden", "Not allowed");
                             }

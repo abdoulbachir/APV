@@ -119,7 +119,7 @@ class ProductionProfileIT {
         assertThat(jdbc.sql("select count(*) from aid_case").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select count(*) from ledger_entry").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select version from flyway_schema_history order by installed_rank desc limit 1").query(String.class).single())
-                .isEqualTo("4");
+                .isEqualTo("5");
         assertThat(jdbc.sql("select data_origin from organization_settings").query(String.class).single()).isEqualTo("real");
         assertThat(jdbc.sql("select version()").query(String.class).single()).startsWith("PostgreSQL 18.");
         // The six approved categories and the default timezone come from the migration.

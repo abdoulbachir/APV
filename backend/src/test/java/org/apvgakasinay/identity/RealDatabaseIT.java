@@ -189,4 +189,68 @@ class RealDatabaseIT {
         }
         assertThat(count("select count(*) from account")).isEqualTo(2);
     }
+
+    /** D5 of the independent review, before the operator command was ever used: with no disposable marker, nothing is truncated. */
+    @Test
+    @Order(0)
+    void a12_2_anUnmarkedDatabaseRefusesTruncateFromTheStart() {
+        assertThat(jdbc.sql("select database_real from identity_guard").query(Boolean.class).single()).isFalse();
+        for (String statement : List.of("truncate table audit_event", "truncate table ledger_entry cascade", "truncate table identity_guard",
+                "truncate table account cascade")) {
+            assertThatThrownBy(() -> jdbc.sql(statement).update()).as(statement)
+                    .isInstanceOf(DataAccessException.class).hasMessageContaining("never truncated on a real database");
+        }
+        assertThat(count("select count(*) from identity_guard")).isEqualTo(1);
+    }
+
+    /**
+     * D5 of the independent review, as it was done there: on the database the operator has
+     * used, with the application's own role, the audit log could be emptied with TRUNCATE
+     * although update and delete were refused. Every table protected by a row trigger, the
+     * ledger included, with and without the marker added afterwards.
+     */
+    @Test
+    @Order(5)
+    void a12_2_theAuditLogTheLedgerAndTheAccountsCannotBeTruncatedOnARealDatabase() {
+        assertThat(jdbc.sql("select database_real from identity_guard").query(Boolean.class).single()).isTrue();
+        long audit = count("select count(*) from audit_event");
+        long accounts = count("select count(*) from account");
+        long factors = count("select count(*) from account_totp");
+        assertThat(audit).isPositive();
+        List<String> statements = List.of(
+                "truncate audit_event",
+                "truncate table audit_event restart identity cascade",
+                "truncate table ledger_entry cascade",
+                "truncate table donation_listing, ledger_entry",
+                "truncate table aid_case cascade",
+                "truncate table ledger_platform_total",
+                "truncate table identity_guard",
+                "truncate table account cascade",
+                "truncate table account_totp",
+                "truncate table account_password, account_totp, account_recovery_code",
+                "truncate table spring_session_retired",
+                "truncate table spring_session cascade",
+                "truncate table auth_throttle, audit_event");
+        for (String statement : statements) {
+            assertThatThrownBy(() -> jdbc.sql(statement).update()).as(statement)
+                    .isInstanceOf(DataAccessException.class).hasMessageContaining("never truncated on a real database");
+        }
+        // Marking it disposable afterwards opens nothing.
+        jdbc.sql("create schema apv_disposable_database").update();
+        try {
+            for (String statement : statements) {
+                assertThatThrownBy(() -> jdbc.sql(statement).update()).as("with the marker added: " + statement)
+                        .isInstanceOf(DataAccessException.class).hasMessageContaining("never truncated on a real database");
+            }
+        } finally {
+            jdbc.sql("drop schema apv_disposable_database").update();
+        }
+        assertThat(count("select count(*) from audit_event")).isEqualTo(audit);
+        assertThat(count("select count(*) from account")).isEqualTo(accounts);
+        assertThat(count("select count(*) from account_totp")).isEqualTo(factors);
+        assertThat(jdbc.sql("select gross_cents from ledger_platform_total").query(java.math.BigDecimal.class).single()).isNotNull();
+        // The row rules still hold beside it.
+        assertThatThrownBy(() -> jdbc.sql("delete from audit_event").update()).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.sql("update audit_event set outcome = 'success'").update()).isInstanceOf(DataAccessException.class);
+    }
 }

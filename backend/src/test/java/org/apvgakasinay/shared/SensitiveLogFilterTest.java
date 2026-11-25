@@ -163,4 +163,52 @@ class SensitiveLogFilterTest {
                 // The stack trace is still there to debug with.
                 .contains("at org.apvgakasinay.shared.SensitiveLogFilterTest.a9_8_noIdentifierInAPrintedStackTrace");
     }
+
+    private static String hex(String text) {
+        return java.util.HexFormat.of().formatHex(text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Independent review, D6. When a write of session attributes fails, the database driver
+     * quotes the statement with its values, and a stored attribute is printed as a hexadecimal
+     * literal. Decoded, it can hold a session identifier or a CSRF token. No text pattern sees
+     * that, so the literal is replaced whole, in the exception's message and in its causes.
+     */
+    @Test
+    void a9_8_hexadecimalByteLiteralsInExceptionTextAreReplaced(CapturedOutput output) {
+        String id = UUID.randomUUID().toString();
+        String token = UUID.randomUUID().toString();
+        // What Java serialization of a String attribute looks like, and of a token object, in hex.
+        String boundId = "aced00057400" + hex("\u0024" + id);
+        String tokenObject = "aced0005737200" + hex("org.springframework.security.web.csrf.DefaultCsrfToken") + hex(token) + hex("X-CSRF-TOKEN");
+        String statement = "Batch entry 0 INSERT INTO SPRING_SESSION_ATTRIBUTES (SESSION_PRIMARY_ID, ATTRIBUTE_NAME, ATTRIBUTE_BYTES) "
+                + "VALUES (('PRIMARY'), ('apv.boundSessionId'), ('\\x" + boundId + "'::bytea)) was aborted";
+        String other = "Batch entry 1 INSERT INTO SPRING_SESSION_ATTRIBUTES VALUES ('PRIMARY', 'CSRF_TOKEN', '\\x" + tokenObject.toUpperCase()
+                + "') failed; Key (attribute_bytes)=(\\x" + tokenObject + "); empty E'\\x' and '\\x'::bytea";
+
+        assertThat(SensitiveLogFilter.redact(statement))
+                .isEqualTo("Batch entry 0 INSERT INTO SPRING_SESSION_ATTRIBUTES (SESSION_PRIMARY_ID, ATTRIBUTE_NAME, ATTRIBUTE_BYTES) "
+                        + "VALUES (('PRIMARY'), ('apv.boundSessionId'), ([redacted-bytes])) was aborted");
+        assertThat(SensitiveLogFilter.redact(other)).doesNotContainIgnoringCase(tokenObject).doesNotContainIgnoringCase(hex(token))
+                .contains("VALUES ('PRIMARY', 'CSRF_TOKEN', [redacted-bytes]) failed").contains("=([redacted-bytes]);")
+                .endsWith("empty [redacted-bytes] and [redacted-bytes]");
+        // Short hexadecimal that is not a byte literal stays: request identifiers, colours, escapes in ordinary text.
+        String ordinary = "request 5f0c1c9e2b7a4d1f took 12 ms; char \\x41; colour 0xdeadbeefdeadbeefdeadbeef";
+        assertThat(SensitiveLogFilter.redact(ordinary)).isEqualTo(ordinary);
+
+        RuntimeException cause = new RuntimeException(other);
+        RuntimeException thrown = new RuntimeException(statement, cause);
+        Throwable safe = SensitiveLogFilter.redactThrown(thrown);
+        assertThat(safe).isNotSameAs(thrown);
+        assertThat(safe.getMessage() + safe.getCause().getMessage()).doesNotContainIgnoringCase(hex(id)).doesNotContainIgnoringCase(hex(token))
+                .contains("[redacted-bytes]");
+
+        // And as it is printed, with its stack trace, by the installed configuration.
+        LoggerFactory.getLogger("org.apvgakasinay.test.Application").error("marker-hex: could not save the session", thrown);
+        LoggerFactory.getLogger("org.apvgakasinay.test.Application").error("marker-hex-message: " + statement);
+        String printed = output.getAll();
+        assertThat(printed).contains("marker-hex: could not save the session").contains("marker-hex-message").contains("[redacted-bytes]");
+        assertThat(printed.toLowerCase().contains(hex(id)) || printed.toLowerCase().contains(hex(token)))
+                .as("a hexadecimal byte literal reached the log").isFalse();
+    }
 }
