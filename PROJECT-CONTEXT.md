@@ -1,6 +1,6 @@
 # APV-GAKASINAY — Project context and handoff
 
-**Checkpoint:** 2026-11-26, M0B, M1A, generated fixture cleanup and M1B (identity runtime) accepted and merged, followed by the corrections from the owner's first manual test. M2 not started.
+**Checkpoint:** 2026-11-26, M0B, M1A, generated fixture cleanup, M1B (identity runtime) and its manual-test corrections, the Docker test-site setup, and the **M2A donation-lifecycle contract (version 0.4.0)** accepted and merged. M2B (building the donation lifecycle) not started.
 **Purpose:** Start a fresh conversation or onboard an agent without replaying the development history.
 **Repository:** https://github.com/abdoulbachir/APV
 
@@ -110,6 +110,10 @@ Lessons worth keeping: a correction to session handling needs an adversarial che
 
 Open later decisions: email infrastructure and automated verification/recovery, screenshot retention, guest tracking, hosting/domain, provider eligibility, the application's database role in production. Do not reopen approved M0/M1A/M1B design or introduce later milestone functionality.
 
+- Private test site: a Docker setup to run the whole application under production rules for manual testing (`deploy/test/README.md`, backend image `backend/Dockerfile`), merged to main. The site used for the first round was wiped.
+- **M2A donation-lifecycle contract (2026-11-26):** [PR #14](https://github.com/abdoulbachir/APV/pull/14), accepted head `cd939f05e8aabae04c0ad88b3e70d2790dbbbc85`, owner authorized the merge; main advanced to `c4c714c13bced09d0b21946e86369ead2b437d50`, all four CI workflows green. Contract version 0.4.0, additive (the seven public reads and twelve identity operations unchanged; shared ErrorCode/field-code enums and the `donations.confirm` permission grew). Adds 14 operations (4 giving, 10 review) for reporting a gift, private evidence, review, manual entry, corrections, payment methods and the general fund. Rules: `contract/donation-lifecycle.md`; scenarios: `contract/tests/donation-acceptance.md`; the 15 approved owner decisions: `docs/decisions.md` (2026-11-26 section) and `contract/M2A-review.md`. `financial-terms.md` section 9 confirmed (decision 11). The frontend compiles against 0.4.0 (error-code lookup now total). Not implemented: M2B builds it.
+- **Blocking M2B giving:** the owner supplies, privately and as server configuration only, the payment methods to enable first and their recipient handles (decision 5). They are never committed. The fund text (decision 7) is approved and ships in the 2B migration as written in `donation-lifecycle.md` section 10.
+
 ## 8. Roadmap and agent workflow
 
 | Stage | State / intended scope |
@@ -117,8 +121,9 @@ Open later decisions: email infrastructure and automated verification/recovery, 
 | Phase 1 / M0A / M0B | Accepted and merged: design, contract, public reads and joint integration |
 | M1A | Accepted and merged: identity/security contract and owner policy decisions |
 | Cleanup | Accepted and merged: generated fixture lifecycle and artifact isolation |
-| M1B | Accepted and merged: identity runtime, backend security and audit, frontend sign-in and account flows, joint browser acceptance, four independent review rounds |
-| M2 | Next, not started; needs the owner's go-ahead. First backend item: a real database has no general fund although `/api/site` announces `fundCode` (the frontend tolerates it since PR #13). Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
+| M1B | Accepted and merged: identity runtime, backend security and audit, frontend sign-in and account flows, joint browser acceptance, four independent review rounds; plus the owner's manual-test corrections and the Docker test-site setup |
+| M2A | Accepted and merged: the donation-lifecycle contract (v0.4.0), 15 owner decisions approved |
+| M2B | Next, not started; needs the owner's go-ahead and the decision-5 handles. Build the donation lifecycle against `contract/donation-lifecycle.md`: giving/receipt/status/review/correction UI and the backend donations module, the general-fund migration, then independent and joint acceptance like M1B |
 | M3 | Remaining public pages, donor account/profile/history |
 | M4 | Case administration, updates, media/consent |
 | M5 | Financial administration, disbursements/transfers, payment config, users/contact/audit |
