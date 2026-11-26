@@ -8,7 +8,7 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend corrected it, but the reviewer's third round found that the correction introduced a medium defect, R2, since corrected and verified by the coordinator (see "Third round" and "R2 and R3 corrected" below). The independent reviewer has not yet seen that last correction.
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend corrected it, but the reviewer's third round found that the correction introduced a medium defect, R2, since corrected and verified by the coordinator (see "Third round" and "R2 and R3 corrected" below). The independent reviewer's fourth round confirmed that correction and found no new defect. Acceptance and the merge are the owner's decision.
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -118,12 +118,24 @@ Verified by the coordinator, this time by attack and not only by reading (`tests
 - **R1 again (`r1.mjs`, 150 rounds):** 60 with both answers 204, none left signed in, no 5xx.
 - **Whole harness at `8a21b2e`:** 79 PASS, 2 PARTIAL (10.15, 10.16), 0 FAIL (`tests/acceptance/results-2026-11-25-rerun-8a21b2e.json`). Both backend logs for the whole run: no identifier-shaped text, no hex literal, no ERROR line.
 
-Not done: the independent reviewer's check of this correction.
+### Fourth round by the independent reviewer at `bf8c33d`
+
+Report kept outside the repository: "M1B Independent R2-R3 Report (bf8c33d)". `bf8c33d` has the application code of `8a21b2e`.
+
+- **R2:** corrected. 256 cookie arrangements over sign-out, sign-in, second factor and password change, anonymous and signed-in caller, `dev` and production rules: no request ended or altered a session other than the one whose token it showed.
+- **Recorded identifier against the checked session:** 175 requests refused before the record or the operation ended nothing; 60 rounds of concurrent sign-outs clean; a bystander's live identifier as a second cookie never touched the bystander.
+- **R3:** corrected. 448 requests with 28 malformed values on eight paths: every answer equals the unknown-cookie answer, no 5xx, no ERROR line.
+- **R1 and D1:** still hold, 200 rounds each.
+- **Frontend:** sign-in, password change and sign-out on `dev` and over HTTPS under production rules.
+- **Logs:** none of 8,987 secret values, no hex literal, no password hash, no ERROR line.
+
+No new defect. Reviewer's verdict: acceptable from its side at this commit; not a statement of production readiness. Not tested there: the framework's cookie and CSRF internals in source, other browsers, the backend test suite, CI. The races are statistical.
 
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
-- The independent reviewer's check of the R2 and R3 corrections, if the owner wants it. Then the owner's acceptance of the milestone and authorization to merge.
+- The owner's acceptance of the milestone and authorization to merge.
+- Known and accepted or deferred: D3 (ADR 0002); the role owning the tables can remove the TRUNCATE protection (deployment decision).
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
