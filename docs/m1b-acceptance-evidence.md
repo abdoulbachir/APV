@@ -8,7 +8,7 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend has corrected it and the coordinator has verified the correction (see "Independent re-check" and "R1 corrected" below). The owner has not yet accepted the milestone.
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend corrected it, but the reviewer's third round found that the correction introduced a medium defect, R2, which is open (see "Third round" below).
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -88,12 +88,20 @@ The owner chose to have R1 fixed. The backend corrected it in `0d54613` (test fi
 
 The control shows the script can see the defect; its rate is lower than the reviewer's 25 of 210. The check is statistical: the order cannot be forced from outside, which the backend's own test does with a held request.
 
-Not done: a third round by the independent reviewer on this one change.
+### Third round by the independent reviewer at `7aa1679`: R1 corrected, R2 and R3 open
+
+Report kept outside the repository: "M1B Independent R1 Report (7aa1679)".
+
+- **R1:** corrected. 300 rounds, 185 with both answers 204, nobody left signed in. D1 still holds; the second-factor and enrollment paths have no gap; the new set-password message is shown in both languages.
+- **R2 (medium, open, introduced by the R1 correction).** `POST /api/auth/logout` with two values of the session cookie, first a replaced identifier of another session, then the caller's own live session, and the caller's own token: 204, and the other session, living under its new identifier, is deleted. Deterministic, possible for an anonymous caller, on `dev` and under production rules; no audit record for the victim. It needs one replaced identifier of the victim and gives no access, only a forced sign-out. The session the request resolves is the caller's, so the token check passes, while the identifier the request "arrived with" is the first cookie value. Every single-cookie form is refused.
+- **R3 (low, open, not new).** A session cookie that decodes to text containing a null byte answers 500 on every path, public reads included, with an ERROR line and stack trace per request.
+
+The coordinator's review of the R1 correction (above) concluded that a stale cookie could not use the lookup. That was wrong for a request carrying two session cookies; the coordinator's check was by reading the code and did not consider that input.
 
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
-- The owner's acceptance of the milestone and authorization to merge. R1 was not re-checked by the independent reviewer after its correction; the coordinator verified it (above).
+- R2 and R3 (above), for the backend. Then the owner's acceptance of the milestone and authorization to merge.
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
