@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { CaseCard } from '../components/CaseCard';
 import { CompactCaseCard } from '../components/CompactCaseCard';
 import { fill } from '../i18n/I18nContext';
@@ -21,7 +21,9 @@ export function HomePage() {
   const handledNavigation = useRef<string | null>(null);
   const result = useAsync(async () => {
     const site = await api.getSite(locale);
-    const [stats, cases, fund] = await Promise.all([api.getStats(locale), api.getCases({ status:'active', sort:'featured', pageSize:4 }, locale), api.getCase(site.fundCode,locale)]);
+    const [stats, cases, fund] = await Promise.all([api.getStats(locale), api.getCases({ status:'active', sort:'featured', pageSize:4 }, locale), 
+      // A site that has no general fund yet (a new real database) still has a home page: the fund panel says so.
+      api.getCase(site.fundCode,locale).catch(error => { if (error instanceof ApiError && error.code === 'case_not_found') return null; throw error; })]);
     return { stats, cases, fund, site };
   }, [locale], true);
   const motionRef = usePageMotion<HTMLDivElement>(!!result.data && !result.error, result.data);

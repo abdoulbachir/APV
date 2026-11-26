@@ -51,16 +51,27 @@ function useOptions(){
  },[client,locale,snapshot.generation,attempt]);
  return {value,retry:()=>setAttempt(n=>n+1)};
 }
-function FormError({error}:{error:IdentityError|null}){
+const SECRET_CODES=['invalid_credentials','credential_invalid','mfa_code_invalid'];
+// secretOnField: this form has the field a wrong password, code or credential is reported on, so
+// the message is shown once, there, and not a second time here.
+function FormError({error,secretOnField=false}:{error:IdentityError|null;secretOnField?:boolean}){
  const t=useCopy();
+ if(error&&secretOnField&&SECRET_CODES.includes(error.code))return null;
  return error?<p className="identity-error" role="alert" tabIndex={-1}>{t.errors[error.code]}</p>:null;
 }
-function Field({name,label,type='text',autoComplete,hint,inputMode,error}:{name:string;label:string;type?:string;autoComplete?:string;hint?:string;inputMode?:'numeric'|'email';error:IdentityError|null}){
+// The contract counts a password in Unicode code points after NFC normalization (identity-and-security 3).
+const MIN_PASSWORD_LENGTH=15;
+const passwordLength=(value:string)=>[...value.normalize('NFC')].length;
+function Field({name,label,type='text',autoComplete,hint,inputMode,error,minLength}:{name:string;label:string;type?:string;autoComplete?:string;hint?:string;inputMode?:'numeric'|'email';error:IdentityError|null;minLength?:number}){
  const t=useCopy();const field=error?.fields.find(x=>x.name===name);
+ // Only the length is kept, never the value. It is read again after a refused submit, which empties the field.
+ const input=useRef<HTMLInputElement>(null);const [length,setLength]=useState(0);
+ useEffect(()=>{if(minLength&&input.current)setLength(passwordLength(input.current.value));},[error,minLength]);
+ const short=minLength!==undefined&&length>0&&length<minLength;
  const secretError=((name==='password'||name==='currentPassword')&&error?.code==='invalid_credentials')||(name==='credential'&&error?.code==='credential_invalid')||(name==='code'&&error?.code==='mfa_code_invalid');
  const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):secretError&&error?t.errors[error.code]:null;
- const desc=[hint?name+'-hint':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
- return <div className="identity-field"><label htmlFor={name}>{label}</label><input id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{message&&<p className="identity-field-error" id={name+'-error'}>{message}</p>}</div>;
+ const desc=[hint?name+'-hint':null,short?name+'-length':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
+ return <div className="identity-field"><label htmlFor={name}>{label}</label><input ref={input} id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message||short?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false} onInput={minLength?e=>setLength(passwordLength(e.currentTarget.value)):undefined}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{short&&<p className="identity-field-length" id={name+'-length'}>{t.passwordTooShort.replace('{count}',String(length)).replace('{min}',String(minLength))}</p>}{message&&<p className="identity-field-error" id={name+'-error'} role={secretError?'alert':undefined}>{message}</p>}</div>;
 }
 // Each screen owns its token lease. Revalidation remounts the guarded screen;
 // form values are never copied into router state or shared account state.
@@ -136,7 +147,7 @@ function LoginForm({lease}:{lease:FormLease}){
   clearSecret(form,'password');
   void submit('login',body,async()=>{setNotice(null);await refresh(true);});
  }
- return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="current-password" error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.submitLogin}</button></fieldset></form>;
+ return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="current-password" error={error}/><FormError error={error} secretOnField/><button className="identity-primary" type="submit">{busy?t.busy:t.submitLogin}</button></fieldset></form>;
 }
 function LoginScreen(){
  const t=useCopy();const options=useOptions();
@@ -153,7 +164,7 @@ function RegisterForm({lease}:{lease:FormLease}){
   void submit('register',body,async()=>{setNotice('accepted');await refresh(true);navigate('/sign-in',{replace:true});});
  }
  if(error?.code==='registration_closed')return <p role="status">{t.closed}</p>;
- return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="displayName" label={t.name} autoComplete="name" error={error}/><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="new-password" hint={t.passwordHint} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.submitRegister}</button></fieldset></form>;
+ return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="displayName" label={t.name} autoComplete="name" error={error}/><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="new-password" hint={t.passwordHint} minLength={MIN_PASSWORD_LENGTH} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.submitRegister}</button></fieldset></form>;
 }
 function RegisterScreen(){
  const t=useCopy();const options=useOptions();
@@ -168,7 +179,7 @@ function ChallengeForm({lease}:{lease:FormLease}){
   clearSecret(form,'code');
   void submit('verifyMfa',recovery?{method:'recovery_code',code}:{method:'totp',code},async()=>{setNotice(null);await refresh(true);});
  }
- return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field key={String(recovery)} name="code" label={recovery?t.recovery:t.totp} autoComplete="one-time-code" inputMode={recovery?undefined:'numeric'} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.verify}</button><button type="button" className="identity-link" onClick={()=>setRecovery(v=>!v)}>{recovery?t.useTotp:t.useRecovery}</button></fieldset></form>;
+ return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field key={String(recovery)} name="code" label={recovery?t.recovery:t.totp} autoComplete="one-time-code" inputMode={recovery?undefined:'numeric'} error={error}/><FormError error={error} secretOnField/><button className="identity-primary" type="submit">{busy?t.busy:t.verify}</button><button type="button" className="identity-link" onClick={()=>setRecovery(v=>!v)}>{recovery?t.useTotp:t.useRecovery}</button></fieldset></form>;
 }
 function LogoutForm({lease}:{lease:FormLease}){
  const t=useCopy();const {refresh,setNotice}=useIdentitySession();
@@ -235,7 +246,7 @@ function EnrollmentForm({lease,onCodes}:{lease:FormLease;onCodes:(lease:FormLeas
   e.preventDefault();const form=e.currentTarget;const code=textValue(new FormData(form),'code');clearSecret(form,'code');
   void submit('confirmMfaEnrollment',{code},async value=>{setEnrollment(null);await onCodes(lease,value);});
  }
- return <><p>{t.enrollIntro}</p>{enrollment?<><AuthenticatorQr uri={enrollment.otpauthUri}/><p>{t.manualSecret}</p><code className="identity-secret">{enrollment.secret}</code><form ref={ref} onSubmit={confirm}><fieldset disabled={busy}><Field name="code" label={t.totp} autoComplete="one-time-code" inputMode="numeric" error={error}/><FormError error={error}/><button type="submit" className="identity-primary">{busy?t.busy:t.confirmEnroll}</button><button type="button" className="identity-link" onClick={begin}>{t.restartEnroll}</button></fieldset></form></>:<><FormError error={error}/><button type="button" className="identity-primary" disabled={busy} onClick={begin}>{busy?t.busy:t.startEnroll}</button></>}</>;
+ return <><p>{t.enrollIntro}</p>{enrollment?<><AuthenticatorQr uri={enrollment.otpauthUri}/><p>{t.manualSecret}</p><code className="identity-secret">{enrollment.secret}</code><form ref={ref} onSubmit={confirm}><fieldset disabled={busy}><Field name="code" label={t.totp} autoComplete="one-time-code" inputMode="numeric" error={error}/><FormError error={error} secretOnField/><button type="submit" className="identity-primary">{busy?t.busy:t.confirmEnroll}</button><button type="button" className="identity-link" onClick={begin}>{t.restartEnroll}</button></fieldset></form></>:<><FormError error={error}/><button type="button" className="identity-primary" disabled={busy} onClick={begin}>{busy?t.busy:t.startEnroll}</button></>}</>;
 }
 export function EnrollmentPreparationPage(){
  const t=useCopy();const navigate=useNavigate();const receipt=useCodeReceipt();
@@ -258,7 +269,7 @@ function PasswordForm({lease,setup}:{lease:FormLease;setup:boolean}){
  return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}>{setup?
   <Field name="credential" label={t.credential} type="password" autoComplete="off" hint={t.credentialHint} error={error}/>:
   <Field name="currentPassword" label={t.currentPassword} type="password" autoComplete="current-password" error={error}/>}
-  <Field name="newPassword" label={t.newPassword} type="password" autoComplete="new-password" hint={t.passwordHint} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:setup?t.setPassword:t.changePassword}</button></fieldset></form>;
+  <Field name="newPassword" label={t.newPassword} type="password" autoComplete="new-password" hint={t.passwordHint} minLength={MIN_PASSWORD_LENGTH} error={error}/><FormError error={error} secretOnField/><button className="identity-primary" type="submit">{busy?t.busy:setup?t.setPassword:t.changePassword}</button></fieldset></form>;
 }
 export function SetPasswordPage(){
  const t=useCopy();
@@ -276,7 +287,7 @@ function RegenerateForm({lease,onCodes}:{lease:FormLease;onCodes:(lease:FormLeas
   clearSecret(form,'currentPassword');clearSecret(form,'code');
   void submit('regenerateRecoveryCodes',{currentPassword,code},value=>onCodes(lease,value));
  }
- return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="currentPassword" label={t.currentPassword} type="password" autoComplete="current-password" error={error}/><Field name="code" label={t.totp} autoComplete="one-time-code" inputMode="numeric" error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.regenerate}</button></fieldset></form>;
+ return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="currentPassword" label={t.currentPassword} type="password" autoComplete="current-password" error={error}/><Field name="code" label={t.totp} autoComplete="one-time-code" inputMode="numeric" error={error}/><FormError error={error} secretOnField/><button className="identity-primary" type="submit">{busy?t.busy:t.regenerate}</button></fieldset></form>;
 }
 export function RecoveryCodesPage(){
  const t=useCopy();const navigate=useNavigate();const receipt=useCodeReceipt();

@@ -1,6 +1,7 @@
 /* Consolidated Phase 1 styles: base rules followed by responsive adaptations. */
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; background: var(--surface-page); color-scheme: light; }
+/* The header stays at the top while scrolling, so anything scrolled to or focused stops below it. */
+html { scroll-behavior: smooth; background: var(--surface-page); color-scheme: light; scroll-padding-top: calc(var(--header-height) + var(--space-4)); }
 body { margin: 0; min-width: var(--size-min-page); background: var(--surface-page); color: var(--text-main); font-family: var(--font-body); font-size: var(--font-size-body); line-height: var(--line-body); -webkit-font-smoothing: antialiased; }
 button { font: inherit; -webkit-tap-highlight-color: transparent; }
 input { font: inherit; }
@@ -17,7 +18,7 @@ p { margin-top: 0; }
 .section-wrap { width: min(100%, var(--content-max)); margin-inline: auto; padding-inline: var(--page-pad); }
 .skip-link { position: fixed; top: var(--space-2); left: var(--space-2); z-index: 100; padding: var(--space-3) var(--space-4); transform: translateY(-200%); background: var(--action-bg); color: var(--action-ink); }
 .skip-link:focus { transform: translateY(0); }
-.site-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-6); padding: 0 max(var(--page-pad), calc((100% - var(--content-max)) / 2 + var(--page-pad))); border-bottom: var(--border-thin) solid var(--border-soft); position: relative; z-index: 30; height: auto; min-height: var(--header-height); background: var(--surface-page); color: var(--text-main); }
+.site-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-6); padding: 0 max(var(--page-pad), calc((100% - var(--content-max)) / 2 + var(--page-pad))); border-bottom: var(--border-thin) solid var(--border-soft); position: sticky; top: 0; z-index: 30; height: auto; min-height: var(--header-height); background: var(--surface-page); color: var(--text-main); }
 .brand { display: inline-flex; align-items: center; gap: var(--space-3); width: fit-content; min-height: var(--touch); font-weight: 700; text-decoration: none; white-space: nowrap; font-size: var(--font-size-brand); font-family: var(--font-display); letter-spacing: var(--tracking-brand); font-weight: 700; }
 .brand-mark { width: var(--space-7); height: var(--space-7); display: block; border: var(--border-thin) solid var(--accent); border-radius: var(--radius-round); position: relative; flex-shrink: 0; background: var(--surface-soft); }
 .brand-mark::before { content: ""; position: absolute; width: var(--space-1); height: var(--space-1); border-radius: var(--radius-round); background: var(--accent-secondary); }
@@ -33,6 +34,9 @@ p { margin-top: 0; }
 .language-switch { display: inline-flex; border: var(--border-thin) solid var(--border-soft); border-radius: var(--radius-round); padding: var(--space-1); background: var(--surface-soft); backdrop-filter: none; }
 .language-switch button { min-width: var(--touch); min-height: var(--touch); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-round); background: transparent; color: var(--text-muted); font-size: var(--font-size-xs); font-weight: 800; cursor: pointer; }
 .language-switch button.is-active { background: var(--accent); color: var(--surface-page); }
+/* The way to an account, beside the main action and quieter than it. A signed-in visitor is taken to their account. */
+.header-account { min-height: var(--touch); display: inline-flex; align-items: center; padding: 0 var(--space-4); border: var(--border-thin) solid var(--control-border); border-radius: var(--radius-round); font-size: var(--font-size-sm); font-weight: 800; text-decoration: none; color: var(--text-main); white-space: nowrap; }
+.header-account:hover { color: var(--accent); border-color: var(--accent); }
 .header-give { min-height: var(--touch); display: inline-flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-5); border-radius: var(--radius-round); font-size: var(--font-size-sm); font-weight: 800; text-decoration: none; background: var(--action-bg); color: var(--action-ink); }
 .eyebrow { display: flex; align-items: center; gap: var(--space-3); color: var(--accent); font-size: var(--font-size-xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; margin-bottom: var(--space-4); }
 .eyebrow span { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-round); background: var(--accent-secondary); box-shadow: none; }
@@ -263,6 +267,7 @@ p { margin-top: 0; }
   .brand { font-size: var(--font-size-xs); gap: var(--space-2); letter-spacing: var(--tracking-mobile-brand); white-space: normal; }
   .brand-mark { display: block; width: var(--space-6); height: var(--space-6); }
   .header-give { display: inline-flex; padding: 0 var(--space-2); font-size: var(--font-size-xs); gap: var(--space-1); }
+  .header-account { padding: 0 var(--space-2); font-size: var(--font-size-xs); }
   .header-actions { gap: var(--space-2); flex-wrap: wrap; }
   .home-hero { display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto; padding: var(--space-5) var(--space-4); gap: var(--space-5); min-height: 0; }
   .hero-copy { grid-column: 1; grid-row: 2; min-height: 0; padding: 0; max-width: 100%; }
@@ -374,6 +379,7 @@ p { margin-top: 0; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .site-header { transition: transform var(--transition-fast) ease; }
   /* Entrance choreography: typography stays legible at all times. */
   .hero-copy > *, .case-identity > * {
     animation: motion-rise var(--motion-enter) var(--motion-ease) both;
@@ -452,6 +458,9 @@ p { margin-top: 0; }
   :root[data-theme="dark"] .stats-strip { background: var(--surface-card); }
 }
 @media (max-width: 32rem) {
+  /* The header is two rows at this width. */
+  html { scroll-padding-top: 8.5rem; }
+  .site-header[data-away="true"]:not(:focus-within) { transform: translateY(-100%); }
   .site-header { grid-template-columns: minmax(0,1fr); gap: var(--space-2); }
   .site-header .brand { max-width: none; white-space: normal; }
   .header-actions { justify-content: space-between; flex-wrap: nowrap; }

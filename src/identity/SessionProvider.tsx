@@ -3,10 +3,13 @@ import { createIdentityClient, type IdentityClient, type IdentitySession } from 
 import { useI18n } from '../i18n/I18nContext';
 import type { SessionState } from '../api/generated/identity-api';
 import { createSessionStore, type SessionSnapshot, type SessionStore } from './session-store';
+import { reportSignedIn, sessionProviderMounted } from './signed-in-signal';
 import './session.css';
 
-const channelName='apv-session-events-v1';
-const changeSignal='session-changed';
+export const sessionChannelName='apv-session-events-v1';
+export const sessionChangeSignal='session-changed';
+const channelName=sessionChannelName;
+const changeSignal=sessionChangeSignal;
 type SessionContextValue={
  store:SessionStore;
  client:IdentityClient;
@@ -78,6 +81,13 @@ export function SessionProvider({children,client}:{children:ReactNode;client?:Id
    suspend();
   };
  },[refresh,suspend]);
+ // The header learns the state from here while these screens are mounted (layout effect: before
+ // the header's own effect decides whether it has to read).
+ useLayoutEffect(()=>sessionProviderMounted(),[]);
+ useEffect(()=>{
+  const status=snapshot.reading.status;
+  if(status!=='checking'&&status!=='unavailable')reportSignedIn(status==='authenticated');
+ },[snapshot]);
  useLayoutEffect(()=>{
   if(document.visibilityState!=='hidden' && snapshot.reading.status!=='checking')
    delete document.documentElement.dataset.identitySuspended;
