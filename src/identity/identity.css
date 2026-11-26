@@ -8,6 +8,12 @@
 .identity-field label { font-weight:700; }
 .identity-field input { width:100%; min-height:var(--touch); padding:var(--space-3); border:1px solid var(--control-border); border-radius:var(--radius-xs); background:var(--surface-page); color:var(--text-main); }
 .identity-field small { color:var(--text-muted); }
+/* A field that is not acceptable: a red edge and red words. The words carry the meaning; colour only adds to them. */
+.identity-panel { --field-invalid:#a3211a; }
+:root[data-theme="dark"] .identity-panel { --field-invalid:#ffb4ab; }
+.identity-field input[aria-invalid="true"] { border-color:var(--field-invalid); box-shadow:inset 0 0 0 1px var(--field-invalid); }
+.identity-field-length,.identity-field-error { color:var(--field-invalid); }
+.identity-field-length { font-weight:700; }
 .identity-field-error,.identity-error { font-weight:700; border-inline-start:3px solid currentColor; padding-inline-start:var(--space-3); }
 .identity-notice { padding:var(--space-3); background:var(--surface-soft); border-radius:var(--radius-xs); }
 .identity-primary { min-height:var(--touch); padding:var(--space-3) var(--space-5); background:var(--action-bg); color:var(--action-ink); border:0; border-radius:var(--radius-xs); font-weight:800; cursor:pointer; }
