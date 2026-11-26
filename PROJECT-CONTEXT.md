@@ -1,6 +1,6 @@
 # APV-GAKASINAY — Project context and handoff
 
-**Checkpoint:** 2026-11-25, M0B, M1A and generated fixture cleanup accepted and merged; M1B preparation started.
+**Checkpoint:** 2026-11-25, M0B, M1A, generated fixture cleanup and M1B (identity runtime) accepted and merged. M2 not started.
 **Purpose:** Start a fresh conversation or onboard an agent without replaying the development history.
 **Repository:** https://github.com/abdoulbachir/APV
 
@@ -17,8 +17,9 @@ Future payment methods: Zelle, PayPal, Cash App, Apple Cash (person-to-person, n
 ## 2. Authoritative sources
 
 - [Approved decisions](docs/decisions.md): overrides historical "pending" language for decisions actually approved.
-- [API v0.3.0](contract/openapi.yaml) on main: seven accepted public GET endpoints and twelve identity operations (contract only); preserve compatibility.
-- [Identity and security contract](contract/identity-and-security.md), [ADR 0002](docs/adr/0002-identity-and-sessions.md), [M1A review](contract/M1A-review.md), [security acceptance matrix](contract/tests/security-acceptance.md): authoritative accepted design and 220 planned M1B tests. These paths refer to the current main tree, not the older base of this documentation branch.
+- [API v0.3.0](contract/openapi.yaml) on main: seven accepted public GET endpoints and twelve identity operations, all implemented since M1B; preserve compatibility.
+- [Identity and security contract](contract/identity-and-security.md), [ADR 0002](docs/adr/0002-identity-and-sessions.md), [M1A review](contract/M1A-review.md), [security acceptance matrix](contract/tests/security-acceptance.md): authoritative accepted design and the 220 M1B scenarios. Section 4.3 of the identity contract was reworded on 2026-11-25 with owner approval (version unchanged). These paths refer to the current main tree, not the older base of this documentation branch.
+- [M1B acceptance evidence](docs/m1b-acceptance-evidence.md): every finding, correction, reviewer round and known limit of M1B, with the scenario map. [Backend scenario coverage](docs/m1b-backend-acceptance-coverage.md), [frontend notes](docs/m1b-frontend.md), [browser acceptance harness](tests/acceptance/README.md).
 - [Financial terms](contract/financial-terms.md): ledger, exact money arithmetic, reconciliation, deadlines, lifecycle; read alongside approved decisions.
 - [Privacy and media](contract/media-and-privacy.md): consent, closed public DTOs, public URLs, retention limits and caching.
 - [Backend architecture ADR](docs/adr/0001-backend-architecture.md): approved stack, boundaries, deployment and session direction.
@@ -68,12 +69,13 @@ Final CI: [frontend 8/8 tests, both builds, audits zero](https://github.com/abdo
 
 Full fictional dataset: 205 records (200 current, 2 completed, 2 drafts, FUND), 292 ledger entries, 9 category records (8 public incl inactive transport; retired draft-only excluded), 17 pages of 12 (last 8), bilingual. Golden checks: HELP-014 allocated 567500 delivered 320000; FUND available 164000 delivered 0; HELP-101 allocated 38500 delivered 30000, donor D3 net 3500; HELP-903 available -1000; drafts HELP-902/906 return case_not_found 404. Fixture media variants share original bytes in dev only. No real donation or account data.
 
-## 7. Accepted M1A and cleanup; current work M1B
+## 7. Accepted M1A, cleanup and M1B
 
 ### Accepted checkpoints
 
 - M1A: [PR #8](https://github.com/abdoulbachir/APV/pull/8), independent Traycer PASS at `b5ea149fb3e33380dd622ad734117a15051b4bfd`. Owner approved all seven policies and operational advice. Documentation closure `458e87fd9d1aab4dff15c3c76b8582079021ec3c`, all four CI workflows passed; merged to main at `daa1637a703437fcd132fe4323909782b8a95eed`. No identity runtime implemented. All 220 security scenarios are planned, not executed authentication tests.
-- Generated fixture cleanup: [PR #9](https://github.com/abdoulbachir/APV/pull/9), accepted head `46273e9037828b4b6c6e5ffae3f2db63d8ba2482`, independent PASS and all four CI workflows passed; owner authorized merge, main advanced to `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`. See [independent acceptance](https://github.com/abdoulbachir/APV/pull/9#issuecomment-7152910529). All three generated files absent from tracked tree; exact fixture blob digests unchanged on generation. Independent evidence: 8 frontend tests, 38 backend unit + 76 real PostgreSQL integration tests, 1,806 schema-valid responses, 1,838 parity matches, 114 live comparisons, 10 errors, 4 media assets; clean real builds with/without fixtures and explicit mock build, real dist/JAR marker inspection, Chromium at 1440x900 and 390x844; backend outage has no fallback. Linux filesystem only; no production deployment or real data. Post-merge CI was queued at this checkpoint; recheck it.
+- Generated fixture cleanup: [PR #9](https://github.com/abdoulbachir/APV/pull/9), accepted head `46273e9037828b4b6c6e5ffae3f2db63d8ba2482`, independent PASS and all four CI workflows passed; owner authorized merge, main advanced to `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`. See [independent acceptance](https://github.com/abdoulbachir/APV/pull/9#issuecomment-7152910529). All three generated files absent from tracked tree; exact fixture blob digests unchanged on generation. Independent evidence: 8 frontend tests, 38 backend unit + 76 real PostgreSQL integration tests, 1,806 schema-valid responses, 1,838 parity matches, 114 live comparisons, 10 errors, 4 media assets; clean real builds with/without fixtures and explicit mock build, real dist/JAR marker inspection, Chromium at 1440x900 and 390x844; backend outage has no fallback. Linux filesystem only; no production deployment or real data. Post-merge CI was queued at that checkpoint.
+- M1B: [PR #12](https://github.com/abdoulbachir/APV/pull/12) (`integration/m1b-identity`, containing the frontend and backend branches of PRs #10 and #11 with both histories). Accepted head `96d78a16bffee96f6f0b059c3e39aec44b908828`, all four CI workflows passed there; owner authorized the merge; main advanced to `d296ac6cd3ec4ae5e33afb0735a8b12221cfbc0b` by a merge commit, tree identical to the accepted head. The three workflows that run on main passed after the merge. PRs #10 and #11 show as merged because their commits arrived through #12; they were not merged separately.
 
 ### Approved identity policy
 
@@ -81,17 +83,28 @@ See current main `docs/decisions.md` and contract v0.3.0. Registration closed in
 
 Same-origin PostgreSQL sessions, HttpOnly/Secure production cookies, SameSite=Lax; session-bound CSRF and deterministic request precedence. Never automatically replay a refused mutation. Distinguish secret failures from session loss and pending MFA states. Only own-account read/change-password permissions operational in M1; future staff/financial permissions remain non-operational. No new financial features or identity linking from email alone. Preserve last usable superadmin invariant and explicit disposable-database marker design. No credentials or private identity state in browser storage.
 
-### M1B preparation
+### M1B as accepted
 
-Both branches created at exact cleanup merge baseline `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`: `feature/m1b-identity-backend` and `feature/m1b-identity-frontend`. No runtime code yet. Do not start both agents editing shared files. Backend agent first runs four ADR 0002 compatibility probes on its branch:
-1. Custom TOTP factor integration with Spring Security MFA; if unsuitable use the documented centralized session-state fallback, same API contract.
-2. Per-role idle timeout and fixed absolute deadline using Spring Session JDBC, verified against PostgreSQL.
-3. Session-stored CSRF replacement on all custom session-ID transitions, with stale token rejection and fresh-token behavior.
-4. Pin an exact compatible Bouncy Castle version for Argon2id; test encoder and record dependency/security evidence.
+The twelve identity operations run on Spring Boot with PostgreSQL sessions, with sign-in, sign-up (closed in production), account, password, activation, second-factor and recovery-code screens in the frontend, EN/FR. Full record: `docs/m1b-acceptance-evidence.md`. Summary of the evidence, all on 2026-11-25:
 
-Return executable test evidence, actual resolved versions, any fallback and limitations, exact commit; no main merge. No claim of complete authentication. After probes reviewed, implement the twelve identity operations, security and audit modules, Flyway schema, session/cookie/CSRF rules, authorization, rates, operator activation/recovery, concurrent MFA and last-superadmin invariants, disposable database enforcement and tests. Frontend: approved design tokens, EN/FR, mobile, existing public routes preserved; sign-in, conditional registration, account and password management, activation/recovery credential entry, pending MFA/enrollment and one-time recovery-code display/regeneration. Use generated identity contract, memory-only secrets, explicit state reconciliation, no mutation replay, local QR, CSP-compatible external prepaint theme script. Align generated CSRF header comment in M1B; coordinate shared tooling ownership. Independent acceptance and joint actual browser/real PG integration before owner-authorized merge.
+- Backend suite: 332 tests in CI, including the backend-asserted scenarios of the 220 (`docs/m1b-backend-acceptance-coverage.md`). Frontend: 32 tests, both builds.
+- Joint browser run (real frontend build, real backend, real PostgreSQL 18.7 in disposable containers, Chromium headless, dev profile and production rules over HTTPS): the 42 browser scenarios, 79 recorded checks PASS, 2 PARTIAL, 0 FAIL on the final application code (`8a21b2e`; later commits changed only tests and documents).
+- Independent review, four rounds by a separate agent session with its own environment and inputs. Found and saw corrected: findings 2 to 5 of the joint run, D1, D2, D4, D5, D6, R1, R2 (introduced by the R1 correction, medium, a sign-out with two session cookies could end another person's session), R3. Final verdict at `bf8c33d`: acceptable, no new defect, not a statement of production readiness.
+- Owner decisions during M1B: D3 accepted as a known limitation; both contract 4.3 wording clarifications approved; a hint added to the set-password refusal message in both languages; R1 to be fixed rather than accepted.
 
-Open later decisions: email infrastructure and automated verification/recovery, screenshot retention, guest tracking, hosting/domain, provider eligibility. Do not reopen approved M0/M1A design or introduce later milestone functionality.
+Known limits, none of them hidden by the acceptance:
+
+- D3: a password change can sign out its own author when another request of that session is in flight (ADR 0002).
+- Scenarios 10.15 and 10.16 are PARTIAL: no real screen reader and no real password manager were used. Chromium only.
+- Not all 220 scenarios ran in a browser; most are asserted by the backend suite only. Real-time expiry was simulated by ageing stored sessions.
+- The breached-password list used in tests is synthetic, of production size. A real corpus must be supplied for production; the optional SHA-256 pin exists for it.
+- The database role that owns the tables can remove the TRUNCATE protection; a separate non-owning application role is a deployment decision. Tables without a row-level rule can be truncated. Before the first operator command a real database is not yet marked real.
+- A request carrying several session cookies is not refused; it acts only on the first value that names a live session, whose token it must show. In production the `__Host-` prefix prevents two.
+- No production deployment, hosting, TLS termination, email or real data.
+
+Lessons worth keeping: a correction to session handling needs an adversarial check, not only a code reading (R2 passed the coordinator's reading and was found by attack); tests that assert on captured logs must match log records, and a test class that raises log levels must restore them.
+
+Open later decisions: email infrastructure and automated verification/recovery, screenshot retention, guest tracking, hosting/domain, provider eligibility, the application's database role in production. Do not reopen approved M0/M1A/M1B design or introduce later milestone functionality.
 
 ## 8. Roadmap and agent workflow
 
@@ -100,14 +113,14 @@ Open later decisions: email infrastructure and automated verification/recovery, 
 | Phase 1 / M0A / M0B | Accepted and merged: design, contract, public reads and joint integration |
 | M1A | Accepted and merged: identity/security contract and owner policy decisions |
 | Cleanup | Accepted and merged: generated fixture lifecycle and artifact isolation |
-| M1B | Current: compatibility probes first, then parallel backend identity/security/audit and frontend auth/account flows; independent runtime security and joint integration |
-| M2 | Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
+| M1B | Accepted and merged: identity runtime, backend security and audit, frontend sign-in and account flows, joint browser acceptance, four independent review rounds |
+| M2 | Next, not started; needs the owner's go-ahead. Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
 | M3 | Remaining public pages, donor account/profile/history |
 | M4 | Case administration, updates, media/consent |
 | M5 | Financial administration, disbursements/transfers, payment config, users/contact/audit |
 | M6 | Production E2E, deployment/security readiness, backup/restore |
 
-Owner wants actual implementation and verification, not repeated planning. Frontend agent (ChatGPT/GitHub connector) owns frontend, shared fixture/type tooling and independent contract review; backend agent (local coding agent) owns Spring/DB and proposes contract; Traycer is independent tester, read-only review unless explicitly reassigned. Backend agent may lack GitHub API; frontend agent can create PRs. Do not extract stored git credentials or install GitHub CLI against owner instruction. Use connected GitHub account `abdoulbachir` for writes (not Nazir-code); discover available connector actions at runtime.
+Owner wants actual implementation and verification, not repeated planning. Since M1B the frontend agent is a local coding agent that is also technical coordinator and independent backend reviewer: it owns the frontend, shared fixture/type tooling, the integration branch and the acceptance harness, and never edits backend code (it reports defects). The backend agent (local coding agent, clone `~/apv`) owns Spring/DB and proposes contract changes. Independent acceptance is a separate read-only agent session with its own clone and containers; the Traycer product declined the M1B assignment three times, so a separate agent session did it. The owner relays prompts and reports between agents. Do not extract stored git credentials or install GitHub CLI against owner instruction. Use connected GitHub account `abdoulbachir` for writes (not Nazir-code); discover available connector actions at runtime.
 
 Use exact baseline SHAs, clean working trees, separate branches/worktrees, no force push. Contract-first, review pending owner decisions, then parallel frontend/backend, combined integration branch, test all suites and actual browser, obtain explicit owner authorization before merging main. Verify CI at exact final head, distinguish CI vs actual local tests, report limitations. Do not merge implementation PRs separately if already included in integration PR. Preserve main and other agents' work, no branch deletions without approval.
 
@@ -119,10 +132,11 @@ From local repo (usually `~/apv`), inspect `git status` first; then `git fetch o
 - Contract: `cd contract && npm ci && npm run validate`.
 - Backend: `cd backend && ./mvnw test` unit; `node ../contract/tools/generate-dataset.mjs && ./mvnw verify` includes real PostgreSQL Testcontainers (Docker required).
 - Mock preview: `npm run dev`; real preview: `VITE_API_MODE=real VITE_SAMPLE_DATA=true npm run dev`; production explicitly real and no sample-data flag.
-- Local joint startup: from root only with isolated disposable DB and running Docker, `npm run fixtures:generate`, `test -e .env || cp .env.example .env`, `docker compose up -d --wait`. In backend terminal: `cd backend; set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. In root: `node --experimental-strip-types tests/live-api.mjs`, then real preview. See linked docs for details. **Dev profile replaces fixture database contents every start. Never connect to production, overwrite existing .env or delete data volumes casually.** Rootless Docker was used successfully by Traycer; normal Docker Desktop still not confirmed. Flyway/PostgreSQL combination tested, formal vendor support unverified.
+- Local joint startup: from root only with isolated disposable DB and running Docker, `npm run fixtures:generate`, `test -e .env || cp .env.example .env`, `docker compose up -d --wait`. In backend terminal: `cd backend; set -a; . ../.env; set +a; ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. In root: `node --experimental-strip-types tests/live-api.mjs`, then real preview. See linked docs for details. **Dev profile replaces fixture database contents every start. Never connect to production, overwrite existing .env or delete data volumes casually.** Rootless Docker and Docker Desktop both work. Docker Desktop on the owner's machine is kept stopped: start it with `systemctl --user start docker-desktop`; before stopping it run `docker desktop stop` (with a timeout, it can hang), otherwise containers and volumes removed just before reappear at the next start. It refuses bind mounts from `/tmp`.
+- Joint browser acceptance: `tests/acceptance/README.md` (creates its own two PostgreSQL containers, refuses to run if its names or ports are taken, never touches another database). Flyway/PostgreSQL combination tested, formal vendor support unverified.
 
 ## 10. Resuming in a new chat
 
-Read this handoff and current main source documents, verify main and M1B branches/PRs. Do not repeat accepted M0, M1A or cleanup work. The immediate goal is to verify the four M1B framework probes and then implement the accepted identity contract. Do not claim authentication runtime acceptance until the security matrix and integration pass.
+Read this handoff and current main source documents, verify main and open branches/PRs. Do not repeat accepted M0, M1A, cleanup or M1B work. M2 has not started and starts only on the owner's instruction, contract first. Do not describe the identity runtime as production ready: see the known limits in section 7.
 
 After each milestone, update this file with the new accepted baseline, current checkpoint, important decisions, evidence, open questions and limitations. Archive superseded details in Git history or their appropriate ADR/contract files rather than expanding this summary indefinitely.
