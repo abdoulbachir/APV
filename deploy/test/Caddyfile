@@ -2,6 +2,9 @@
 # and forwards /api and /media/public unchanged to the backend. TLS ends here.
 {
 	admin off
+	# A browser that addresses the site by a network address sends no server name. Without this the
+	# web container, whose own address inside Docker is another one, finds no certificate to present.
+	default_sni {$APV_SITE_HOST}
 }
 
 {$APV_SITE_HOST} {

@@ -9,7 +9,7 @@ Three containers: PostgreSQL, the backend, and a web container (Caddy) that serv
 ## Before the first start
 
 1. **The breached-password list.** The backend refuses to start without it under production rules. Build it once as `docs/backend-password-blocklist.md` describes (a download of a few tens of gigabytes) and put the `.bin` file and its `.manifest` in one folder on this machine.
-2. **The name testers will type.** It must be the same for everyone and must reach this machine: a name in your home DNS, or a public name. The backend accepts sign-in only from that exact origin.
+2. **The name testers will type.** It must be the same for everyone and must reach this machine: a name in your home DNS, a public name, or the machine's address on the home network (for example `192.168.1.20`; it must not change while testing). The backend accepts sign-in only from that exact origin.
 3. **Settings.** From the repository root:
 
    ```bash
