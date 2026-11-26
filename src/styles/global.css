@@ -379,6 +379,7 @@ p { margin-top: 0; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .site-header { transition: transform var(--transition-fast) ease; }
   /* Entrance choreography: typography stays legible at all times. */
   .hero-copy > *, .case-identity > * {
     animation: motion-rise var(--motion-enter) var(--motion-ease) both;
@@ -459,6 +460,7 @@ p { margin-top: 0; }
 @media (max-width: 32rem) {
   /* The header is two rows at this width. */
   html { scroll-padding-top: 8.5rem; }
+  .site-header[data-away="true"]:not(:focus-within) { transform: translateY(-100%); }
   .site-header { grid-template-columns: minmax(0,1fr); gap: var(--space-2); }
   .site-header .brand { max-width: none; white-space: normal; }
   .header-actions { justify-content: space-between; flex-wrap: nowrap; }
