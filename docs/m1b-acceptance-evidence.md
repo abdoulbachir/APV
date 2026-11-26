@@ -154,7 +154,7 @@ Asked and kept as they are, by the owner: the 15-character minimum, the mandator
 
 Verification at `8347376` plus the harness files of this section: the whole harness, 79 PASS, 2 PARTIAL (10.15, 10.16), 0 FAIL; `a3.mjs`, 9 PASS; R1 150 rounds and R2 clean; both backend logs without identifier, hex literal or ERROR line (`tests/acceptance/results-2026-11-26-manual-test-fixes.json`). A first rerun failed 10.6, 14.11, 3.3 and 10.6f: the header then read `GET /me` beside the session store, where scenario 14.11 requires exactly one. The header was changed, not the harness. Public pages now make one identity request each, where they made none.
 
-Not covered by an automated check: the home page on a database without a fund (seen by the owner and in a browser on the test site), and the phone header's hiding (measured in a local preview and seen by the owner on an iPhone).
+Not covered by an automated check: the home page on a database without a fund (checked by the coordinator in a browser on the test site), and the phone header's hiding (measured by the coordinator in a local preview at phone width; the owner tested on an iPhone afterwards and reported no problem with it, without confirming it specifically).
 
 ### Still open
 
