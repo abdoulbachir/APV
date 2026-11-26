@@ -1,0 +1,14 @@
+# Keeps the image builds small and free of local state. The backend has its own context and file.
+.git
+node_modules
+dist
+backend
+contract/node_modules
+contract/fixtures/dataset.json
+contract/fixtures/dataset.public.json
+tests/acceptance/env
+tests/acceptance/evidence
+tests/acceptance/node_modules
+**/.env
+deploy/test/.env
+generated-images
