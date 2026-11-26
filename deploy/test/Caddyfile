@@ -1,0 +1,32 @@
+# Same-origin front of the test site: serves the built frontend with the project's policy headers
+# and forwards /api and /media/public unchanged to the backend. TLS ends here.
+{
+	admin off
+	# A browser that addresses the site by a network address sends no server name. Without this the
+	# web container, whose own address inside Docker is another one, finds no certificate to present.
+	default_sni {$APV_SITE_HOST}
+}
+
+{$APV_SITE_HOST} {
+	# "internal": a certificate from this server's own private authority (testers install its
+	# root certificate). An email address instead: a public certificate, for a public name.
+	tls {$APV_TLS}
+
+	@backend path /api/* /media/public/*
+	handle @backend {
+		# The original Host header is passed on. X-Forwarded-For from the client is discarded and
+		# replaced by the address of the connection, which is what the backend trusts.
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		root * /srv
+		# Generated at build time from security/content-policy.mjs, the single source.
+		import /etc/caddy/policy-headers.caddy
+		route {
+			try_files {path} /index.html
+			header /index.html Cache-Control no-store
+			file_server
+		}
+	}
+}

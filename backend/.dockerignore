@@ -1,0 +1,12 @@
+# Only what the build needs is sent to Docker. Everything else stays out of the build context,
+# so it cannot end up in a layer by accident: build output (which can hold a 2 GB test list),
+# tests and their fixtures, the development database scripts, local settings.
+*
+!pom.xml
+!mvnw
+!.mvn/
+!src/
+src/*
+!src/main/
+**/.env
+**/*.env
