@@ -77,3 +77,27 @@ The owner explicitly approved the following two policies after reviewing the bac
 The owner also directed that the existing prohibition on logging session identifiers be enforced, including expired and rotated identifiers at DEBUG/TRACE. No exception for retired identifiers. This is a correction to implementation, not a change to the accepted confidentiality rule.
 
 These decisions do not authorize merging PR #10 or #11, accepting M1B, or deploying to a real host. Remaining questions: precise wording of body-keyed rate-limit precedence and pending-session discard timing; used/expired credential retention remains a later deployment decision. Preserve existing API schemas, error codes and financial behavior. Joint integration and independent security acceptance remain required.
+
+## Approved on 2026-11-26 — milestone 2A (donation lifecycle contract)
+
+The owner approved all fifteen decisions of `contract/M2A-review.md`, each as the recommended option (A), at contract version 0.4.0 on branch `feature/m2a-donation-contract`. This accepts the design, not an implemented donation system; the write side is milestone 2B. The rules are in `contract/donation-lifecycle.md`; the acceptance scenarios in `contract/tests/donation-acceptance.md`.
+
+| # | Topic | Approved decision |
+|---|---|---|
+| 1 | Guest tracking | A one-time tracking code shown once on the receipt; looked up by `POST /donations/status`; the status shows an amount, a case and a state, never a personal detail. |
+| 2 | What the donor is told, with no email | Only on pages, in both languages (wording written and approved in 2B). Nothing is emailed; the initiative is not called a charity. |
+| 3 | Optional contact field | Include an optional private `contact` field. The site never sends anything to it. |
+| 4 | Provider eligibility | Recorded as an attestation at method activation (who checked, when, what); production refuses activation without it. |
+| 5 | Methods at launch | Start with the one or two the owner already uses and can publish; the handles are supplied privately as server configuration, never committed. |
+| 6 | Managing methods until M5 | The operator command on the server, like staff accounts; no network route in M2. |
+| 7 | General fund on a real database | A one-time migration inserts it, empty. Name and description approved exactly as written in `contract/donation-lifecycle.md` section 10 (EN/FR), shipped in the migration unchanged. |
+| 8 | Who reviews in M2 | Only the super administrator (`donations.confirm`), now returned by `GET /me`. |
+| 9 | Guest public name | The donor's choice at report time is the consent; the reviewer may show less but never add a name; a name is never edited; it can be withdrawn later. |
+| 10 | Confirm for a different case | Allowed, with a required note. The report keeps the donor's case; the confirmation records the real one. |
+| 11 | Lifecycle transitions | `financial-terms.md` section 9 is confirmed (no longer a working proposal). |
+| 12 | Screenshot limits | JPEG and PNG only, ≤ 5 MiB, ≤ 40 Mpx, one per gift, re-encoded and scaled to ≤ 2,400 px. No antivirus engine in M2. |
+| 13 | "Other" until the contact form exists | A static page with the organisers' contact (wording written in 2B). |
+| 14 | Rate-limit and brake numbers | The starting values in `donation-lifecycle.md` section 12, tunable, revisited after first use. |
+| 15 | Retention | Screenshots: 30 days after a decision. Payer name, contact, payment reference, notes: 90 days after a rejection, 24 months after a confirmation. Amounts, cases, dates, ledger and audit: for ever. |
+
+Keep the contract additive: no change to accepted M0/M1 behaviour, schemas or the identity order of checks. The site never processes payments. Four implementation notes for 2B are recorded in `contract/donation-lifecycle.md` (a lost evidence 204 spends the token; duplicate hints cannot match an erased payer name; a `reentryOf` staff entry carries the original's tracking code; the per-reference status limit keys on the reference, backstopped by the per-address limit).

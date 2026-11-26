@@ -2,13 +2,13 @@
 
 Rules behind the giving and donation review endpoints of `openapi.yaml` (version 0.4.0): reporting a gift, private evidence, review, manual entry, corrections, payment methods and the general fund on a real database. The frontend and the backend each implement against this document in milestone 2B. Nothing here is implemented yet.
 
-Status: proposed in milestone 2A. Not reviewed, not accepted. The owner decisions it depends on are listed in `M2A-review.md`; until they are answered, every rule marked **[Proposed]** is a recommendation, written out in full so it can be judged and, if approved, implemented as it stands.
+Status: accepted in milestone 2A. The owner approved all fifteen decisions of `M2A-review.md` on 2026-11-26, each as the recommended option, so every rule below is the design milestone 2B implements. The specifics the owner fixed (the optional `contact` field, the fund text, the retention periods) are as written here.
 
 Rule labels:
 
 - **[Approved]** decided by the project owner (`../docs/decisions.md`), or a rule of an accepted contract (`financial-terms.md`, `media-and-privacy.md`, `identity-and-security.md`, `../docs/adr/0001-backend-architecture.md`). Restated here, not changed.
-- **[M2A design]** technical design proposed here, to be reviewed, then implemented and verified in milestone 2B.
-- **[Proposed, decision N]** depends on owner decision N of `M2A-review.md`. The text describes the recommended option.
+- **[M2A design]** technical design accepted in milestone 2A, to be implemented and verified in milestone 2B.
+- **[Approved, decision N]** owner decision N of `M2A-review.md`, approved on 2026-11-26.
 
 "I&S" is `identity-and-security.md`. "Gift" and "donation" mean the same thing; the API says `donation`.
 
@@ -106,7 +106,7 @@ A donor reads the details, leaves for their payment application, pays, comes bac
 
 **[Approved]** Every change to payment configuration is restricted to super administrators and written to the audit log. Browser screens for it belong to milestone 5 (`payment_methods.manage`).
 
-**[Proposed, decision 6]** Until then, payment methods are managed with the operator command, like staff accounts (I&S 8.1): on the server, by someone who already has access to it, prompting on the terminal, never over the network.
+**[Approved, decision 6]** Until then, payment methods are managed with the operator command, like staff accounts (I&S 8.1): on the server, by someone who already has access to it, prompting on the terminal, never over the network.
 
 | Command | Effect |
 |---|---|
@@ -120,7 +120,7 @@ What milestone 2 must contain so that gifts can be reported before those screens
 
 There is no network operation that changes a recipient detail in milestone 2. This matters: whoever can change a recipient detail can redirect every future gift, so the first version of that power stays behind server access, the same trust the first super administrator rests on.
 
-**Eligibility.** **[Approved]** Before a method is enabled in production, the provider's eligibility rules, geographic limits and terms are checked; a personal account is not assumed to be permitted for collecting donations. **[Proposed, decision 4]** The site cannot check a provider's terms. It records that a person did: `payment-method-activate` asks who checked, on which date, and what was checked (free text), stores the answers with the method and writes them to the audit log. Outside the `dev` and `test` profiles a method cannot be activated without them. This is an attestation by the operator, not proof.
+**Eligibility.** **[Approved]** Before a method is enabled in production, the provider's eligibility rules, geographic limits and terms are checked; a personal account is not assumed to be permitted for collecting donations. **[Approved, decision 4]** The site cannot check a provider's terms. It records that a person did: `payment-method-activate` asks who checked, on which date, and what was checked (free text), stores the answers with the method and writes them to the audit log. Outside the `dev` and `test` profiles a method cannot be activated without them. This is an attestation by the operator, not proof.
 
 ## 3. Reporting a gift
 
@@ -150,7 +150,7 @@ The report form says, before anything is typed: the site never asks for a card n
 | `paidOn` | The calendar day the donor paid, `YYYY-MM-DD`. From 90 days before today to one day after today in the organization timezone; the extra day is for donors east of it. |
 | `payerName` | The name the payment was sent from, as the recipient will see it in their payment application. 2 to 80 characters. Private. It is what the super administrator matches the payment with. |
 | `paymentReference` | Optional. A confirmation number or the handle the payment came from. 1 to 64 characters. Private. |
-| `contact` | Optional. An email address or a phone number where the organisers may reach the donor about this gift. 3 to 120 characters. Private. The site sends nothing to it. **[Proposed, decision 3]** |
+| `contact` | Optional. An email address or a phone number where the organisers may reach the donor about this gift. 3 to 120 characters. Private. The site sends nothing to it. **[Approved, decision 3]** |
 | `display` | How the gift appears publicly once confirmed (3.4). Required: there is no default on the server. |
 
 Text fields: Unicode NFC; no control characters; no leading or trailing white space (the frontend trims, the server refuses with `invalid_format`, as for email addresses). A text value that is a payment card number (13 to 19 digits once spaces and dashes are removed, with a valid check digit) is refused with field code `card_number` and is not stored or logged: the site never holds one. **[M2A design]**
@@ -159,7 +159,7 @@ The body is JSON, at most 16 KiB, and an unknown property is refused with `unkno
 
 ### 3.4 How the donor appears
 
-**[Approved]** by `media-and-privacy.md` section 6; **[Proposed, decision 9]** for guests.
+**[Approved]** by `media-and-privacy.md` section 6; **[Approved, decision 9]** for guests.
 
 | `display.mode` | Meaning once confirmed |
 |---|---|
@@ -195,7 +195,7 @@ To give the same answer twice without storing a secret, the tracking code and th
 
 ### 4.1 What is accepted
 
-**[Proposed, decision 12]**
+**[Approved, decision 12]**
 
 | Limit | Value |
 |---|---|
@@ -223,7 +223,9 @@ Reporting and uploading are two requests, so that a failed upload on a weak conn
 | The content is not a JPEG or PNG that can be decoded within the limits | 400 `evidence_invalid` |
 | Too many pictures are being processed, or the storage budget of 12.3 is full | 503 with `Retry-After` |
 
-An upload that fails leaves the gift exactly as it was: reported, without evidence. The frontend says the gift is recorded and the screenshot was not, and offers to try again while the token lasts. It never implies the gift failed.
+An upload that fails *with an answer* leaves the gift exactly as it was: reported, without evidence. The frontend says the gift is recorded and the screenshot was not, and offers to try again while the token lasts. It never implies the gift failed.
+
+A 204 that is **lost in transit** is different: the token was spent and the screenshot may be stored. The token cannot be retried once spent, and the frontend must not tell the donor the screenshot was not stored; the donor's status page reports `evidenceAttached`, which is the fact to show. (2B.)
 
 ### 4.3 What is stored
 
@@ -249,12 +251,12 @@ There is no email infrastructure. The site sends nothing to anyone. **[Approved]
 
 ### 5.1 Tracking code
 
-**[Proposed, decision 1]** A guest can follow one gift with the tracking code shown on the receipt.
+**[Approved, decision 1]** A guest can follow one gift with the tracking code shown on the receipt.
 
 - 20 characters from an alphabet without look-alike letters (digits and upper-case letters except `I`, `L`, `O`, `U`), shown in five groups of four. The first two groups are the reference; the other twelve characters are the secret part: 60 random bits.
 - Shown once, on the receipt. The page offers to copy it and tells the donor to keep it: it cannot be shown again, and the organisers cannot read it either. It is kept in memory only: not in an address, not in `localStorage`. If it ever travels in a link it is in the fragment, removed from the address bar before anything else is done (I&S 11).
 - `POST /donations/status` with the code returns the state of that one gift. A `POST`, so the code is never in an address or a server log.
-- A wrong code, a malformed code and an unknown reference all answer 404 `donation_not_found`, in the same time. Lookups are rate-limited by client address and by reference (section 12).
+- A wrong code, a malformed code and an unknown reference all answer 404 `donation_not_found`, in the same time. Lookups are rate-limited by client address and by reference (section 12). The per-reference limit keys on the first eight characters of the code, which are the reference; a code so malformed that no reference can be read from it is bounded by the per-address limit alone. (2B.)
 
 | The status shows | Never shows |
 |---|---|
@@ -268,7 +270,7 @@ Losing the code loses tracking, not the gift. A named or anonymous gift also app
 
 ### 5.2 What the donor is told
 
-**[Proposed, decision 2]** The exact wording, in English and French, is the frontend's and needs the owner's approval. What each screen must say:
+**[Approved, decision 2]** The exact wording, in English and French, is the frontend's and needs the owner's approval. What each screen must say:
 
 | Moment | Must say |
 |---|---|
@@ -285,7 +287,7 @@ No screen promises a delay as a guarantee, calls the initiative a charity, or sa
 
 ### 6.1 Who
 
-**[Proposed, decision 8]** In milestone 2 every review operation needs `donations.confirm`, which only a super administrator holds (I&S 1.2), in a fully signed-in session with its second factor. `donation_reports.read` for administrators stays a planned name and grants nothing yet.
+**[Approved, decision 8]** In milestone 2 every review operation needs `donations.confirm`, which only a super administrator holds (I&S 1.2), in a fully signed-in session with its second factor. `donation_reports.read` for administrators stays a planned name and grants nothing yet.
 
 `GET /me` therefore returns `donations.confirm` in `permissions` for a super administrator, in addition to the two of milestone 1. This is the announced way permissions become operational (I&S 1.2).
 
@@ -301,7 +303,7 @@ No screen promises a delay as a guarantee, calls the initiative a charity, or sa
 
 Ties are broken by the gift identifier, compared character by character. `caseCode` narrows to one case (reported or confirmed), `reference` to one reference. Every page carries `pendingCount`, the number of gifts in `reported`.
 
-`GET /admin/donations/{donationId}` returns everything recorded about one gift: what was reported; the recipient details that were shown, with their version and whether they are still current; whether evidence is attached; the decision; the ledger entry and its corrections; the history; and **possible duplicates**: other gifts with the same method and amount whose payer name is equal ignoring case and white space, reported within 7 days of this one. A possible duplicate is a hint for the reviewer. It never refuses or decides anything.
+`GET /admin/donations/{donationId}` returns everything recorded about one gift: what was reported; the recipient details that were shown, with their version and whether they are still current; whether evidence is attached; the decision; the ledger entry and its corrections; the history; and **possible duplicates**: other gifts with the same method and amount whose payer name is equal ignoring case and white space, reported within 7 days of this one. A possible duplicate is a hint for the reviewer. It never refuses or decides anything. The match is on the payer name, which retention erases (section 14), so a gift whose name has been erased cannot surface as a hint. (2B.)
 
 Both are `Cache-Control: no-store`.
 
@@ -320,7 +322,7 @@ Both are `Cache-Control: no-store`.
 | `listing` | `as_requested`, `anonymous` or `hidden`. `as_requested` applies the donor's choice. The other two show less than the donor asked, for example when the typed name cannot be published. Never more: a gift the donor asked to hide cannot be listed, and a name is never edited. |
 | `note` | Optional, private, at most 500 characters. Required when `caseCode` is not the reported case. |
 
-**[Proposed, decision 10]** A gift may be confirmed for another case than the one reported, or for the fund, when the super administrator states why. The report keeps the case the donor chose; the tracking page shows both.
+**[Approved, decision 10]** A gift may be confirmed for another case than the one reported, or for the fund, when the super administrator states why. The report keeps the case the donor chose; the tracking page shows both.
 
 In one transaction, under the lock on the gift:
 
@@ -367,7 +369,7 @@ For money that arrived without a report: handed over in person, or sent by someo
 | `note` | Required, private: why this gift is entered by staff. At most 500 characters. |
 | `reentryOf` | Optional: the gift this one replaces (8.3). |
 
-The gift has no reported amount: nobody reported it. Its origin is `staff_entry`, it has no tracking code and no evidence. Everything else is the confirmation of 6.3, in one transaction.
+The gift has no reported amount: nobody reported it. Its origin is `staff_entry` and it has no evidence. A plain staff entry has no tracking code; the one exception is a re-entry (`reentryOf`), which takes over the tracking code of the gift it replaces (8.3), so the donor's status page follows the correction. Everything else is the confirmation of 6.3, in one transaction.
 
 A manual entry is the only way to record money that arrived without a report, and it is always a new gift. **[Approved]** A genuinely new external payment is never recorded as a correction.
 
@@ -450,7 +452,7 @@ The general fund has no goal and its status does not change.
 
 `GET /site` announces `fundCode: FUND`. A real database has no such case today, so `GET /cases/FUND` answers 404 there; the frontend has tolerated that since pull request 13. A gift to the general fund needs the fund to exist.
 
-**[Proposed, decision 7]**
+**[Approved, decision 7]**
 
 - **How it comes to exist.** A database migration of milestone 2B inserts the fund when no case of kind `fund` exists. A migration runs exactly once per database, on every database, including one that already holds accounts. No command has to be remembered, and no start-up code writes data.
 - **Once.** The existing unique index allows one fund. The migration inserts nothing when one is there, which is the case on a development database loaded from a fixture.
@@ -591,7 +593,7 @@ A gift also keeps its own short history (who decided what, when), which the revi
 
 ## 14. Retention
 
-How long private data is kept is the owner's decision. **[Proposed, decision 15]** for both rows; nothing is assumed until it is answered.
+How long private data is kept is the owner's decision. **[Approved, decision 15]** for both rows; nothing is assumed until it is answered.
 
 ### 14.1 Periods
 
