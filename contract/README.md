@@ -8,9 +8,12 @@
 | `financial-terms.md` | Exact meaning of every money field, and the ledger rules. |
 | `media-and-privacy.md` | Picture addresses, caching, consent withdrawal, public-only responses. |
 | `identity-and-security.md` | Roles and permissions, accounts, passwords, sessions, second factor, CSRF, rate limits, audit. |
+| `donation-lifecycle.md` | Reporting a gift, private evidence, review, manual entry, corrections, payment methods, the general fund on a real database. |
 | `fixtures/` | The shared bilingual test dataset: format, example, expected values, public projection. |
 | `tools/`, `tests/` | The validation scripts and the deliberately wrong inputs they must reject. |
 | `tests/security-acceptance.md` | The security tests milestone 1B must pass. |
+| `tests/donation-acceptance.md` | The donation lifecycle tests milestone 2B must pass. |
+| `M2A-review.md` | Review status and the owner decisions for the donation lifecycle (version 0.4.0). |
 | `tests/negative-contracts.json` | Deliberately damaged copies of the contract that the checker must reject. |
 | `M1A-review.md` | Review status and decisions for the identity contract (version 0.3.0). |
 | `M0A-review.md` | Review status, decisions and the acceptance checklist for this version. |
@@ -49,7 +52,7 @@ What it checks:
 
 `tools/lib.mjs` contains a small reference implementation of the read rules (totals, corrections, donor list, search, sorting, paging). It exists so examples and expected values are computed, not checked by eye. It is not production code, and the frontend mock and the backend are free to implement the rules their own way; the fixtures and golden results are what binds them.
 
-## Scope of version 0.3.0
+## Scope of version 0.4.0
 
 Public read endpoints, unchanged since 0.2.0:
 
@@ -65,7 +68,9 @@ Identity endpoints, added in 0.3.0 and not implemented yet: `GET /api/auth/csrf`
 
 Every schema declares an `x-audience` (`public`, `shared`, `account`, `request` or `credential`), and `npm run validate` fails if private data could reach a public response.
 
-Donation reporting, uploads, profiles, category management and administration are added by later contract pull requests.
+Donation lifecycle endpoints, added in 0.4.0 and not implemented yet: `GET /api/giving/methods`, `POST /api/donations`, `/donations/evidence`, `/donations/status`, and ten operations under `/api/admin/donations` (list, enter, detail, evidence read and delete, confirm, reject, reopen, reversals, refunds, listing). Their rules are in `donation-lifecycle.md`.
+
+Profiles, category management and the contact form are added by later contract pull requests.
 
 ## Categories are data
 

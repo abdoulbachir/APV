@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: APV-GAKASINAY API
-  version: 0.3.0
-  summary: Public read endpoints (milestone 0) and identity (milestone 1).
+  version: 0.4.0
+  summary: Public read endpoints (milestone 0), identity (milestone 1) and the donation lifecycle (milestone 2).
   description: |
     Single source of truth for the API between the APV-GAKASINAY frontend and backend.
 
@@ -123,6 +123,10 @@ tags:
     description: Sign-up, sign-in, sign-out, CSRF token, second factor and one-time credentials.
   - name: Account
     description: The signed-in person's own account.
+  - name: Giving
+    description: Reporting a gift paid outside the site, its private evidence, and tracking it. No account needed.
+  - name: Donation review
+    description: A super administrator confirms, rejects, enters and corrects gifts. The rules are in contract/donation-lifecycle.md.
   - name: Site
     description: Settings and platform-wide totals.
   - name: Cases
@@ -1106,6 +1110,811 @@ paths:
         '429': { $ref: '#/components/responses/IdentityRateLimited' }
         '500': { $ref: '#/components/responses/IdentityInternalError' }
         '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /giving/methods:
+    get:
+      tags: [Giving]
+      operationId: listPaymentMethods
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
+      summary: The payment methods a donor can use, with the recipient details to pay to.
+      description: |
+        Active methods in display order (`position` ascending, then `id`), each with its
+        current details version. Not localized: names, instructions and labels are returned
+        in both languages.
+
+        Never cached: a stored copy of recipient details that have since been replaced would
+        send money to the wrong place. An empty list means gifts cannot be reported on this
+        site at the moment.
+
+        "Other" is not in this list. The frontend always offers it; it leads to the contact
+        page and creates no report.
+      responses:
+        '200':
+          description: The active payment methods. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentMethodList' }
+              example:
+                methods:
+                  - id: zelle
+                    labels: { en: Zelle, fr: Zelle }
+                    position: 1
+                    detailsId: pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N
+                    instructions:
+                      en: Send your gift with Zelle from your bank's application, then come back to this page to report it.
+                      fr: Envoyez votre don avec Zelle depuis l’application de votre banque, puis revenez sur cette page pour le déclarer.
+                    recipient:
+                      - { labels: { en: Send to, fr: Envoyer à }, value: gifts@apv-gakasinay.example, format: text }
+                      - { labels: { en: Name shown by your bank, fr: Nom affiché par votre banque }, value: Sample Recipient, format: text }
+                  - id: paypal
+                    labels: { en: PayPal, fr: PayPal }
+                    position: 2
+                    detailsId: pmd_Wm2Xt7Lp9Vb4NHq3Zr8Kd5
+                    instructions:
+                      en: Open the link, send your gift, then come back to this page to report it.
+                      fr: Ouvrez le lien, envoyez votre don, puis revenez sur cette page pour le déclarer.
+                    recipient:
+                      - { labels: { en: Payment page, fr: Page de paiement }, value: 'https://paypal.example/sample-recipient', format: link }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/GivingUnavailable' }
+  /donations:
+    post:
+      tags: [Giving]
+      operationId: reportDonation
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
+      x-returns-credential: true
+      x-idempotent: true
+      summary: Report a gift that was paid outside the site.
+      description: |
+        No account is needed. The gift is recorded as `reported` and changes nothing public:
+        no total, no list and no count, until a super administrator has verified that the
+        money was received and confirms it.
+
+        The answer is the receipt: the reference, the tracking code (shown once) and the
+        token that allows one screenshot to be attached within 30 minutes.
+
+        `Idempotency-Key` is required. The same key with the same body returns the first
+        answer again, tracking code included, and records nothing more; the same key with
+        another body is 409 `idempotency_key_reused`. Generate the key at random when the form
+        is opened and keep it with the form.
+
+        Refusals: 400 for an invalid body (an unknown or draft case is field `caseCode`,
+        `invalid_value`; text that is a payment card number is `card_number`); 409
+        `case_not_accepting` when the case does not take gifts now; 409
+        `payment_details_changed` when the recipient details shown were replaced 24 hours ago
+        or more; 503 `reporting_paused` when the site is holding back reports.
+
+        When the session is fully signed in, the gift is linked to that account. It is never
+        linked because an address or a name matches.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationReportRequest' }
+            example:
+              caseCode: HELP-014
+              amount: 5000
+              paymentDetailsId: pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N
+              paidOn: '2026-11-26'
+              payerName: Sample Donor
+              paymentReference: ZL-48213907
+              display: { mode: named, publicName: Sample D. }
+      responses:
+        '201':
+          description: The report is recorded. The tracking code and the upload token are shown only here. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationReceipt' }
+              example:
+                reference: 7K4M-2QXD
+                trackingCode: 7K4M-2QXD-9FTR-C3VZ-H8NW
+                state: reported
+                caseCode: HELP-014
+                amount: 5000
+                reportedAt: '2026-11-26T15:04:05Z'
+                evidenceUpload:
+                  token: f3Kq9ZxT1mB7vLw2RnC8yPd4HsJ6uGa0EoXiVtY5QkM
+                  expiresAt: '2026-11-26T15:34:05Z'
+                  maxBytes: 5242880
+                  formats: [image/jpeg, image/png]
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '403': { $ref: '#/components/responses/GivingForbidden' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/ReportConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/GivingUnavailable' }
+  /donations/evidence:
+    post:
+      tags: [Giving]
+      operationId: attachDonationEvidence
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
+      x-binary-upload: true
+      summary: Attach one screenshot to a gift that was just reported.
+      description: |
+        Optional. The body is the picture itself, JPEG or PNG, at most 5 MiB: no multipart
+        form and no file name. `X-Evidence-Token` is the token of the receipt; it names the
+        gift, works once and lasts 30 minutes.
+
+        The picture is decoded, scaled down and written again by the server; only that copy
+        is kept, without any of the data the file carried. It is private: no public route and
+        no donor can read it, the uploader included.
+
+        A screenshot is supporting evidence, not proof of receipt. It never confirms a gift.
+
+        A refusal leaves the gift as it was, reported and without evidence. 400
+        `evidence_token_invalid` for a token that is wrong, expired, used, or whose gift is no
+        longer `reported`: the four look the same. 400 `evidence_invalid` when the content is
+        not a JPEG or PNG that can be decoded within the limits.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/EvidenceToken'
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/png:
+            schema: { type: string, format: binary }
+      responses:
+        '204':
+          description: The screenshot is stored.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/EvidenceRejected' }
+        '403': { $ref: '#/components/responses/GivingForbidden' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '413': { $ref: '#/components/responses/EvidenceTooLarge' }
+        '415': { $ref: '#/components/responses/EvidenceUnsupportedType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/GivingUnavailable' }
+  /donations/status:
+    post:
+      tags: [Giving]
+      operationId: getDonationStatus
+      x-session-state: [anonymous, mfa_required, mfa_enrollment_required, authenticated]
+      summary: The state of one gift, for whoever holds its tracking code.
+      description: |
+        A `POST` although it changes nothing, so that the tracking code is never part of an
+        address. The answer holds no personal detail: no name, no contact detail, no payment
+        reference, no note and no picture.
+
+        A wrong code, a malformed code and an unknown reference are answered alike: 404
+        `donation_not_found`.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationStatusRequest' }
+            example:
+              trackingCode: 7K4M-2QXD-9FTR-C3VZ-H8NW
+      responses:
+        '200':
+          description: The state of the gift. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationStatus' }
+              example:
+                reference: 7K4M-2QXD
+                state: confirmed
+                caseCode: HELP-014
+                reportedAmount: 5000
+                reportedAt: '2026-11-26T15:04:05Z'
+                decidedAt: '2026-11-28T09:30:00Z'
+                confirmedAmount: 5000
+                confirmedCaseCode: HELP-014
+                netAmount: 5000
+                rejectionReason: null
+                evidenceAttached: true
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '403': { $ref: '#/components/responses/GivingForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/GivingUnavailable' }
+  /admin/donations:
+    get:
+      tags: [Donation review]
+      operationId: listDonations
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Gifts, for review.
+      description: |
+        `status=reported` (the default) is the queue, oldest report first. `confirmed` and
+        `rejected` are ordered by the latest decision first, `all` by the latest report first.
+        Ties are broken by `id`, compared character by character.
+
+        `caseCode` keeps gifts reported or confirmed for that case. `reference` keeps the one
+        gift with that reference. `pendingCount` is the number of gifts in `reported`,
+        whatever the filters.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationStateFilter'
+        - $ref: '#/components/parameters/DonationCaseFilter'
+        - $ref: '#/components/parameters/DonationReferenceFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of gifts. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationPage' }
+              example:
+                items:
+                  - id: don_4Tq8ZbN2rLx7Vd1KmP5sWy
+                    reference: 7K4M-2QXD
+                    origin: reported
+                    state: reported
+                    caseCode: HELP-014
+                    reportedAmount: 5000
+                    confirmedAmount: null
+                    netAmount: null
+                    methodId: zelle
+                    payerName: Sample Donor
+                    reportedAt: '2026-11-26T15:04:05Z'
+                    decidedAt: null
+                    evidence: attached
+                    flags: []
+                page: 1
+                pageSize: 12
+                totalItems: 1
+                totalPages: 1
+                pendingCount: 1
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+    post:
+      tags: [Donation review]
+      operationId: enterDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      x-idempotent: true
+      summary: Record a gift that arrived without a report. It is confirmed at once.
+      description: |
+        For money handed over in person or sent by someone who will not use the site. The
+        super administrator has verified that it was received. The gift has no reported
+        amount and no tracking code; everything else is a confirmation: one `donation` ledger
+        entry, the donor listing, and the case status, in one transaction.
+
+        `reentryOf` names a confirmed gift of which nothing still stands, corrected by
+        reversals only and not re-entered yet: this entry replaces it, for the right amount or
+        case. Anything else is 409 `reentry_not_allowed`.
+
+        A new payment is always recorded here, never as a correction.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationEntryRequest' }
+            example:
+              caseCode: FUND
+              amount: 20000
+              receivedOn: '2026-11-25'
+              method: { description: 'Cash, in person' }
+              payerName: Sample Donor
+              display: { mode: anonymous }
+              note: Handed over at the family gathering.
+      responses:
+        '201':
+          description: The gift is recorded and confirmed. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example:
+                id: don_9Lm3XcV7bNq2Wr5TzK8dPy
+                reference: C3VZ-H8NW
+                origin: staff_entry
+                state: confirmed
+                reported: null
+                method: { id: null, description: 'Cash, in person' }
+                shownDetails: null
+                payerName: Sample Donor
+                paymentReference: null
+                contact: null
+                display: { mode: anonymous, publicName: null }
+                linkedAccount: false
+                evidence: none
+                flags: []
+                decision:
+                  state: confirmed
+                  at: '2026-11-26T16:00:00Z'
+                  by: { id: acc_7Yk2mQ9xT1bLw4RmN8cYp3, displayName: Sample Owner }
+                  caseCode: FUND
+                  amount: 20000
+                  receivedOn: '2026-11-25'
+                  providerReference: null
+                  listing: anonymous
+                  rejectionReason: null
+                  note: Handed over at the family gathering.
+                ledgerEntryId: L4821
+                netAmount: 20000
+                corrections: []
+                reentryOf: null
+                reenteredAs: null
+                possibleDuplicates: []
+                history:
+                  - { at: '2026-11-26T16:00:00Z', action: entered, by: { id: acc_7Yk2mQ9xT1bLw4RmN8cYp3, displayName: Sample Owner } }
+                privateDetailsErasedAt: null
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}:
+    get:
+      tags: [Donation review]
+      operationId: getDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Everything recorded about one gift.
+      description: |
+        What was reported, the recipient details that were shown and whether they are still
+        current, whether a screenshot is attached, the decision, the ledger entry and its
+        corrections, the history, and possible duplicates: other gifts with the same method,
+        amount and payer name reported within 7 days. A possible duplicate is a hint. It
+        decides nothing.
+
+        The permission is checked before the identifier is looked at: an account without it
+        gets 403 and never learns whether the gift exists.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+      responses:
+        '200':
+          description: The gift. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example:
+                id: don_4Tq8ZbN2rLx7Vd1KmP5sWy
+                reference: 7K4M-2QXD
+                origin: reported
+                state: reported
+                reported: { caseCode: HELP-014, amount: 5000, paidOn: '2026-11-26', at: '2026-11-26T15:04:05Z' }
+                method: { id: zelle, description: null }
+                shownDetails:
+                  detailsId: pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N
+                  revision: 3
+                  current: true
+                  supersededAt: null
+                  recipient:
+                    - { labels: { en: Send to, fr: Envoyer à }, value: gifts@apv-gakasinay.example, format: text }
+                    - { labels: { en: Name shown by your bank, fr: Nom affiché par votre banque }, value: Sample Recipient, format: text }
+                payerName: Sample Donor
+                paymentReference: ZL-48213907
+                contact: null
+                display: { mode: named, publicName: Sample D. }
+                linkedAccount: false
+                evidence: attached
+                flags: []
+                decision: null
+                ledgerEntryId: null
+                netAmount: null
+                corrections: []
+                reentryOf: null
+                reenteredAs: null
+                possibleDuplicates: []
+                history:
+                  - { at: '2026-11-26T15:04:05Z', action: reported, by: null }
+                  - { at: '2026-11-26T15:05:10Z', action: evidence_attached, by: null }
+                privateDetailsErasedAt: null
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/evidence:
+    get:
+      tags: [Donation review]
+      operationId: getDonationEvidence
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      x-binary-download: true
+      summary: The screenshot attached to a gift.
+      description: |
+        The copy the server wrote when the screenshot was uploaded, never the file as sent.
+        Served with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
+        `Content-Disposition: inline` and `Content-Security-Policy: default-src 'none'; sandbox`.
+        Every read is written to the audit log.
+
+        404 `evidence_not_found` when the gift has no screenshot or it has been deleted; 404
+        `donation_not_found` when there is no such gift.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+      responses:
+        '200':
+          description: The picture. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/EvidenceNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/evidence/delete:
+    post:
+      tags: [Donation review]
+      operationId: deleteDonationEvidence
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Delete the screenshot of a gift before its retention period ends.
+      description: |
+        For a privacy request. No body. The stored file is deleted; the gift keeps that a
+        screenshot existed and when it was deleted. 404 `evidence_not_found` when there is
+        none, or it is already deleted.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: The gift, without its screenshot. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "reported", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "deleted", "flags": [], "decision": null, "ledgerEntryId": null, "netAmount": null, "corrections": [], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-26T15:05:10Z", "action": "evidence_attached", "by": null}, {"at": "2026-11-27T09:00:00Z", "action": "evidence_deleted", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/EvidenceNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/confirm:
+    post:
+      tags: [Donation review]
+      operationId: confirmDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      x-idempotent: true
+      summary: Confirm that the money of a reported gift was received.
+      description: |
+        Only after verifying, in the payment account itself, that the money arrived. A
+        screenshot is not that verification.
+
+        `caseCode` and `confirmedAmount` are always stated; the server never takes them from
+        the report. They are stored beside the reported values, which never change. A
+        `caseCode` other than the reported one needs a `note`.
+
+        In one transaction: the gift goes from `reported` to `confirmed`, one `donation`
+        ledger entry is written on the confirmed case, dated now, the donor listing is
+        written according to `listing`, and the case status follows the lifecycle rules.
+        Public totals change at that instant and not before.
+
+        409 `donation_state_conflict` when the gift is not `reported`; 409
+        `duplicate_payment_reference` when another confirmed gift of the same payment method
+        carries the same `providerReference`; 409 `platform_limit_reached`; 409
+        `idempotency_key_reused`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationConfirmRequest' }
+            example:
+              caseCode: HELP-014
+              confirmedAmount: 5000
+              receivedOn: '2026-11-26'
+              providerReference: ZL-48213907
+              listing: as_requested
+      responses:
+        '200':
+          description: The gift, confirmed. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "confirmed", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": {"state": "confirmed", "at": "2026-11-28T09:30:00Z", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}, "caseCode": "HELP-014", "amount": 5000, "receivedOn": "2026-11-26", "providerReference": "ZL-48213907", "listing": "named", "rejectionReason": null, "note": null}, "ledgerEntryId": "L4821", "netAmount": 5000, "corrections": [], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "confirmed", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/reject:
+    post:
+      tags: [Donation review]
+      operationId: rejectDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Decide that a reported gift cannot be confirmed.
+      description: |
+        From `reported` only; otherwise 409 `donation_state_conflict`. Nothing public changes:
+        no money was ever recorded for this gift. `note` is required when `reason` is `other`.
+        The donor's status page shows the reason, never the note.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationRejectRequest' }
+            example:
+              reason: not_received
+              note: No payment from this name in the last two weeks.
+      responses:
+        '200':
+          description: The gift, rejected. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "rejected", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": {"state": "rejected", "at": "2026-11-28T09:30:00Z", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}, "caseCode": null, "amount": null, "receivedOn": null, "providerReference": null, "listing": null, "rejectionReason": "not_received", "note": "No payment from this name in the last two weeks."}, "ledgerEntryId": null, "netAmount": null, "corrections": [], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "rejected", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/reopen:
+    post:
+      tags: [Donation review]
+      operationId: reopenDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Put a rejected gift back in the queue.
+      description: |
+        From `rejected` to `reported`, for a payment that arrived after the rejection or a
+        rejection made by mistake. No body. The earlier rejection stays in the history.
+        Otherwise 409 `donation_state_conflict`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: The gift, reported again. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "reported", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": null, "ledgerEntryId": null, "netAmount": null, "corrections": [], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "rejected", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}, {"at": "2026-11-29T10:00:00Z", "action": "reopened", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/reversals:
+    post:
+      tags: [Donation review]
+      operationId: reverseDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      x-idempotent: true
+      summary: Repair a confirmed gift that was recorded wrongly. No money moved.
+      description: |
+        Writes one `donation_reversal` ledger entry correcting the gift's `donation` entry:
+        the same payment confirmed twice, a typing error in the amount, the wrong case, a
+        payment that never arrived. For money that really went back to the donor use
+        `POST /admin/donations/{donationId}/refunds` instead; the two are never
+        interchangeable.
+
+        `amount` is from 1 cent to what still stands of the gift. Passing it is 409
+        `correction_exceeds_remaining`. The limit is checked under a lock, so two simultaneous
+        corrections cannot both pass. The entry is written even when it leaves the case with
+        less than it has handed over; the shortfall is shown.
+
+        A reversal only takes away. To record another amount or case, reverse in full and
+        enter the gift again with `reentryOf`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationReversalRequest' }
+            example:
+              amount: 4500
+              reason: wrong_amount
+              note: Typed 50.00, the payment was 5.00.
+      responses:
+        '200':
+          description: The gift, with the reversal. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "confirmed", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": {"state": "confirmed", "at": "2026-11-28T09:30:00Z", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}, "caseCode": "HELP-014", "amount": 5000, "receivedOn": "2026-11-26", "providerReference": "ZL-48213907", "listing": "named", "rejectionReason": null, "note": null}, "ledgerEntryId": "L4821", "netAmount": 500, "corrections": [{"ledgerEntryId": "L4822", "kind": "donation_reversal", "amount": 4500, "at": "2026-11-29T11:00:00Z", "reason": "wrong_amount", "providerReference": null}], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "confirmed", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}, {"at": "2026-11-29T11:00:00Z", "action": "reversed", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/refunds:
+    post:
+      tags: [Donation review]
+      operationId: refundDonation
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      x-idempotent: true
+      summary: Record that money of a confirmed gift really went back to the donor.
+      description: |
+        Writes one `refund` ledger entry correcting the gift's `donation` entry. The site
+        sends no money: this records a return that was made, or forced by the payment
+        provider, outside it. `refundedOn` is the day the money left.
+
+        `amount` is from 1 cent to what still stands of the gift: 409
+        `correction_exceeds_remaining` beyond it. The same `providerReference` cannot be
+        recorded twice against one gift: 409 `duplicate_payment_reference`. The entry is
+        written even when it leaves the case with less than it has handed over.
+
+        For a record that was simply wrong, with no money moved, use
+        `POST /admin/donations/{donationId}/reversals`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationRefundRequest' }
+            example:
+              amount: 2000
+              refundedOn: '2026-12-02'
+              providerReference: ZL-RET-77120
+              note: The donor asked for part of the gift back.
+      responses:
+        '200':
+          description: The gift, with the refund. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "confirmed", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "named", "publicName": "Sample D."}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": {"state": "confirmed", "at": "2026-11-28T09:30:00Z", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}, "caseCode": "HELP-014", "amount": 5000, "receivedOn": "2026-11-26", "providerReference": "ZL-48213907", "listing": "named", "rejectionReason": null, "note": null}, "ledgerEntryId": "L4821", "netAmount": 3000, "corrections": [{"ledgerEntryId": "L4823", "kind": "refund", "amount": 2000, "at": "2026-12-02T08:00:00Z", "reason": null, "providerReference": "ZL-RET-77120"}], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "confirmed", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}, {"at": "2026-12-02T08:00:00Z", "action": "refunded", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
+  /admin/donations/{donationId}/listing:
+    post:
+      tags: [Donation review]
+      operationId: restrictDonationListing
+      x-session-state: [authenticated]
+      x-permission: donations.confirm
+      summary: Show less of the donor of a confirmed gift.
+      description: |
+        For a donor who no longer wants to be named or listed. `anonymous` removes the name;
+        `hidden` removes the gift from the donor list. It can only show less than is shown
+        now: asking for the same or more is 409 `donation_state_conflict`, as is a gift that
+        is not confirmed. No amount, total or ledger entry changes.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/DonationIdPath'
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationListingRequest' }
+            example:
+              listing: anonymous
+      responses:
+        '200':
+          description: The gift, listed as asked. Never cached.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationDetail' }
+              example: {"id": "don_4Tq8ZbN2rLx7Vd1KmP5sWy", "reference": "7K4M-2QXD", "origin": "reported", "state": "confirmed", "reported": {"caseCode": "HELP-014", "amount": 5000, "paidOn": "2026-11-26", "at": "2026-11-26T15:04:05Z"}, "method": {"id": "zelle", "description": null}, "shownDetails": {"detailsId": "pmd_Hq3Zr8Kd5Wm2Xt7Lp9Vb4N", "revision": 3, "current": true, "supersededAt": null, "recipient": [{"labels": {"en": "Send to", "fr": "Envoyer \u00e0"}, "value": "gifts@apv-gakasinay.example", "format": "text"}]}, "payerName": "Sample Donor", "paymentReference": "ZL-48213907", "contact": null, "display": {"mode": "anonymous", "publicName": null}, "linkedAccount": false, "evidence": "attached", "flags": [], "decision": {"state": "confirmed", "at": "2026-11-28T09:30:00Z", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}, "caseCode": "HELP-014", "amount": 5000, "receivedOn": "2026-11-26", "providerReference": "ZL-48213907", "listing": "anonymous", "rejectionReason": null, "note": null}, "ledgerEntryId": "L4821", "netAmount": 5000, "corrections": [], "reentryOf": null, "reenteredAs": null, "possibleDuplicates": [], "history": [{"at": "2026-11-26T15:04:05Z", "action": "reported", "by": null}, {"at": "2026-11-28T09:30:00Z", "action": "confirmed", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}, {"at": "2026-11-30T12:00:00Z", "action": "listing_restricted", "by": {"id": "acc_7Yk2mQ9xT1bLw4RmN8cYp3", "displayName": "Sample Owner"}}], "privateDetailsErasedAt": null}
+        '400': { $ref: '#/components/responses/GivingValidationError' }
+        '401': { $ref: '#/components/responses/StaffUnauthenticated' }
+        '403': { $ref: '#/components/responses/StaffForbidden' }
+        '404': { $ref: '#/components/responses/DonationNotFound' }
+        '405': { $ref: '#/components/responses/IdentityMethodNotAllowed' }
+        '409': { $ref: '#/components/responses/DonationConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/GivingRateLimited' }
+        '500': { $ref: '#/components/responses/IdentityInternalError' }
+        '503': { $ref: '#/components/responses/IdentityUnavailable' }
 components:
   securitySchemes:
     sessionCookie:
@@ -1119,6 +1928,48 @@ components:
         cookie is named `apv_session` and is not `Secure`; that form is refused outside the
         development profile.
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        A random value chosen by the client for one intended action, and sent again unchanged
+        when that same request is repeated. The same key with the same request returns the
+        first answer and writes nothing more; the same key with a different request is 409
+        `idempotency_key_reused`. Kept in memory only. A key of a guest report is remembered
+        for 24 hours; a key of a staff operation belongs to the account that used it and is
+        remembered for 7 days.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{22,64}$' }
+      example: b6f0c1de-7a52-4c1e-9d3f-2e8a51c07b94
+    EvidenceToken:
+      name: X-Evidence-Token
+      in: header
+      required: true
+      description: The upload token of the receipt. Names one gift, works once, lasts 30 minutes. Never in an address or in storage.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+      example: f3Kq9ZxT1mB7vLw2RnC8yPd4HsJ6uGa0EoXiVtY5QkM
+    DonationIdPath:
+      name: donationId
+      in: path
+      required: true
+      description: Identifier of a gift, as the review list returns it.
+      schema: { $ref: '#/components/schemas/DonationId' }
+      example: don_4Tq8ZbN2rLx7Vd1KmP5sWy
+    DonationStateFilter:
+      name: status
+      in: query
+      description: Which gifts to list. `reported` is the review queue.
+      schema: { type: string, enum: [reported, confirmed, rejected, all], default: reported }
+    DonationCaseFilter:
+      name: caseCode
+      in: query
+      description: Keeps gifts reported or confirmed for this case. Matched case-insensitively.
+      schema: { type: string, pattern: '^[A-Za-z]{2,8}(-[0-9]{1,6})?$', maxLength: 16 }
+    DonationReferenceFilter:
+      name: reference
+      in: query
+      description: Keeps the gift with this reference, with or without the dash.
+      schema: { type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{4}-?[0-9A-HJKMNP-TV-Z]{4}$' }
     CsrfHeader:
       name: X-CSRF-TOKEN
       in: header
@@ -1182,6 +2033,171 @@ components:
       description: Seconds to wait before retrying.
       schema: { type: integer, minimum: 1 }
   responses:
+    GivingValidationError:
+      description: |
+        A path parameter, a query parameter, a header of the operation or the body is invalid.
+        Never cached. `fields` names what is wrong; a header is named as it is written, for
+        example `Idempotency-Key`.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: validation_error
+              message: amount must be at least 1
+              fields: [{ name: amount, code: out_of_range }]
+              requestId: 5f0c1c9e2b7a4d1f
+    GivingForbidden:
+      description: |
+        `forbidden` when the `Origin` or `Sec-Fetch-Site` header shows the request did not
+        come from the site's own page (checked first). `csrf_invalid` when the CSRF header is
+        missing or does not belong to a live session. Both are decided before the body is
+        read: nothing was recorded or counted. After `csrf_invalid`, fetch a token and let
+        the person submit again; never resend by itself.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: csrf_invalid, message: Missing or invalid CSRF token, requestId: 5f0c1c9e2b7a4d1f }
+    GivingRateLimited:
+      description: Too many requests. Wait `Retry-After` seconds; never more than 60 minutes.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: rate_limited, message: Too many requests, requestId: 5f0c1c9e2b7a4d1f }
+    GivingUnavailable:
+      description: |
+        `reporting_paused`: the site is holding back new reports, because too many arrived or
+        too many wait to be reviewed. Nothing was recorded. `unavailable`: temporarily
+        unavailable, including when too many pictures are being processed or the storage for
+        screenshots is full; a gift already reported stays recorded.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: reporting_paused, message: Reports cannot be taken at the moment, requestId: 5f0c1c9e2b7a4d1f }
+    ReportConflict:
+      description: |
+        Nothing was recorded. `case_not_accepting`: the case does not take gifts now.
+        `payment_details_changed`: the recipient details the report names were replaced 24
+        hours ago or more; read the methods again. `idempotency_key_reused`: this key was
+        already used for a different report.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: case_not_accepting, message: This case does not accept gifts now, requestId: 5f0c1c9e2b7a4d1f }
+    EvidenceRejected:
+      description: |
+        The gift stays as it was, reported and without a screenshot.
+        `evidence_token_invalid`: the token is wrong, expired, already used, or its gift is no
+        longer `reported`; the four look the same. `evidence_invalid`: the content is not a
+        JPEG or PNG that can be decoded within the limits. `validation_error`: a header is
+        missing or malformed.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: evidence_token_invalid, message: Invalid or expired upload token, requestId: 5f0c1c9e2b7a4d1f }
+    EvidenceTooLarge:
+      description: The picture is larger than 5 MiB. The body is not read past the limit.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: payload_too_large, message: Picture too large, requestId: 5f0c1c9e2b7a4d1f }
+    EvidenceUnsupportedType:
+      description: The declared type is neither `image/jpeg` nor `image/png`.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: unsupported_media_type, message: Content-Type must be image/jpeg or image/png, requestId: 5f0c1c9e2b7a4d1f }
+    StaffUnauthenticated:
+      description: |
+        About the session, never about the request: `unauthenticated` when nobody is signed
+        in or the session was lost, `mfa_required` or `mfa_enrollment_required` when a second
+        factor is still owed. On a `POST` these are reached only with a valid CSRF token; a
+        lost session's stale token is refused first with 403 `csrf_invalid`. Nothing was
+        changed and the gift identifier was not looked at.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: unauthenticated, message: Sign-in required, requestId: 5f0c1c9e2b7a4d1f }
+    StaffForbidden:
+      description: |
+        `forbidden` when the `Origin` or `Sec-Fetch-Site` header shows the request did not
+        come from the site's own page (checked first, on a `POST`), or when the signed-in
+        account does not hold the permission of the operation (checked after the token, and
+        before the gift identifier is looked at). `csrf_invalid` when the CSRF header of a
+        `POST` is missing or does not belong to a live session. Nothing was changed.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: forbidden, message: Not allowed, requestId: 5f0c1c9e2b7a4d1f }
+    DonationNotFound:
+      description: |
+        No such gift. For a tracking code: the code is wrong, malformed beyond what the schema
+        refuses, or names no gift; all are answered alike.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: donation_not_found, message: Gift not found, requestId: 5f0c1c9e2b7a4d1f }
+    EvidenceNotFound:
+      description: |
+        `evidence_not_found`: the gift has no screenshot, or it has been deleted.
+        `donation_not_found`: no such gift.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: evidence_not_found, message: No screenshot for this gift, requestId: 5f0c1c9e2b7a4d1f }
+    DonationConflict:
+      description: |
+        Nothing was changed. `donation_state_conflict`: the gift is not in the state this
+        operation needs, for example it was decided a moment ago by another request.
+        `idempotency_key_reused`: this key was already used for a different request.
+        `duplicate_payment_reference`: that provider reference is already recorded.
+        `correction_exceeds_remaining`: the correction is larger than what still stands of
+        the gift. `reentry_not_allowed`: the gift named by `reentryOf` cannot be re-entered.
+        `platform_limit_reached`: the write would pass the bound on all movements.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { code: donation_state_conflict, message: The gift is not in the required state, requestId: 5f0c1c9e2b7a4d1f }
     Unauthenticated:
       description: |
         Two kinds of 401, told apart by the code.
@@ -1389,6 +2405,580 @@ components:
           example:
             error: { code: unavailable, message: Service unavailable, requestId: 5f0c1c9e2b7a4d1f }
   schemas:
+    DonationId:
+      x-audience: account
+      description: Opaque identifier of a gift. Staff only, never public, not derived from the donor or the payment.
+      type: string
+      pattern: '^don_[A-Za-z0-9]{22}$'
+    DonationReference:
+      x-audience: shared
+      description: The short reference a donor quotes when contacting the organisers. Eight characters without look-alike letters, written in two groups of four.
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$'
+    PaidDate:
+      x-audience: shared
+      description: A calendar day a payment was made or received, `YYYY-MM-DD`, no time and no zone.
+      type: string
+      format: date
+    PayerName:
+      x-audience: request
+      description: The name a payment was sent from, as the recipient sees it. Private. NFC, no control characters, no surrounding white space.
+      type: string
+      minLength: 2
+      maxLength: 80
+    PublicDonorName:
+      x-audience: request
+      description: A name a donor chose and agreed to show in the public donor list.
+      type: string
+      minLength: 2
+      maxLength: 60
+    DonationAmount:
+      x-audience: shared
+      description: An amount of money reported, confirmed or corrected, in integer US cents. The bounds of one movement.
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 10000000000
+    LocalizedText:
+      x-audience: shared
+      description: The same text in both languages.
+      type: object
+      additionalProperties: false
+      required: [en, fr]
+      properties:
+        en: { type: string }
+        fr: { type: string }
+    PaymentDetailsId:
+      x-audience: shared
+      description: Identifier of one published version of a method's recipient details. A gift keeps the version that was shown when it was reported.
+      type: string
+      pattern: '^pmd_[A-Za-z0-9]{22}$'
+    RecipientField:
+      x-audience: shared
+      description: One recipient detail shown to the donor. A `link` is an https address the donor opens; a `text` value is shown with a copy button. Never rendered as HTML.
+      type: object
+      additionalProperties: false
+      required: [labels, value, format]
+      properties:
+        labels: { $ref: '#/components/schemas/LocalizedText' }
+        value: { type: string, minLength: 1, maxLength: 200 }
+        format: { type: string, enum: [text, link] }
+    PaymentMethodId:
+      x-audience: shared
+      description: Stable identifier of a payment method, like a category identifier. Chosen when the method is created, never changed, never reused.
+      type: string
+      pattern: '^[a-z][a-z0-9_]{1,31}$'
+    PaymentMethod:
+      x-audience: shared
+      description: An active payment method with the recipient details to pay to. Recipient details are public by nature, since a donor must read them before paying.
+      type: object
+      additionalProperties: false
+      required: [id, labels, position, detailsId, instructions, recipient]
+      properties:
+        id: { $ref: '#/components/schemas/PaymentMethodId' }
+        labels: { $ref: '#/components/schemas/LocalizedText' }
+        position: { type: integer, minimum: 1 }
+        detailsId: { $ref: '#/components/schemas/PaymentDetailsId' }
+        instructions: { $ref: '#/components/schemas/LocalizedText' }
+        recipient:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items: { $ref: '#/components/schemas/RecipientField' }
+    PaymentMethodList:
+      x-audience: shared
+      description: The active methods in display order. Empty when gifts cannot be reported yet.
+      type: object
+      additionalProperties: false
+      required: [methods]
+      properties:
+        methods:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentMethod' }
+    DonationState:
+      x-audience: shared
+      description: |
+        The state of a gift. `reported`: a donor said they paid, nothing is verified and
+        nothing public changed. `confirmed`: a super administrator verified receipt; one
+        `donation` ledger entry exists. `rejected`: the report cannot be confirmed.
+      type: string
+      enum: [reported, confirmed, rejected]
+    DonationDisplay:
+      x-audience: request
+      description: |
+        How the gift appears publicly once confirmed. `named` needs `publicName` and is the
+        donor's consent to show that name; `anonymous` lists the gift without a name; `hidden`
+        counts it in totals but does not list it. No picture: a guest has none.
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [named, anonymous, hidden] }
+        publicName: { $ref: '#/components/schemas/PublicDonorName' }
+    DonationReportRequest:
+      x-audience: request
+      description: |
+        A gift reported by a donor. It can carry no state, no confirmed amount, no account, no
+        permission and no identifier of its own. A text value that is a payment card number is
+        refused and never stored.
+      type: object
+      additionalProperties: false
+      required: [caseCode, amount, paymentDetailsId, paidOn, payerName, display]
+      properties:
+        caseCode:
+          description: A public case or `FUND`. Matched case-insensitively. Must accept gifts now.
+          type: string
+          pattern: '^[A-Za-z]{2,8}(-[0-9]{1,6})?$'
+          maxLength: 16
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        paymentDetailsId: { $ref: '#/components/schemas/PaymentDetailsId' }
+        paidOn: { $ref: '#/components/schemas/PaidDate' }
+        payerName: { $ref: '#/components/schemas/PayerName' }
+        paymentReference:
+          description: Optional. A confirmation number or the handle the payment came from. Private.
+          type: string
+          minLength: 1
+          maxLength: 64
+        contact:
+          description: Optional. Where the organisers may reach the donor about this gift. Private. The site sends nothing to it.
+          type: string
+          minLength: 3
+          maxLength: 120
+        display: { $ref: '#/components/schemas/DonationDisplay' }
+    EvidenceUpload:
+      x-audience: credential
+      description: The one-time capability to attach a screenshot to the gift just reported. Kept in memory only.
+      type: object
+      additionalProperties: false
+      required: [token, expiresAt, maxBytes, formats]
+      properties:
+        token: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        maxBytes: { type: integer, const: 5242880 }
+        formats:
+          type: array
+          items: { type: string, enum: [image/jpeg, image/png] }
+    DonationReceipt:
+      x-audience: credential
+      description: |
+        The receipt shown once after a report. It carries the tracking code and the upload
+        token, which are never shown again and which the organisers cannot read either.
+      type: object
+      additionalProperties: false
+      required: [reference, trackingCode, state, caseCode, amount, reportedAt, evidenceUpload]
+      properties:
+        reference: { $ref: '#/components/schemas/DonationReference' }
+        trackingCode:
+          description: The secret the donor keeps, shown once. Five groups of four without look-alike letters.
+          type: string
+          pattern: '^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){4}$'
+        state: { $ref: '#/components/schemas/DonationState' }
+        caseCode:
+          description: The case the donor chose, canonical upper case.
+          type: string
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        reportedAt: { $ref: '#/components/schemas/Timestamp' }
+        evidenceUpload:
+          oneOf:
+            - $ref: '#/components/schemas/EvidenceUpload'
+            - type: 'null'
+    DonationStatusRequest:
+      x-audience: request
+      description: A tracking code, to read the state of one gift.
+      type: object
+      additionalProperties: false
+      required: [trackingCode]
+      properties:
+        trackingCode:
+          type: string
+          pattern: '^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){4}$'
+    DonationStatus:
+      x-audience: account
+      description: |
+        What the holder of a tracking code may see about one gift. No name, no contact detail,
+        no payment reference, no note, no picture, and nothing about who decided.
+      type: object
+      additionalProperties: false
+      required: [reference, state, caseCode, reportedAmount, reportedAt, decidedAt, confirmedAmount, confirmedCaseCode, netAmount, rejectionReason, evidenceAttached]
+      properties:
+        reference: { $ref: '#/components/schemas/DonationReference' }
+        state: { $ref: '#/components/schemas/DonationState' }
+        caseCode:
+          description: The case the donor reported.
+          type: string
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
+        reportedAmount: { $ref: '#/components/schemas/DonationAmount' }
+        reportedAt: { $ref: '#/components/schemas/Timestamp' }
+        decidedAt:
+          description: When the gift was confirmed or rejected. Null while reported.
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        confirmedAmount:
+          description: What was confirmed. Null unless confirmed.
+          oneOf:
+            - $ref: '#/components/schemas/DonationAmount'
+            - type: 'null'
+        confirmedCaseCode:
+          description: The case money was confirmed for, which can differ from the reported one. Null unless confirmed.
+          type: [string, 'null']
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
+        netAmount:
+          description: What still stands after corrections. Null unless confirmed.
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+        rejectionReason:
+          description: Why the gift was rejected. Null unless rejected.
+          type: [string, 'null']
+          enum: [not_received, duplicate, other, null]
+        evidenceAttached:
+          description: Whether a screenshot is attached. Never the screenshot itself.
+          type: boolean
+    DonationConfirmRequest:
+      x-audience: request
+      description: The super administrator's confirmation. The case and amount are always stated, never taken from the report.
+      type: object
+      additionalProperties: false
+      required: [caseCode, confirmedAmount, receivedOn, listing]
+      properties:
+        caseCode:
+          description: The case the money is confirmed for. A published case or `FUND`, not a draft.
+          type: string
+          pattern: '^[A-Za-z]{2,8}(-[0-9]{1,6})?$'
+          maxLength: 16
+        confirmedAmount: { $ref: '#/components/schemas/DonationAmount' }
+        receivedOn: { $ref: '#/components/schemas/PaidDate' }
+        providerReference:
+          description: Optional. The payment's own identifier in the provider's records. Unique per method.
+          type: string
+          minLength: 1
+          maxLength: 64
+        listing: { type: string, enum: [as_requested, anonymous, hidden] }
+        note:
+          description: Private. Required when the case differs from the reported one.
+          type: string
+          maxLength: 500
+    DonationRejectRequest:
+      x-audience: request
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, enum: [not_received, duplicate, other] }
+        note:
+          description: Private. Required when the reason is `other`.
+          type: string
+          maxLength: 500
+    DonationEntryRequest:
+      x-audience: request
+      description: A gift staff record that arrived without a report. Confirmed at once. Exactly one of a method identifier or a free description.
+      type: object
+      additionalProperties: false
+      required: [caseCode, amount, receivedOn, method, payerName, display, note]
+      properties:
+        caseCode:
+          type: string
+          pattern: '^[A-Za-z]{2,8}(-[0-9]{1,6})?$'
+          maxLength: 16
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        receivedOn: { $ref: '#/components/schemas/PaidDate' }
+        method:
+          description: Exactly one of `id` (a method record) or `description` (a way that is not a record, such as cash).
+          type: object
+          additionalProperties: false
+          properties:
+            id: { $ref: '#/components/schemas/PaymentMethodId' }
+            description: { type: string, minLength: 2, maxLength: 80 }
+        payerName: { $ref: '#/components/schemas/PayerName' }
+        display: { $ref: '#/components/schemas/DonationDisplay' }
+        note: { type: string, minLength: 1, maxLength: 500 }
+        reentryOf:
+          description: Optional. A fully reversed confirmed gift this entry replaces.
+          $ref: '#/components/schemas/DonationId'
+    DonationReversalRequest:
+      x-audience: request
+      description: Repairs a record. No money moved. Not for money that went back (that is a refund).
+      type: object
+      additionalProperties: false
+      required: [amount, reason]
+      properties:
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        reason: { type: string, enum: [duplicate_confirmation, wrong_amount, wrong_case, not_received, other] }
+        note: { type: string, maxLength: 500 }
+    DonationRefundRequest:
+      x-audience: request
+      description: Records money that really went back to the donor, outside the site. Not for a record that was merely wrong (that is a reversal).
+      type: object
+      additionalProperties: false
+      required: [amount, refundedOn]
+      properties:
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        refundedOn: { $ref: '#/components/schemas/PaidDate' }
+        providerReference:
+          description: Optional. The provider's identifier for the return. Cannot be recorded twice against one gift.
+          type: string
+          minLength: 1
+          maxLength: 64
+        note: { type: string, maxLength: 500 }
+    DonationListingRequest:
+      x-audience: request
+      description: Shows less of a confirmed gift's donor. Can only reduce what is shown.
+      type: object
+      additionalProperties: false
+      required: [listing]
+      properties:
+        listing: { type: string, enum: [anonymous, hidden] }
+    StaffActor:
+      x-audience: account
+      description: The staff account that took an action, for the review history.
+      type: object
+      additionalProperties: false
+      required: [id, displayName]
+      properties:
+        id: { $ref: '#/components/schemas/AccountId' }
+        displayName: { $ref: '#/components/schemas/DisplayName' }
+    ShownDetails:
+      x-audience: account
+      description: The recipient details that were shown when the gift was reported, as they were then, and whether that version is still current.
+      type: object
+      additionalProperties: false
+      required: [detailsId, revision, current, supersededAt, recipient]
+      properties:
+        detailsId: { $ref: '#/components/schemas/PaymentDetailsId' }
+        revision: { type: integer, minimum: 1 }
+        current: { type: boolean }
+        supersededAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        recipient:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items: { $ref: '#/components/schemas/RecipientField' }
+    DonationMethodRef:
+      x-audience: account
+      description: The method of a gift. `id` for a method record, `description` for a free-form way such as cash. Exactly one is set.
+      type: object
+      additionalProperties: false
+      required: [id, description]
+      properties:
+        id:
+          oneOf:
+            - $ref: '#/components/schemas/PaymentMethodId'
+            - type: 'null'
+        description: { type: [string, 'null'] }
+    DonationReported:
+      x-audience: account
+      description: What a donor reported. Null for a staff entry, which nobody reported.
+      type: object
+      additionalProperties: false
+      required: [caseCode, amount, paidOn, at]
+      properties:
+        caseCode: { type: string, pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$' }
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        paidOn: { $ref: '#/components/schemas/PaidDate' }
+        at: { $ref: '#/components/schemas/Timestamp' }
+    DonationDecision:
+      x-audience: account
+      description: How a gift was decided. Null while reported.
+      type: object
+      additionalProperties: false
+      required: [state, at, by, caseCode, amount, receivedOn, providerReference, listing, rejectionReason, note]
+      properties:
+        state: { type: string, enum: [confirmed, rejected] }
+        at: { $ref: '#/components/schemas/Timestamp' }
+        by: { $ref: '#/components/schemas/StaffActor' }
+        caseCode:
+          description: The confirmed case. Null on a rejection.
+          type: [string, 'null']
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
+        amount:
+          description: The confirmed amount. Null on a rejection.
+          oneOf:
+            - $ref: '#/components/schemas/DonationAmount'
+            - type: 'null'
+        receivedOn:
+          oneOf:
+            - $ref: '#/components/schemas/PaidDate'
+            - type: 'null'
+        providerReference: { type: [string, 'null'] }
+        listing:
+          type: [string, 'null']
+          enum: [named, anonymous, hidden, null]
+        rejectionReason:
+          type: [string, 'null']
+          enum: [not_received, duplicate, other, null]
+        note: { type: [string, 'null'] }
+    DonationCorrection:
+      x-audience: account
+      description: One correction of a gift, as the review screen shows it.
+      type: object
+      additionalProperties: false
+      required: [ledgerEntryId, kind, amount, at, reason, providerReference]
+      properties:
+        ledgerEntryId: { type: string }
+        kind: { type: string, enum: [donation_reversal, refund] }
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        at: { $ref: '#/components/schemas/Timestamp' }
+        reason: { type: [string, 'null'] }
+        providerReference: { type: [string, 'null'] }
+    DonationHistoryEntry:
+      x-audience: account
+      type: object
+      additionalProperties: false
+      required: [at, action, by]
+      properties:
+        at: { $ref: '#/components/schemas/Timestamp' }
+        action:
+          type: string
+          enum: [reported, evidence_attached, evidence_deleted, confirmed, rejected, reopened, entered, reversed, refunded, listing_restricted]
+        by:
+          oneOf:
+            - $ref: '#/components/schemas/StaffActor'
+            - type: 'null'
+    DonationDuplicateHint:
+      x-audience: account
+      description: Another gift that looks like it could be the same payment. A hint for the reviewer; it decides nothing.
+      type: object
+      additionalProperties: false
+      required: [id, reference, state, amount, reportedAt]
+      properties:
+        id: { $ref: '#/components/schemas/DonationId' }
+        reference: { $ref: '#/components/schemas/DonationReference' }
+        state: { $ref: '#/components/schemas/DonationState' }
+        amount: { $ref: '#/components/schemas/DonationAmount' }
+        reportedAt: { $ref: '#/components/schemas/Timestamp' }
+    DonationListItem:
+      x-audience: account
+      description: One gift in the review list.
+      type: object
+      additionalProperties: false
+      required: [id, reference, origin, state, caseCode, reportedAmount, confirmedAmount, netAmount, methodId, payerName, reportedAt, decidedAt, evidence, flags]
+      properties:
+        id: { $ref: '#/components/schemas/DonationId' }
+        reference: { $ref: '#/components/schemas/DonationReference' }
+        origin: { type: string, enum: [reported, staff_entry] }
+        state: { $ref: '#/components/schemas/DonationState' }
+        caseCode:
+          description: The confirmed case if decided, otherwise the reported case.
+          type: string
+          pattern: '^[A-Z]{2,8}(-[0-9]{1,6})?$'
+        reportedAmount:
+          oneOf:
+            - $ref: '#/components/schemas/DonationAmount'
+            - type: 'null'
+        confirmedAmount:
+          oneOf:
+            - $ref: '#/components/schemas/DonationAmount'
+            - type: 'null'
+        netAmount:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+        methodId:
+          oneOf:
+            - $ref: '#/components/schemas/PaymentMethodId'
+            - type: 'null'
+        payerName: { type: [string, 'null'] }
+        reportedAt: { $ref: '#/components/schemas/Timestamp' }
+        decidedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        evidence: { type: string, enum: [none, attached, deleted] }
+        flags:
+          type: array
+          items: { type: string, enum: [superseded_details, possible_duplicate, shortfall, reentered, different_case] }
+    DonationPage:
+      x-audience: account
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, totalItems, totalPages, pendingCount]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DonationListItem' }
+        page: { $ref: '#/components/schemas/PageNumber' }
+        pageSize: { $ref: '#/components/schemas/PageSizeValue' }
+        totalItems: { $ref: '#/components/schemas/TotalItems' }
+        totalPages: { $ref: '#/components/schemas/TotalPages' }
+        pendingCount:
+          description: Gifts in `reported`, whatever the filters.
+          type: integer
+          minimum: 0
+    DonationDetail:
+      x-audience: account
+      description: Everything recorded about one gift, for the review screens. Holds the donor's private details, which only a holder of `donations.confirm` may read.
+      type: object
+      additionalProperties: false
+      required: [id, reference, origin, state, reported, method, shownDetails, payerName, paymentReference, contact, display, linkedAccount, evidence, flags, decision, ledgerEntryId, netAmount, corrections, reentryOf, reenteredAs, possibleDuplicates, history, privateDetailsErasedAt]
+      properties:
+        id: { $ref: '#/components/schemas/DonationId' }
+        reference: { $ref: '#/components/schemas/DonationReference' }
+        origin: { type: string, enum: [reported, staff_entry] }
+        state: { $ref: '#/components/schemas/DonationState' }
+        reported:
+          oneOf:
+            - $ref: '#/components/schemas/DonationReported'
+            - type: 'null'
+        method: { $ref: '#/components/schemas/DonationMethodRef' }
+        shownDetails:
+          oneOf:
+            - $ref: '#/components/schemas/ShownDetails'
+            - type: 'null'
+        payerName: { type: [string, 'null'] }
+        paymentReference: { type: [string, 'null'] }
+        contact: { type: [string, 'null'] }
+        display: { $ref: '#/components/schemas/DonationDisplayState' }
+        linkedAccount:
+          description: Whether this gift is linked to a donor account. Never which account.
+          type: boolean
+        evidence: { type: string, enum: [none, attached, deleted] }
+        flags:
+          type: array
+          items: { type: string, enum: [superseded_details, possible_duplicate, shortfall, reentered, different_case] }
+        decision:
+          oneOf:
+            - $ref: '#/components/schemas/DonationDecision'
+            - type: 'null'
+        ledgerEntryId: { type: [string, 'null'] }
+        netAmount:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+        corrections:
+          type: array
+          items: { $ref: '#/components/schemas/DonationCorrection' }
+        reentryOf:
+          oneOf:
+            - $ref: '#/components/schemas/DonationId'
+            - type: 'null'
+        reenteredAs:
+          oneOf:
+            - $ref: '#/components/schemas/DonationId'
+            - type: 'null'
+        possibleDuplicates:
+          type: array
+          items: { $ref: '#/components/schemas/DonationDuplicateHint' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/DonationHistoryEntry' }
+        privateDetailsErasedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    DonationDisplayState:
+      x-audience: account
+      description: How the gift is set to appear. The public name is present only for a named gift.
+      type: object
+      additionalProperties: false
+      required: [mode, publicName]
+      properties:
+        mode: { type: string, enum: [named, anonymous, hidden] }
+        publicName: { type: [string, 'null'] }
     MovementCents:
       x-audience: shared
       description: |
@@ -1515,6 +3105,19 @@ components:
         - payload_too_large
         - already_signed_in
         - registration_closed
+        - case_not_accepting
+        - payment_details_changed
+        - idempotency_key_reused
+        - reporting_paused
+        - evidence_token_invalid
+        - evidence_invalid
+        - evidence_not_found
+        - donation_not_found
+        - donation_state_conflict
+        - duplicate_payment_reference
+        - correction_exceeds_remaining
+        - reentry_not_allowed
+        - platform_limit_reached
     Error:
       x-audience: shared
       type: object
@@ -1541,7 +3144,7 @@ components:
                   name: { type: string }
                   code:
                     type: string
-                    enum: [required, invalid_type, invalid_value, out_of_range, too_long, too_short, invalid_format, unknown_field, compromised, same_as_current]
+                    enum: [required, invalid_type, invalid_value, out_of_range, too_long, too_short, invalid_format, unknown_field, compromised, same_as_current, card_number]
             requestId:
               description: Identifier to quote when reporting a problem.
               type: string
@@ -2089,6 +3692,7 @@ components:
       enum:
         - account.read_own
         - account.change_password
+        - donations.confirm
     NewPassword:
       x-audience: request
       description: |

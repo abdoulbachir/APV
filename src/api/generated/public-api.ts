@@ -1,7 +1,17 @@
-// Generated from contract/openapi.yaml (v0.3.0). Do not edit.
+// Generated from contract/openapi.yaml (v0.4.0). Do not edit.
 // Run: cd contract && npm run generate:types
 // Runtime constraints (patterns, numeric bounds, etc.) are enforced by contract tests.
 
+export type DonationReference = string;
+export type PaidDate = string;
+export type DonationAmount = number;
+export type LocalizedText = { "en": string; "fr": string; };
+export type PaymentDetailsId = string;
+export type RecipientField = { "labels": LocalizedText; "value": string; "format": "text" | "link"; };
+export type PaymentMethodId = string;
+export type PaymentMethod = { "id": PaymentMethodId; "labels": LocalizedText; "position": number; "detailsId": PaymentDetailsId; "instructions": LocalizedText; "recipient": Array<RecipientField>; };
+export type PaymentMethodList = { "methods": Array<PaymentMethod>; };
+export type DonationState = "reported" | "confirmed" | "rejected";
 export type MovementCents = number;
 export type Cents = number;
 export type SignedCents = number;
@@ -12,8 +22,8 @@ export type CategoryId = string;
 export type Category = { "id": CategoryId; "labels": { "en": string; "fr": string; }; "position": number; "active": boolean; };
 export type CaseKind = "case" | "fund";
 export type PublicCaseStatus = "active" | "funded" | "delivered" | "closed";
-export type ErrorCode = "validation_error" | "case_not_found" | "not_found" | "rate_limited" | "internal_error" | "unavailable" | "unauthenticated" | "mfa_required" | "mfa_enrollment_required" | "invalid_credentials" | "mfa_code_invalid" | "credential_invalid" | "forbidden" | "csrf_invalid" | "method_not_allowed" | "unsupported_media_type" | "payload_too_large" | "already_signed_in" | "registration_closed";
-export type Error = { "error": { "code": ErrorCode; "message": string; "fields"?: Array<{ "name": string; "code": "required" | "invalid_type" | "invalid_value" | "out_of_range" | "too_long" | "too_short" | "invalid_format" | "unknown_field" | "compromised" | "same_as_current"; }>; "requestId"?: string; }; };
+export type ErrorCode = "validation_error" | "case_not_found" | "not_found" | "rate_limited" | "internal_error" | "unavailable" | "unauthenticated" | "mfa_required" | "mfa_enrollment_required" | "invalid_credentials" | "mfa_code_invalid" | "credential_invalid" | "forbidden" | "csrf_invalid" | "method_not_allowed" | "unsupported_media_type" | "payload_too_large" | "already_signed_in" | "registration_closed" | "case_not_accepting" | "payment_details_changed" | "idempotency_key_reused" | "reporting_paused" | "evidence_token_invalid" | "evidence_invalid" | "evidence_not_found" | "donation_not_found" | "donation_state_conflict" | "duplicate_payment_reference" | "correction_exceeds_remaining" | "reentry_not_allowed" | "platform_limit_reached";
+export type Error = { "error": { "code": ErrorCode; "message": string; "fields"?: Array<{ "name": string; "code": "required" | "invalid_type" | "invalid_value" | "out_of_range" | "too_long" | "too_short" | "invalid_format" | "unknown_field" | "compromised" | "same_as_current" | "card_number"; }>; "requestId"?: string; }; };
 export type Site = { "timezone": string; "currency": "USD"; "locales": Array<Locale>; "defaultLocale": Locale; "categories": Array<Category>; "fundCode": "FUND"; "pagination": { "defaultPageSize": number; "maxPageSize": number; }; };
 export type Stats = { "received": Cents; "delivered": Cents; "available": SignedCents; "peopleHelped": number; "asOf": Timestamp; };
 export type Case = { "code": string; "kind": CaseKind; "status": PublicCaseStatus; "acceptingDonations": boolean; "category": CategoryId | null; "featuredRank": number | null; "title": string; "titleLanguage": Locale; "publicName": string; "story": string; "storyLanguage": Locale; "photoUrl": MediaPath | null; "photoThumbnailUrl": MediaPath | null; "photoAlt": string | null; "photoAltLanguage": Locale | null; "goal": MovementCents | null; "received": SignedCents; "delivered": Cents; "deadline": string | null; "deadlineTimezone": string | null; "deadlineEndsAt": Timestamp | null; "createdAt": Timestamp; };
