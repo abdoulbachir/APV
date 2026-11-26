@@ -1,0 +1,85 @@
+# A private test site that runs under production rules: HTTPS, no development profile, no
+# fictional data, public sign-up closed, staff created with the operator command.
+# It is for testing by hand before any real deployment. It is not the production deployment.
+# Read deploy/test/README.md first.
+#
+#   docker compose --env-file deploy/test/.env -f deploy/test/compose.yaml up -d --build
+name: apv-test
+
+services:
+  postgres:
+    # Keep equal to apv.postgres.image in backend/pom.xml.
+    image: postgres:18.7
+    environment:
+      POSTGRES_DB: apv
+      POSTGRES_USER: apv
+      POSTGRES_PASSWORD: ${APV_DATABASE_PASSWORD:?Set it in deploy/test/.env}
+    # No port is published: only the backend reaches the database.
+    # No initdb script: this database is never marked disposable, so it is a real database to the
+    # backend and fictional data can never be loaded into it.
+    volumes:
+      - apv-test-postgres:/var/lib/postgresql
+    networks: [inside]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apv -d apv"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../../backend
+    # No Spring profile is set: every production rule applies.
+    environment:
+      APV_DATABASE_URL: jdbc:postgresql://postgres:5432/apv
+      APV_DATABASE_USER: apv
+      APV_DATABASE_PASSWORD: ${APV_DATABASE_PASSWORD:?Set it in deploy/test/.env}
+      APV_BIND_ADDRESS: 0.0.0.0
+      APV_PORT: "8080"
+      APV_MFA_ENCRYPTION_KEY: ${APV_MFA_ENCRYPTION_KEY:?Set it in deploy/test/.env}
+      APV_HASH_KEY: ${APV_HASH_KEY:?Set it in deploy/test/.env}
+      APV_ALLOWED_ORIGINS: ${APV_PUBLIC_ORIGIN:?Set it in deploy/test/.env}
+      # Only the web container below may say which address a request came from.
+      APV_TRUSTED_PROXIES: 172.31.250.10
+      APV_PASSWORD_BLOCKLIST_PATH: /var/lib/apv/blocklist/${APV_BLOCKLIST_FILE:?Set it in deploy/test/.env}
+      APV_PASSWORD_BLOCKLIST_SHA256: ${APV_PASSWORD_BLOCKLIST_SHA256:-}
+    volumes:
+      - ${APV_BLOCKLIST_DIR:?Set it in deploy/test/.env}:/var/lib/apv/blocklist:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No port is published: the browser reaches the backend only through the web container.
+    networks: [inside]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/test/web.Dockerfile
+    environment:
+      APV_SITE_HOST: ${APV_SITE_HOST:?Set it in deploy/test/.env}
+      APV_TLS: ${APV_TLS:-internal}
+    ports:
+      - "${APV_HTTP_PORT:-80}:80"
+      - "${APV_HTTPS_PORT:-443}:443"
+    volumes:
+      # Certificates, and the private certificate authority when APV_TLS=internal.
+      - apv-test-web:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      inside:
+        ipv4_address: 172.31.250.10
+    restart: unless-stopped
+
+networks:
+  inside:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  apv-test-postgres:
+  apv-test-web:
