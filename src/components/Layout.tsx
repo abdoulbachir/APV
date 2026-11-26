@@ -1,4 +1,5 @@
 import { Link, Outlet } from 'react-router-dom';
+import { HeaderAccountLink } from './HeaderAccountLink';
 import { SITE_NAME } from '../config';
 import { useI18n } from '../i18n/I18nContext';
 import { LanguageSwitch } from './LanguageSwitch';
@@ -24,7 +25,7 @@ export function Layout() {
           <Link to="/cases">{t.nav.explore}</Link>
           <Link to="/#how">{t.nav.how}</Link>
         </nav>
-        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><Link className="header-account" to="/sign-in">{t.nav.signIn}</Link><Link className="header-give" to="/cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
+        <div className="header-actions"><ThemeSwitch /><LanguageSwitch /><HeaderAccountLink /><Link className="header-give" to="/cases">{t.nav.give}<span aria-hidden="true">↗</span></Link></div>
       </header>
       <main id="main" tabIndex={-1}><Outlet /></main>
       <footer className="site-footer">
