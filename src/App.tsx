@@ -5,12 +5,15 @@ import { CasePage } from './pages/CasePage';
 import { CaseDirectoryPage } from './pages/CaseDirectoryPage';
 import { HomePage } from './pages/HomePage';
 import { IdentityRoutes, SignInPage, SignUpPage, ChallengePage, AccountPage, EnrollmentPreparationPage, SetPasswordPage, ChangePasswordPage, RecoveryCodesPage } from './identity/IdentityPages';
+import { GivingPage, StatusPage } from './donations/DonationPages';
 
 const router = createBrowserRouter([
   { element: <Layout />, errorElement: <RouteErrorState />, children: [
     { path: '/', element: <HomePage /> },
     { path: '/cases', element: <CaseDirectoryPage /> },
     { path: '/cases/:code', element: <CasePage /> },
+    { path: '/give', element: <GivingPage /> },
+    { path: '/track', element: <StatusPage /> },
     { element: <IdentityRoutes />, children: [
       { path: '/sign-in', element: <SignInPage /> },
       { path: '/sign-up', element: <SignUpPage /> },
