@@ -33,6 +33,9 @@ p { margin-top: 0; }
 .language-switch { display: inline-flex; border: var(--border-thin) solid var(--border-soft); border-radius: var(--radius-round); padding: var(--space-1); background: var(--surface-soft); backdrop-filter: none; }
 .language-switch button { min-width: var(--touch); min-height: var(--touch); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-round); background: transparent; color: var(--text-muted); font-size: var(--font-size-xs); font-weight: 800; cursor: pointer; }
 .language-switch button.is-active { background: var(--accent); color: var(--surface-page); }
+/* The way to an account, beside the main action and quieter than it. A signed-in visitor is taken to their account. */
+.header-account { min-height: var(--touch); display: inline-flex; align-items: center; padding: 0 var(--space-4); border: var(--border-thin) solid var(--control-border); border-radius: var(--radius-round); font-size: var(--font-size-sm); font-weight: 800; text-decoration: none; color: var(--text-main); white-space: nowrap; }
+.header-account:hover { color: var(--accent); border-color: var(--accent); }
 .header-give { min-height: var(--touch); display: inline-flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-5); border-radius: var(--radius-round); font-size: var(--font-size-sm); font-weight: 800; text-decoration: none; background: var(--action-bg); color: var(--action-ink); }
 .eyebrow { display: flex; align-items: center; gap: var(--space-3); color: var(--accent); font-size: var(--font-size-xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; margin-bottom: var(--space-4); }
 .eyebrow span { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-round); background: var(--accent-secondary); box-shadow: none; }
@@ -263,6 +266,7 @@ p { margin-top: 0; }
   .brand { font-size: var(--font-size-xs); gap: var(--space-2); letter-spacing: var(--tracking-mobile-brand); white-space: normal; }
   .brand-mark { display: block; width: var(--space-6); height: var(--space-6); }
   .header-give { display: inline-flex; padding: 0 var(--space-2); font-size: var(--font-size-xs); gap: var(--space-1); }
+  .header-account { padding: 0 var(--space-2); font-size: var(--font-size-xs); }
   .header-actions { gap: var(--space-2); flex-wrap: wrap; }
   .home-hero { display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto; padding: var(--space-5) var(--space-4); gap: var(--space-5); min-height: 0; }
   .hero-copy { grid-column: 1; grid-row: 2; min-height: 0; padding: 0; max-width: 100%; }
