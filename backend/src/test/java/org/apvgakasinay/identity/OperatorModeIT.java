@@ -16,6 +16,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * The operator command started the way an operator starts it: its own small application with
  * no web server, reading the terminal. Run against a database that was never marked disposable.
  */
+@org.junit.jupiter.api.extension.ExtendWith(org.apvgakasinay.support.RestoreLogLevels.class)
 class OperatorModeIT {
 
     private static final PostgreSQLContainer POSTGRES =

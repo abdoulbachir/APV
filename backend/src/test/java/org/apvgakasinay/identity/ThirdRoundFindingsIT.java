@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apvgakasinay.support.Logs;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -137,6 +138,10 @@ class ThirdRoundFindingsIT extends IdentityIntegration {
             signedIn.sessionId = value + "; apv_session=" + signedIn.sessionId;
             assertThat(signedIn.get("/api/me").status()).as(value).isEqualTo(200);
         }
-        assertThat(output.getAll().substring(before)).doesNotContain(" ERROR ").doesNotContain("Exception");
+        // By record and by stack frame, not by a word: at verbose levels the log names classes
+        // such as ExceptionTranslationFilter on every request.
+        String logged = output.getAll().substring(before);
+        assertThat(Logs.errorRecords(logged)).as("records at ERROR").isEmpty();
+        assertThat(Logs.applicationStackFrames(logged)).as("printed stack traces").isEmpty();
     }
 }

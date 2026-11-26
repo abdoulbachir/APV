@@ -288,6 +288,11 @@ Integration tests never use an in-memory database. They cover:
 - `IndependentReviewFindingsIT`, with `ApiErrorReportValveTest` and parts of `RealDatabaseIT`, `SensitiveLogFilterTest` and `ClientAddressTest`: regression tests for the defects the independent review found: a refused `POST` creates no session; a sign-in racing a sign-out is refused and not recorded as a success; `TRUNCATE` is refused on a real database; malformed paths, errors inside filters and `TRACE` are answered in the contract's shape; hexadecimal byte literals never reach the log.
 - `SignOutDuringSessionChangeIT`: the defect of the independent re-check (R1). A sign-out is held after it has read its session while a password change, a second factor or an enrollment confirmation runs as a real request; after the sign-out answers 204 nobody is signed in.
 - `ThirdRoundFindingsIT` and `SessionCookieResolverTest`: the defects of the third independent round. A sign-out with two values of the session cookie ends the caller's own session and never another one (R2); a session cookie that is not an identifier is treated as no cookie, never a 500 (R3).
+
+Two rules for tests, after an unstable run:
+
+- Log levels belong to the whole JVM. A test class that raises or lowers them (`LogInspectionIT`, `SensitiveLogFilterTest`, `OperatorModeIT`) registers `support/RestoreLogLevels`, which puts them back when the class is done, so no test depends on which class ran before it.
+- A test that asserts on captured output reads it by record (`support/Logs`): an error is a record at `ERROR` or a printed stack frame of the application, never a word such as `Exception`, which verbose levels print in class names on every request.
 - `identity.*IT`: the identity operations over real HTTP with one cookie jar per simulated browser, against PostgreSQL. Each test method is named after the scenario of `contract/tests/security-acceptance.md` it covers (`a6_7_...` is scenario 6.7). After every test, every identity response it received is validated against the contract's closed schemas and checked for `no-store`. `RealDatabaseIT` and `OperatorModeIT` run without a development profile on a database that was never marked disposable.
 
 `docs/m1b-backend-acceptance-coverage.md` maps all 220 scenarios to these tests, and says which ones need a browser or are not automated.

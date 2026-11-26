@@ -17,7 +17,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 
 /** Scenario 9.8: the safeguard that keeps session identifiers and hashes out of the log at any level. */
-@ExtendWith(OutputCaptureExtension.class)
+@ExtendWith({org.apvgakasinay.support.RestoreLogLevels.class, OutputCaptureExtension.class})
 class SensitiveLogFilterTest {
 
     @Configuration
