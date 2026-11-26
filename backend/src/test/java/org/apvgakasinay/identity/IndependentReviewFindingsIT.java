@@ -130,23 +130,49 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
 
     private org.springframework.boot.test.system.CapturedOutput log;
 
-    /** What the server logged about its errors, without stack frames: the log is already redacted. */
+    /** What the server logged at ERROR, for a failure message: the log is already redacted. */
     private String errorsLogged() {
-        StringBuilder lines = new StringBuilder();
-        for (String line : log.getAll().split("\\R")) {
-            if ((line.contains("Exception") || line.contains(" ERROR ")) && !line.startsWith("\tat ") && lines.length() < 6000) {
-                lines.append(line, 0, Math.min(line.length(), 500)).append('\n');
-            }
-        }
-        return lines.toString();
+        String records = String.join("\n", org.apvgakasinay.support.Logs.errorRecords(log.getAll()));
+        return records.substring(0, Math.min(records.length(), 6000));
     }
 
-    /** One round: a correct sign-in and a sign-out sent at the same moment on one anonymous session. Returns true when the sign-in was refused. */
-    private boolean signInAgainstSignOut(String email, String expectedStatus) {
+    /** How one round of a sign-in against a sign-out ended for the sign-in. */
+    private enum Round { SIGNED_IN, REFUSED_AT_THE_TOKEN_CHECK, REFUSED_WHEN_STORING }
+
+    private long signInRecords() {
+        return count("select count(*) from audit_event where event_type = 'session.sign_in'");
+    }
+
+    private long sessionEndedRecords() {
+        return count("select count(*) from audit_event where event_type = 'session.sign_in' and outcome = 'refused' and details ->> 'reason' = 'session_ended'");
+    }
+
+    private long attemptsCounted() {
+        return count("select coalesce(sum(attempts), 0) from auth_throttle");
+    }
+
+    /**
+     * One round: a correct sign-in and a sign-out sent at the same moment on one anonymous session.
+     *
+     * A sign-in that is refused has lost its session to the sign-out in one of two ways, and
+     * each leaves different traces, all of which are checked:
+     *
+     *   - before the sign-in read the session: there is no token to compare with, so step 4
+     *     refuses it. Nothing later ran: no rate-limit counter moved and no audit record of
+     *     any kind was written for the sign-in;
+     *   - while the sign-in was verifying the password: the operation finds, when it stores
+     *     the session, that it is gone. Exactly one record, refused, reason session_ended.
+     *
+     * In both: 403 csrf_invalid, no cookie, no success record, nobody signed in.
+     */
+    private Round signInAgainstSignOut(String email, String expectedStatus) {
         Browser tab = browser();
         tab.csrf();
         Browser other = sameSession(tab);
         long successes = signIns("success");
+        long records = signInRecords();
+        long ended = sessionEndedRecords();
+        long attempts = attemptsCounted();
         List<Browser.Answer> answers = together(List.of(
                 () -> tab.post("/api/auth/login", json("email", email, "password", PASSWORD)),
                 () -> other.postEmpty("/api/auth/logout")));
@@ -155,29 +181,43 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
         assertThat(login.status()).as("sign-in racing a sign-out: %s%n%s", login.body(), login.status() >= 500 ? errorsLogged() : "").isIn(200, 403);
 
         if (logout.status() == 204) {
+            Round round;
             if (login.status() == 403) {
                 assertError(login, 403, "csrf_invalid");
                 assertThat(setsASession(login)).as("a refused sign-in issued a session cookie").isFalse();
                 assertThat(signIns("success")).as("success recorded for a sign-in that produced no session").isEqualTo(successes);
+                long endedNow = sessionEndedRecords() - ended;
+                if (endedNow == 0) {
+                    round = Round.REFUSED_AT_THE_TOKEN_CHECK;
+                    assertThat(signInRecords()).as("a sign-in refused at the token check wrote an audit record").isEqualTo(records);
+                    assertThat(attemptsCounted()).as("a sign-in refused at the token check moved a rate-limit counter").isEqualTo(attempts);
+                } else {
+                    round = Round.REFUSED_WHEN_STORING;
+                    assertThat(endedNow).as("records of one sign-in whose session was ended").isEqualTo(1);
+                    assertThat(signInRecords()).as("every record of this sign-in").isEqualTo(records + 1);
+                }
             } else {
                 // The sign-in finished first and the sign-out then ended what it had made.
+                round = Round.SIGNED_IN;
                 assertThat(login.json().get("status").asText()).isEqualTo(expectedStatus);
                 assertThat(signIns("success")).isEqualTo(successes + 1);
+                assertThat(sessionEndedRecords()).isEqualTo(ended);
             }
             // Whichever finished first: the sign-out was answered, so nobody is signed in.
             assertThat(count("select count(*) from spring_session where principal_name is not null")).as("sessions that belong to someone").isZero();
             assertThat(tab.get("/api/me").status()).isEqualTo(401);
             assertThat(other.get("/api/me").status()).isEqualTo(401);
-            return login.status() == 403;
+            return round;
         }
         // The sign-out reached the server after the sign-in had replaced the identifier: it is a
         // stale request like any other, and the sign-in stands.
         assertError(logout, 403, "csrf_invalid");
         assertThat(login.status()).isEqualTo(200);
         assertThat(signIns("success")).isEqualTo(successes + 1);
+        assertThat(sessionEndedRecords()).isEqualTo(ended);
         tab.csrf();
         assertThat(tab.postEmpty("/api/auth/logout").status()).isEqualTo(204);
-        return false;
+        return Round.SIGNED_IN;
     }
 
     /**
@@ -195,24 +235,26 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
         Staff owner = staff("sample.owner@example.org", "super_admin");
         assertThat(owner.browser().postEmpty("/api/auth/logout").status()).isEqualTo(204);
 
-        int refused = 0;
-        int rounds = 0;
+        Map<Round, Integer> rounds = new java.util.EnumMap<>(Round.class);
         for (int round = 0; round < 12; round++) {
-            refused += signInAgainstSignOut(donor, "authenticated") ? 1 : 0;
-            rounds++;
+            rounds.merge(signInAgainstSignOut(donor, "authenticated"), 1, Integer::sum);
         }
         for (int round = 0; round < 6; round++) {
-            refused += signInAgainstSignOut(owner.email(), "mfa_required") ? 1 : 0;
-            rounds++;
+            rounds.merge(signInAgainstSignOut(owner.email(), "mfa_required"), 1, Integer::sum);
         }
-        // Verifying a password takes far longer than signing out, so the sign-out wins; the test is about that order.
-        assertThat(refused).as("rounds in which the sign-out ended the session before the sign-in could store it").isPositive();
-        assertThat(count("select count(*) from audit_event where event_type = 'session.sign_in' and outcome = 'refused' and details ->> 'reason' = 'session_ended'"))
-                .isEqualTo(refused);
+        int whenStoring = rounds.getOrDefault(Round.REFUSED_WHEN_STORING, 0);
+        int atTheTokenCheck = rounds.getOrDefault(Round.REFUSED_AT_THE_TOKEN_CHECK, 0);
+        // Verifying a password takes far longer than signing out, so the sign-out usually ends the
+        // session while the sign-in is at work; that order is what this test is about.
+        assertThat(whenStoring).as("rounds in which the sign-out ended the session while the sign-in was verifying the password: %s", rounds).isPositive();
+        // One record for each of those, none for a sign-in the token check refused, none for a sign-in that succeeded.
+        assertThat(sessionEndedRecords()).isEqualTo(whenStoring);
         // The same people can sign in straight afterwards.
         assertThat(browser().login(donor, PASSWORD).status()).isEqualTo(200);
-        Evidence.write("sign-in-against-sign-out", rounds + " rounds of a correct sign-in and a sign-out sent together on one session: "
-                + refused + " sign-ins refused 403 csrf_invalid, 0 answered 500, nobody signed in after any round, "
+        Evidence.write("sign-in-against-sign-out", "18 rounds of a correct sign-in and a sign-out sent together on one session: "
+                + whenStoring + " sign-ins refused 403 csrf_invalid when storing the session (one refused record each), "
+                + atTheTokenCheck + " refused 403 csrf_invalid at the token check (no record, no counter moved), "
+                + rounds.getOrDefault(Round.SIGNED_IN, 0) + " signed in; 0 answered 500, nobody signed in after a sign-out answered 204, "
                 + "0 success records without a session");
     }
 
@@ -322,7 +364,8 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
      * account table cannot be read while a signed-in session asks.
      */
     @Test
-    void a9_10_anErrorInsideTheSecurityFiltersIsTheGeneric500WithARequestIdentifier() {
+    void a9_10_anErrorInsideTheSecurityFiltersIsTheGeneric500WithARequestIdentifier(org.springframework.boot.test.system.CapturedOutput output) {
+        int logBefore = output.getAll().length();
         Browser donor = donor("sample.donor@example.org");
         Browser.Answer me;
         Browser.Answer post;
@@ -344,6 +387,11 @@ class IndependentReviewFindingsIT extends IdentityIntegration {
             assertThat(answer.header("X-Content-Type-Options")).isEqualTo("nosniff");
         }
         assertContractError(raw, "GET /api/me with the account table unreadable");
+        // These failures are what an error looks like in the log: a record at ERROR with its stack
+        // trace. Tests that assert "nothing was logged as an error" look for exactly this.
+        String logged = output.getAll().substring(logBefore);
+        assertThat(org.apvgakasinay.support.Logs.errorRecords(logged)).as("records at ERROR").isNotEmpty();
+        assertThat(org.apvgakasinay.support.Logs.applicationStackFrames(logged)).as("printed stack traces").isNotEmpty();
         assertThat(raw.status()).isEqualTo(500);
         // Nothing was changed by the failures: same session, same password.
         assertThat(donor.get("/api/me").status()).isEqualTo(200);

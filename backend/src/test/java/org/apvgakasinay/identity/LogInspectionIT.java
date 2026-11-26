@@ -19,7 +19,7 @@ import org.springframework.test.context.TestPropertySource;
  * a session identifier that was replaced or deleted is searched for exactly like a live one,
  * in the form the store keeps and in the form the cookie carries.
  */
-@ExtendWith(OutputCaptureExtension.class)
+@ExtendWith({org.apvgakasinay.support.RestoreLogLevels.class, OutputCaptureExtension.class})
 @TestPropertySource(properties = {
         "logging.level.org.apvgakasinay=TRACE",
         "logging.level.org.springframework.security=TRACE",
