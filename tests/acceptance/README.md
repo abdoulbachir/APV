@@ -36,6 +36,7 @@ Run the scripts in that order and one at a time: `b2` to `b4` continue with the 
 | `b4.mjs` | The four refused sign-ins, the process list during an operator command, a whole staff journey searched for leaks (URLs, referrers, console, storage, server logs, audit rows), backend stopped and restarted |
 | `a1.mjs`, `a2.mjs` | Sign-up, policy headers, framing, theme before paint, eight screens in two languages, two themes and two widths, contrast, keyboard, field semantics, public pages with a session cookie |
 | `csrf500.mjs`, `csrfrace.mjs`, `devclock.mjs`, `oldid.mjs` | Plain HTTP reproductions of findings 2, 3 and 5, and the check that an old identifier is dead after a password change. They talk to the `dev` backend on 8080. After `a1` and `a2` the address is throttled: clear `auth_throttle` in the harness's `dev` database before `devclock` and `oldid`. |
+| `r2.mjs` | R2 and R3: a sign-out carrying two session cookies ends only the caller's session; a malformed session cookie is an unknown cookie. Deterministic. Exit 1 on a defect. |
 | `r1.mjs` | R1: sign-out racing a password change, 150 rounds; clears the counters itself. Exit 1 if a 204 sign-out leaves the new cookie signed in. |
 | `lib.mjs`, `ui-checks.mjs` | Browser profiles with full observation, fault injection on real requests, TOTP, QR decoding, presentation checks |
 
