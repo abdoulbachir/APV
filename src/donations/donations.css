@@ -2,6 +2,8 @@
    these rules add only what the donation screens need. */
 .donation-wrap { width: min(100%, 42rem); margin-inline: auto; padding: var(--space-10) var(--page-pad); }
 .donation-wrap .identity-panel { gap: var(--space-5); }
+.donation-switch { margin: 0; }
+.donation-switch a { color: var(--accent); }
 
 .donation-methods, .donation-display { display: grid; gap: var(--space-2); padding: 0; border: 0; margin: 0; }
 .donation-methods legend, .donation-display legend { font-weight: 700; padding: 0; margin-bottom: var(--space-2); }

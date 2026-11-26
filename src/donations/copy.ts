@@ -8,6 +8,7 @@ const en = {
   give: {
     title: 'Report a gift',
     toFund: 'to the general fund', toCase: 'to this case',
+    switchToFund: 'Give to the general fund instead', switchToCase: 'Give to a specific case instead',
     intro: 'The site does not take payments. Send your gift with one of the methods below, then report it here. A gift is listed publicly only after the organisers have verified it.',
     notOpen: 'Gifts cannot be reported at the moment. Please check back later.',
     chooseMethod: 'How did you send it?', other: 'Another way',
@@ -70,6 +71,7 @@ const fr: Copy = {
   give: {
     title: 'Déclarer un don',
     toFund: 'au fonds général', toCase: 'à ce cas',
+    switchToFund: 'Donner plutôt au fonds général', switchToCase: 'Donner plutôt à un cas précis',
     intro: 'Le site n’encaisse pas de paiements. Envoyez votre don avec l’une des méthodes ci-dessous, puis déclarez-le ici. Un don n’apparaît publiquement qu’après vérification par les organisateurs.',
     notOpen: 'Les dons ne peuvent pas être déclarés pour le moment. Revenez plus tard.',
     chooseMethod: 'Comment l’avez-vous envoyé ?', other: 'Un autre moyen',

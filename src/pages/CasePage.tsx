@@ -30,7 +30,6 @@ export function CasePage() {
   const returnTo = typeof source === 'string' && (source === '/cases' || source.startsWith('/cases?')) ? source : null;
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [code]);
   const { t, locale } = useI18n();
-  const [sampleNote, setSampleNote] = useState(false);
   const [showStickyAction, setShowStickyAction] = useState(false);
   const requestKey=JSON.stringify([code,locale]);
   const response = useAsync(async()=>({key:requestKey,detail:await api.getCase(code,locale)}),[requestKey]);
@@ -64,6 +63,7 @@ export function CasePage() {
   const updates=updateHistory.items, donors=donorHistory.items, ledger=ledgerHistory.items;
   const actionNote=item.acceptingDonations?t.publicRead.givingNotOpen:t.publicRead.unavailableGiving;
   const givingLabel=fill(t.casePage.give,{name:item.publicName||item.title});
+  const giveTo=`/give?case=${encodeURIComponent(item.code)}`;
   // Keep the same focusable element after completion. aria-disabled prevents operation
   // without dropping keyboard focus, including while the next request is in flight.
   const historyButton=(history: ReturnType<typeof useHistory<CaseUpdate>> | ReturnType<typeof useHistory<PublicDonor>> | ReturnType<typeof useHistory<LedgerEntry>>)=><>
@@ -81,8 +81,6 @@ export function CasePage() {
   const deliveredPercent = item.goal && item.goal > 0 ? Math.max(0, item.delivered / item.goal * 100) : null;
   const formatPercent = (value: number) => new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-US', { style: 'percent', maximumFractionDigits: 1 }).format(value / 100);
   const storyParagraphs = item.story.split('\n\n');
-  const showSampleNote = () => { setSampleNote(true); window.setTimeout(() => setSampleNote(false), 3600); };
-
   return (
     <article className="case-page" ref={motionRef}>
       <header className="case-hero section-wrap">
@@ -95,8 +93,10 @@ export function CasePage() {
             <h1 ref={heading} tabIndex={-1}>{item.publicName || item.title}</h1>
             <p className="case-title" lang={item.titleLanguage}>{item.title}</p>
             {item.deadline && <p className="deadline-pill">{fill(t.casePage.deadline, { date: formatDate(item.deadline, locale, true) })}</p>}
-            <button className="action action-orange case-primary-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{givingLabel}<span aria-hidden="true">↗</span></button>
-            {(sampleNote || !item.acceptingDonations) && !showStickyAction && <p className="sample-note" role="status">{actionNote}</p>}
+            {item.acceptingDonations
+              ? <Link className="action action-orange case-primary-action" to={giveTo}>{givingLabel}<span aria-hidden="true">↗</span></Link>
+              : <button className="action action-orange case-primary-action" type="button" disabled>{givingLabel}<span aria-hidden="true">↗</span></button>}
+            {!item.acceptingDonations && !showStickyAction && <p className="sample-note" role="status">{actionNote}</p>}
           </div>
         </div>
       </header>
@@ -148,8 +148,10 @@ export function CasePage() {
       </section>
 
       {showStickyAction && <div className="give-dock">
-          <button className="action action-orange give-action" type="button" onClick={showSampleNote} disabled={!item.acceptingDonations}>{givingLabel}<span aria-hidden="true">↗</span></button>
-          {(sampleNote || !item.acceptingDonations) && <p role="status">{actionNote}</p>}
+          {item.acceptingDonations
+            ? <Link className="action action-orange give-action" to={giveTo}>{givingLabel}<span aria-hidden="true">↗</span></Link>
+            : <button className="action action-orange give-action" type="button" disabled>{givingLabel}<span aria-hidden="true">↗</span></button>}
+          {!item.acceptingDonations && <p role="status">{actionNote}</p>}
         </div>}
     </article>
   );

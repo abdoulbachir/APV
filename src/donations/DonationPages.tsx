@@ -100,8 +100,11 @@ export function GivingPage() {
 
   return <div className="donation-wrap"><section className="identity-panel">
     <p className="identity-eyebrow">{c.give.title}</p>
-    <h1>{c.give.title} {target === FUND ? c.give.toFund : c.give.toCase}</h1>
+    <h1>{c.give.title} {target === FUND ? c.give.toFund : target}</h1>
     <p>{c.give.intro}</p>
+    <p className="donation-switch">{target === FUND
+      ? <Link to="/cases">{c.give.switchToCase}</Link>
+      : <Link to="/give">{c.give.switchToFund}</Link>}</p>
     {error && <p className="identity-error" role="alert" tabIndex={-1}>{errorText(c, error.code)}</p>}
     <form onSubmit={onSubmit}><fieldset disabled={busy}>
       <fieldset className="donation-methods"><legend>{c.give.chooseMethod}</legend>
