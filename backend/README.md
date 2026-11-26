@@ -167,6 +167,23 @@ Rules the command and the database enforce:
 
 First start of a real site: set the database variables and the two keys, build the breached-password list and set `APV_PASSWORD_BLOCKLIST_PATH` (`docs/backend-password-blocklist.md`), start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend.
 
+### Container image
+
+`backend/Dockerfile` builds the backend as an image for the private test site (`deploy/test/README.md`, which also has the commands). It is not the production deployment.
+
+- **What is in it:** a Java 21 runtime and the jar, built with the Maven wrapper in a first stage. No Spring profile is set, so every production rule applies. No tests run in the build; CI runs them. The base images are pinned by version and digest.
+- **What is not in it:** the breached-password list, keys, fixtures, development data, or any secret. Settings come from environment variables; the list is read from a read-only mount at `/var/lib/apv/blocklist`. `.dockerignore` sends only `pom.xml`, the wrapper and `src/main` to the build.
+- **User:** it runs as the unprivileged user `10001`. The mounted list and its manifest must be readable by others (`chmod o+r`), or owned by that id.
+- **Arguments pass through** to the jar, so the operator command and the list tool run in the same image. An operator command needs a terminal, which `docker compose run` gives by default:
+
+  ```bash
+  docker compose run --rm backend operator create-super-admin
+  docker compose run --rm backend blocklist verify /var/lib/apv/blocklist/breached-sha1.bin
+  ```
+
+- **Port:** 8080 (`APV_PORT`), on all addresses of the container (`APV_BIND_ADDRESS=0.0.0.0`). Publish it to nothing but the reverse proxy.
+- **Health:** the container is healthy when `GET /api/site` on its own port answers 200. That needs the web server up, the database reachable and migrated, and the list accepted, since the application does not start without it. Failures do not count during the first five minutes, because the whole list is verified at every start; during that time the check runs every two seconds.
+
 ### Logging
 
 Logs never contain a session identifier (live, replaced or expired, in the stored form or as the cookie carries it), a password hash or a raw request, at any level. This does not depend on the logging configuration: a filter installed with the logging system (`SensitiveLogFilter`, `logback-spring.xml`) drops everything below INFO from the loggers that print raw requests, cookies, bound SQL values or a replaced session identifier (the embedded server, the database driver, Spring's SQL parameter logger, the session fixation strategy), and replaces identifier shapes and Argon2 hashes in every other message with `[redacted-id]` and `[redacted-hash]`. The exception attached to a log line is treated the same way: its message and those of its causes are searched (a database error quotes the row it failed on), and when something is replaced the stack trace is printed from a redacted copy, shown as `SensitiveLogFilter$Redacted: <original class>: <message>` with the original frames. Bytes written as a hexadecimal literal (`'\x…'::bytea`, which is how the database driver quotes a stored session attribute when a write fails) are replaced whole with `[redacted-bytes]`, whatever they hold. Setting those loggers to DEBUG or TRACE has no effect. Passwords, codes and one-time credentials have no recognisable shape; they are kept out by never being given to a logger. The default level, INFO, is the one to run with.
