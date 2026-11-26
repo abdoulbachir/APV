@@ -5,8 +5,10 @@ import type { SessionState } from '../api/generated/identity-api';
 import { createSessionStore, type SessionSnapshot, type SessionStore } from './session-store';
 import './session.css';
 
-const channelName='apv-session-events-v1';
-const changeSignal='session-changed';
+export const sessionChannelName='apv-session-events-v1';
+export const sessionChangeSignal='session-changed';
+const channelName=sessionChannelName;
+const changeSignal=sessionChangeSignal;
 type SessionContextValue={
  store:SessionStore;
  client:IdentityClient;
