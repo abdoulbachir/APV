@@ -55,12 +55,19 @@ function FormError({error}:{error:IdentityError|null}){
  const t=useCopy();
  return error?<p className="identity-error" role="alert" tabIndex={-1}>{t.errors[error.code]}</p>:null;
 }
-function Field({name,label,type='text',autoComplete,hint,inputMode,error}:{name:string;label:string;type?:string;autoComplete?:string;hint?:string;inputMode?:'numeric'|'email';error:IdentityError|null}){
+// The contract counts a password in Unicode code points after NFC normalization (identity-and-security 3).
+const MIN_PASSWORD_LENGTH=15;
+const passwordLength=(value:string)=>[...value.normalize('NFC')].length;
+function Field({name,label,type='text',autoComplete,hint,inputMode,error,minLength}:{name:string;label:string;type?:string;autoComplete?:string;hint?:string;inputMode?:'numeric'|'email';error:IdentityError|null;minLength?:number}){
  const t=useCopy();const field=error?.fields.find(x=>x.name===name);
+ // Only the length is kept, never the value. It is read again after a refused submit, which empties the field.
+ const input=useRef<HTMLInputElement>(null);const [length,setLength]=useState(0);
+ useEffect(()=>{if(minLength&&input.current)setLength(passwordLength(input.current.value));},[error,minLength]);
+ const short=minLength!==undefined&&length>0&&length<minLength;
  const secretError=((name==='password'||name==='currentPassword')&&error?.code==='invalid_credentials')||(name==='credential'&&error?.code==='credential_invalid')||(name==='code'&&error?.code==='mfa_code_invalid');
  const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):secretError&&error?t.errors[error.code]:null;
- const desc=[hint?name+'-hint':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
- return <div className="identity-field"><label htmlFor={name}>{label}</label><input id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{message&&<p className="identity-field-error" id={name+'-error'}>{message}</p>}</div>;
+ const desc=[hint?name+'-hint':null,short?name+'-length':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
+ return <div className="identity-field"><label htmlFor={name}>{label}</label><input ref={input} id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message||short?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false} onInput={minLength?e=>setLength(passwordLength(e.currentTarget.value)):undefined}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{short&&<p className="identity-field-length" id={name+'-length'}>{t.passwordTooShort.replace('{count}',String(length)).replace('{min}',String(minLength))}</p>}{message&&<p className="identity-field-error" id={name+'-error'}>{message}</p>}</div>;
 }
 // Each screen owns its token lease. Revalidation remounts the guarded screen;
 // form values are never copied into router state or shared account state.
@@ -153,7 +160,7 @@ function RegisterForm({lease}:{lease:FormLease}){
   void submit('register',body,async()=>{setNotice('accepted');await refresh(true);navigate('/sign-in',{replace:true});});
  }
  if(error?.code==='registration_closed')return <p role="status">{t.closed}</p>;
- return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="displayName" label={t.name} autoComplete="name" error={error}/><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="new-password" hint={t.passwordHint} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.submitRegister}</button></fieldset></form>;
+ return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}><Field name="displayName" label={t.name} autoComplete="name" error={error}/><Field name="email" label={t.email} type="email" autoComplete="username" error={error}/><Field name="password" label={t.password} type="password" autoComplete="new-password" hint={t.passwordHint} minLength={MIN_PASSWORD_LENGTH} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:t.submitRegister}</button></fieldset></form>;
 }
 function RegisterScreen(){
  const t=useCopy();const options=useOptions();
@@ -258,7 +265,7 @@ function PasswordForm({lease,setup}:{lease:FormLease;setup:boolean}){
  return <form ref={ref} onSubmit={onSubmit}><fieldset disabled={busy}>{setup?
   <Field name="credential" label={t.credential} type="password" autoComplete="off" hint={t.credentialHint} error={error}/>:
   <Field name="currentPassword" label={t.currentPassword} type="password" autoComplete="current-password" error={error}/>}
-  <Field name="newPassword" label={t.newPassword} type="password" autoComplete="new-password" hint={t.passwordHint} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:setup?t.setPassword:t.changePassword}</button></fieldset></form>;
+  <Field name="newPassword" label={t.newPassword} type="password" autoComplete="new-password" hint={t.passwordHint} minLength={MIN_PASSWORD_LENGTH} error={error}/><FormError error={error}/><button className="identity-primary" type="submit">{busy?t.busy:setup?t.setPassword:t.changePassword}</button></fieldset></form>;
 }
 export function SetPasswordPage(){
  const t=useCopy();
