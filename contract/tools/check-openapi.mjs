@@ -16,10 +16,12 @@ const fail = message => failures.push(message);
 //   credential a one-time secret; only from the operations listed below
 const AUDIENCES = ['public', 'shared', 'account', 'request', 'credential'];
 const PUBLIC_TAGS = ['Site', 'Cases', 'Case history'];
-const IDENTITY_TAGS = ['Authentication', 'Account'];
+// Non-public operations: identity (M1) and the donation lifecycle (M2). All are no-store,
+// declare x-session-state, and may serve account and credential schemas.
+const IDENTITY_TAGS = ['Authentication', 'Account', 'Giving', 'Donation review'];
 const SESSION_STATES = ['anonymous', 'mfa_required', 'mfa_enrollment_required', 'authenticated'];
 // Adding an operation that returns a secret means editing this list on purpose.
-const CREDENTIAL_OPERATIONS = ['getCsrfToken', 'beginMfaEnrollment', 'confirmMfaEnrollment', 'regenerateRecoveryCodes'];
+const CREDENTIAL_OPERATIONS = ['getCsrfToken', 'beginMfaEnrollment', 'confirmMfaEnrollment', 'regenerateRecoveryCodes', 'reportDonation'];
 // Names that suggest private data: never in a public or shared schema.
 const FORBIDDEN_PROPERTY = /real|contact|email|phone|address|note|visibility|private|password|session|token|screenshot|consent|userid|accountid|donorid|birth|role|permission|mfa|credential/i;
 // Names that must never be in what an account can read about itself either.
@@ -177,7 +179,8 @@ function structuralRules(doc) {
         if (!responses['403']) bad(`${id}: must document 403 for a missing or invalid CSRF token`);
         if (operation.requestBody && (!responses['413'] || !responses['415'] || !responses['400'])) bad(`${id}: a request body needs 400, 413 and 415`);
         const media = Object.keys(operation.requestBody?.content ?? {});
-        if (operation.requestBody && (media.length !== 1 || media[0] !== 'application/json')) bad(`${id}: request bodies are application/json only`);
+        if (operation.requestBody && !operation['x-binary-upload'] && (media.length !== 1 || media[0] !== 'application/json')) bad(`${id}: request bodies are application/json only`);
+        if (operation.requestBody && operation['x-binary-upload'] && !media.every(type => /^image\//.test(type))) bad(`${id}: a binary upload accepts image types only`);
         if (operation.requestBody && operation.requestBody.required !== true) bad(`${id}: a defined request body is required`);
       } else if (operation.requestBody) {
         bad(`${id}: GET has no request body`);
@@ -218,6 +221,8 @@ function checkExample(schema, example, where) {
 }
 function checkResponse(response, where) {
   for (const [type, media] of Object.entries(derefDocument(response).content ?? {})) {
+    // Binary responses (a served picture) carry no JSON example to validate.
+    if (type !== 'application/json') continue;
     if (media.example === undefined) fail(`no example at ${where} (${type})`);
     else checkExample(media.schema, media.example, where);
   }

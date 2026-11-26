@@ -54,10 +54,13 @@ function useOptions(){
 const SECRET_CODES=['invalid_credentials','credential_invalid','mfa_code_invalid'];
 // secretOnField: this form has the field a wrong password, code or credential is reported on, so
 // the message is shown once, there, and not a second time here.
+// Any error code resolves to a message; a code the copy does not list yet (a later contract adds some)
+// falls back to the generic failure, as the contract says a client should treat an unknown code.
+const errorText=(t:ReturnType<typeof useCopy>,code:string):string=>(t.errors as Record<string,string>)[code]??t.errors.internal_error;
 function FormError({error,secretOnField=false}:{error:IdentityError|null;secretOnField?:boolean}){
  const t=useCopy();
  if(error&&secretOnField&&SECRET_CODES.includes(error.code))return null;
- return error?<p className="identity-error" role="alert" tabIndex={-1}>{t.errors[error.code]}</p>:null;
+ return error?<p className="identity-error" role="alert" tabIndex={-1}>{errorText(t,error.code)}</p>:null;
 }
 // The contract counts a password in Unicode code points after NFC normalization (identity-and-security 3).
 const MIN_PASSWORD_LENGTH=15;
@@ -69,7 +72,7 @@ function Field({name,label,type='text',autoComplete,hint,inputMode,error,minLeng
  useEffect(()=>{if(minLength&&input.current)setLength(passwordLength(input.current.value));},[error,minLength]);
  const short=minLength!==undefined&&length>0&&length<minLength;
  const secretError=((name==='password'||name==='currentPassword')&&error?.code==='invalid_credentials')||(name==='credential'&&error?.code==='credential_invalid')||(name==='code'&&error?.code==='mfa_code_invalid');
- const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):secretError&&error?t.errors[error.code]:null;
+ const message=field?(t.fields[field.code as keyof typeof t.fields]??t.fields.invalid_value):secretError&&error?errorText(t,error.code):null;
  const desc=[hint?name+'-hint':null,short?name+'-length':null,message?name+'-error':null].filter(Boolean).join(' ')||undefined;
  return <div className="identity-field"><label htmlFor={name}>{label}</label><input ref={input} id={name} name={name} type={type} autoComplete={autoComplete} inputMode={inputMode} required aria-invalid={message||short?true:undefined} aria-describedby={desc} autoCapitalize="none" spellCheck={false} onInput={minLength?e=>setLength(passwordLength(e.currentTarget.value)):undefined}/>{hint&&<small id={name+'-hint'}>{hint}</small>}{short&&<p className="identity-field-length" id={name+'-length'}>{t.passwordTooShort.replace('{count}',String(length)).replace('{min}',String(minLength))}</p>}{message&&<p className="identity-field-error" id={name+'-error'} role={secretError?'alert':undefined}>{message}</p>}</div>;
 }

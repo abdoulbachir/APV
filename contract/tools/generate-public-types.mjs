@@ -5,6 +5,7 @@ import YAML from 'yaml';
 //   public-api.ts    public and shared schemas, and the public read operations (unchanged shape)
 //   identity-api.ts  account, request and credential schemas, and the identity operations
 const PUBLIC_TAGS=new Set(["Site","Cases","Case history"]);
+const DONATION_TAGS=new Set(["Giving","Donation review"]);
 const PUBLIC_AUDIENCES=new Set(["public","shared"]);
 
 function generate(spec){
@@ -54,16 +55,22 @@ function generate(spec){
 
  // Identity: private schemas and operations. Shared types are imported from the public file.
  imported.clear();
- const body=[],operations=[],paths=[];
+ const body=[],operations=[],paths=[],donationOps=[],donationPaths=[];
+ const isDonationOperation=op=>(op.tags??[]).every(tag=>DONATION_TAGS.has(tag));
  for(const [name,s] of Object.entries(schemas))if(!isPublicSchema(name))body.push("export type "+name+" = "+type(s,name)+";");
  for(const [route,item] of Object.entries(spec.paths)){
   for(const [method,op] of Object.entries(item)){
    if(isPublicOperation(op))continue;
    if(method!=="get"&&method!=="post")throw Error("Unsupported identity method at "+route);
+   const donation=isDonationOperation(op);
    const id=op.operationId;
+   const grouped={query:[],path:[]};
    for(const param of op.parameters??[]){
     let v=param;if(v.$ref)v=spec.components.parameters[v.$ref.split("/").pop()];
-    if(!v||v.in!=="header")throw Error("Identity operations take header parameters only: "+id);
+    if(!v)throw Error("Unresolved parameter on "+id);
+    if(v.in==="header")continue;// CSRF, idempotency and upload tokens travel in headers, not in the typed shape
+    if(!Object.hasOwn(grouped,v.in))throw Error("Unsupported parameter location "+v.in+" on "+id);
+    grouped[v.in].push(quote(v.name)+(v.required?"":"?")+": "+type(v.schema,id+"."+v.name)+";");
    }
    const media=op.requestBody?.content?.["application/json"];
    const request=media?type(media.schema,id+".request"):"null";
@@ -73,8 +80,9 @@ function generate(spec){
    const response=content?type(content.schema,id+".response"):"null";
    const states=op["x-session-state"];
    if(!Array.isArray(states)||!states.length)throw Error("Missing x-session-state: "+id);
-   operations.push("  "+id+": { method: "+quote(method.toUpperCase())+"; request: "+request+"; response: "+response+"; status: "+status+"; allowedStates: "+states.map(quote).join(" | ")+"; };");
-   paths.push("  "+id+": "+quote(route)+",");
+   const entry="  "+id+": { method: "+quote(method.toUpperCase())+"; request: "+request+"; response: "+response+"; status: "+status+"; query: { "+grouped.query.join(" ")+" }; path: { "+grouped.path.join(" ")+" }; allowedStates: "+states.map(quote).join(" | ")+"; };";
+   (donation?donationOps:operations).push(entry);
+   (donation?donationPaths:paths).push("  "+id+": "+quote(route)+",");
   }
  }
  const csrf=spec.components.parameters.CsrfHeader.name;
@@ -82,7 +90,8 @@ function generate(spec){
   "import type { "+[...imported].sort().join(", ")+" } from './public-api';","",...body,"",
   "/** Send this header, with the token from getCsrfToken, on methods other than GET, HEAD and OPTIONS. */","export const csrfHeaderName = "+quote(csrf)+" as const;","",
   "/** The state of this browser's session. Each operation lists the states in which it may be called. */","export type SessionState = \"anonymous\" | \"mfa_required\" | \"mfa_enrollment_required\" | \"authenticated\";","",
-  "export interface IdentityOperations {",...operations,"}","","export const identityPaths = {",...paths,"} as const;",""];
+  "export interface IdentityOperations {",...operations,"}","","export const identityPaths = {",...paths,"} as const;","",
+  "/** Donation lifecycle operations (contract/donation-lifecycle.md). Reporting needs no account; review needs donations.confirm. */","export interface DonationOperations {",...donationOps,"}","","export const donationPaths = {",...donationPaths,"} as const;",""];
  return {publicApi:result.join("\n"),identityApi:identity.join("\n")};
 }
 

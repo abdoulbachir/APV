@@ -154,7 +154,9 @@ Donor list: the sum of listed donor amounts is at most `externalDonations`, beca
 
 **Several pages.** Two requests are two snapshots. `GET /cases/{code}/ledger` in `openapi.yaml` describes how a movement recorded between two page requests shows up, and how a client detects it with `totalItems`.
 
-## 9. Lifecycle (working proposal, pending owner confirmation)
+## 9. Lifecycle
+
+Confirmed by the owner with milestone 2A (2026-11-26, decision 11). The status transitions below are accepted; their write side is built in milestone 2B.
 
 Statuses: `draft`, `active`, `funded`, `delivered`, `closed`. Public grouping: current is `active` and `funded`; completed is `delivered` and `closed`.
 

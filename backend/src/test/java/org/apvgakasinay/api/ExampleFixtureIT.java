@@ -62,8 +62,9 @@ class ExampleFixtureIT extends PostgresIntegration {
 
     @Test
     void everyResponseIsValidAgainstTheContract() {
-        // The seven public read endpoints are unchanged since 0.2.0; 0.3.0 adds the identity endpoints.
-        assertThat(contract.version()).isEqualTo("0.3.0");
+        // The seven public read endpoints are unchanged since 0.2.0; 0.3.0 adds the identity
+        // endpoints and 0.4.0 the donation lifecycle. Both are additive to the public reads.
+        assertThat(contract.version()).isEqualTo("0.4.0");
         assertThat(everyPublicResponse()).hasSize(2 + 2 * (10 + 16));
     }
 
