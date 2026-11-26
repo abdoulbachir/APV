@@ -208,16 +208,20 @@ public class IdentityService {
     /**
      * Ends the session this request was sent for, whatever identifier it has by now.
      *
-     * The session is named by the identifier the request arrived with, not by the session the
-     * request still holds when it gets here. A sign-in, a second factor or a password change
-     * that finished while this request was running has given the session a new identifier, and
-     * a password change has also raised the security version, so step 6 has already dropped
-     * the session from this request: here there is then no session to end, and the one the
-     * person is signed in with lives on under its new identifier. Every replaced identifier is
+     * The session is the one the request resolved when it arrived, the one whose token step 4
+     * checked, and it is named by the identifier it had then, not by the session the request
+     * still holds when it gets here. A sign-in, a second factor or a password change that
+     * finished while this request was running has given the session a new identifier, and a
+     * password change has also raised the security version, so step 6 has already dropped the
+     * session from this request: here there is then no session to end, and the one the person
+     * is signed in with lives on under its new identifier. Every replaced identifier is
      * recorded with its session (migration V4), which is how it is found.
+     *
+     * The identifier is never read from the Cookie header. A header can hold a second value of
+     * the session cookie, and what such a value names is not this request's session.
      */
     public void logout(HttpServletRequest request, Caller caller) {
-        String arrivedWith = request.getRequestedSessionId();
+        String arrivedWith = Sessions.arrivedWith(request);
         Sessions.Identity identity = Sessions.identity(request.getSession(false));
         Sessions.end(request);
         if (arrivedWith != null) {
