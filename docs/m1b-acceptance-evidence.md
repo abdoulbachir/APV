@@ -8,7 +8,7 @@ Real browser, real production frontend build, real Spring Boot, real PostgreSQL.
 
 Everything below this section describes the first run, at `cf0c883`, and is kept as the record of it. This section is the current state.
 
-**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend corrected it, but the reviewer's third round found that the correction introduced a medium defect, R2, which is open (see "Third round" below).
+**Milestone 1B is still not accepted.** The first five findings are corrected. An independent review found six new defects, all failing closed; five have been corrected in the backend and confirmed by the reviewer's re-check, which found one new low-severity defect, R1; the backend corrected it, but the reviewer's third round found that the correction introduced a medium defect, R2, since corrected and verified by the coordinator (see "Third round" and "R2 and R3 corrected" below). The independent reviewer has not yet seen that last correction.
 
 - **Backend corrections.** `e74314c` and `1552dd0` were merged into the integration branch as `bfb1abb`. Findings 2, 3, 4 and 5 are corrected; finding 1 was corrected in the frontend before.
 - **Harness re-run at `bfb1abb`.** All of `tests/acceptance/` again, same two environments: 79 checks pass, 2 are partial (10.15, 10.16), none fails. The log check that failed in the first run (9.8) passes, and so does staff sign-in in the `dev` profile with a code for the real time. The three reproductions now give: 40 of 40 corrupted tokens answered 403 `csrf_invalid`; 10 of 10 rounds of simultaneous token reads answered 200 twice; a real-time authenticator code accepted. Raw results: `tests/acceptance/results-2026-11-25-rerun-bfb1abb.json`. The only change to the harness was that `a1.mjs` no longer expects the pinned clock.
@@ -88,20 +88,42 @@ The owner chose to have R1 fixed. The backend corrected it in `0d54613` (test fi
 
 The control shows the script can see the defect; its rate is lower than the reviewer's 25 of 210. The check is statistical: the order cannot be forced from outside, which the backend's own test does with a held request.
 
-### Third round by the independent reviewer at `7aa1679`: R1 corrected, R2 and R3 open
+### Third round by the independent reviewer at `7aa1679`: R1 corrected, R2 and R3 found
 
 Report kept outside the repository: "M1B Independent R1 Report (7aa1679)".
 
 - **R1:** corrected. 300 rounds, 185 with both answers 204, nobody left signed in. D1 still holds; the second-factor and enrollment paths have no gap; the new set-password message is shown in both languages.
-- **R2 (medium, open, introduced by the R1 correction).** `POST /api/auth/logout` with two values of the session cookie, first a replaced identifier of another session, then the caller's own live session, and the caller's own token: 204, and the other session, living under its new identifier, is deleted. Deterministic, possible for an anonymous caller, on `dev` and under production rules; no audit record for the victim. It needs one replaced identifier of the victim and gives no access, only a forced sign-out. The session the request resolves is the caller's, so the token check passes, while the identifier the request "arrived with" is the first cookie value. Every single-cookie form is refused.
-- **R3 (low, open, not new).** A session cookie that decodes to text containing a null byte answers 500 on every path, public reads included, with an ERROR line and stack trace per request.
+- **R2 (medium, introduced by the R1 correction).** `POST /api/auth/logout` with two values of the session cookie, first a replaced identifier of another session, then the caller's own live session, and the caller's own token: 204, and the other session, living under its new identifier, is deleted. Deterministic, possible for an anonymous caller, on `dev` and under production rules; no audit record for the victim. It needs one replaced identifier of the victim and gives no access, only a forced sign-out. The session the request resolves is the caller's, so the token check passes, while the identifier the request "arrived with" is the first cookie value. Every single-cookie form is refused.
+- **R3 (low, not new).** A session cookie that decodes to text containing a null byte answers 500 on every path, public reads included, with an ERROR line and stack trace per request.
 
 The coordinator's review of the R1 correction (above) concluded that a stale cookie could not use the lookup. That was wrong for a request carrying two session cookies; the coordinator's check was by reading the code and did not consider that input.
+
+### R2 and R3 corrected at `8a21b2e`
+
+The backend corrected both in `87f433d` (tests first, two failing in CI on the old code) and `0ac6bff` (331 backend tests), merged into the integration branch as `8a21b2e`.
+
+- **R2:** the first identity filter records the identifier of the stored session the request resolved, before the deadline check and step 4; sign-out ends that session and its successor and nothing else. Cookie text is no longer read by identity code (the second use, in the D1 correction, was changed too). A request with several session cookies is not refused: it resolves the first value that names a live session, and the token must be that session's. In production the `__Host-` prefix keeps a browser from holding two.
+- **R3:** a cookie value that is not a lower-case UUID is dropped before any lookup, so it is a request with no session cookie.
+- No contract, error code or order of checks changed.
+
+Verified by the coordinator, this time by attack and not only by reading (`tests/acceptance/r2.mjs`, deterministic):
+
+| Check | `8a21b2e` (corrected) | `d221564` (before), as control |
+|---|---|---|
+| Sign-out with a victim's retired identifier and the caller's live session, both orders, anonymous and signed-in caller, identifier replaced once or twice (12 arrangements) | Victim signed in after every one | Victim signed out whenever the retired identifier came first |
+| Victim's live identifier with the caller's token; retired identifier alone | 403 `csrf_invalid`, victim untouched | Same |
+| Cookie decoding to a null byte, on four `GET` paths and a `POST` | 200, 401, 200, 200, 403; no ERROR line | 500 on all five |
+| Other malformed values (not Base64, 5 KB, upper-case identifier) | As an unknown cookie | As an unknown cookie |
+
+- **R1 again (`r1.mjs`, 150 rounds):** 60 with both answers 204, none left signed in, no 5xx.
+- **Whole harness at `8a21b2e`:** 79 PASS, 2 PARTIAL (10.15, 10.16), 0 FAIL (`tests/acceptance/results-2026-11-25-rerun-8a21b2e.json`). Both backend logs for the whole run: no identifier-shaped text, no hex literal, no ERROR line.
+
+Not done: the independent reviewer's check of this correction.
 
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
-- R2 and R3 (above), for the backend. Then the owner's acceptance of the milestone and authorization to merge.
+- The independent reviewer's check of the R2 and R3 corrections, if the owner wants it. Then the owner's acceptance of the milestone and authorization to merge.
 - 10.15 and 10.16 need a real screen reader and a real password manager.
 - Everything under "Not done" below that concerns production.
 
