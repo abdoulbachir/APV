@@ -18,8 +18,8 @@
 
   <properties>
     <!-- TEMPORARY: stability check of the test suite under another class order. Removed in the next commits. -->
-    <surefire.runOrder>alphabetical</surefire.runOrder>
-    <failsafe.runOrder>alphabetical</failsafe.runOrder>
+    <surefire.runOrder>random</surefire.runOrder>
+    <failsafe.runOrder>random</failsafe.runOrder>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Not managed by Spring Boot; pinned here. Test scope only. -->
