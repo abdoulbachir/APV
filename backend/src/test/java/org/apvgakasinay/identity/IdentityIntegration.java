@@ -73,6 +73,24 @@ abstract class IdentityIntegration {
 
     @BeforeEach
     void cleanIdentityData() {
+        resetIdentityData();
+        clock.pin(START);
+        publicClock.pin(START);
+        Browser.RECORDED.clear();
+    }
+
+    /**
+     * The database is shared by every integration test class, and the classes run in no fixed
+     * order. An identity test therefore leaves it as it found it: no account, no session, the
+     * guard neither bootstrapped nor real. A class that runs next and does not clean first
+     * (the development profile's, for one) then never sees what a test here did.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void leaveNoIdentityDataBehind() {
+        resetIdentityData();
+    }
+
+    private void resetIdentityData() {
         makeDisposableAgain();
         // TRUNCATE is how a disposable database is reset, and it is allowed on a disposable database only.
         jdbc.sql("""
@@ -81,9 +99,6 @@ abstract class IdentityIntegration {
                 restart identity cascade
                 """).update();
         jdbc.sql("insert into identity_guard default values").update();
-        clock.pin(START);
-        publicClock.pin(START);
-        Browser.RECORDED.clear();
     }
 
     /**
@@ -92,8 +107,7 @@ abstract class IdentityIntegration {
      * which the test container's user is, can take that back, by switching every trigger off
      * for one transaction. The application has no such path.
      */
-    @org.junit.jupiter.api.AfterEach
-    void makeDisposableAgain() {
+    private void makeDisposableAgain() {
         if (jdbc.sql("select coalesce(bool_or(database_real), false) from identity_guard").query(Boolean.class).single()) {
             new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status -> {
                 jdbc.sql("set local session_replication_role = replica").update();
