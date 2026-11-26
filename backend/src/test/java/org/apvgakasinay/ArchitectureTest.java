@@ -34,10 +34,28 @@ class ArchitectureTest {
     static final ArchRule siteInternalsArePrivate = internalsOf("site");
 
     @ArchTest
+    static final ArchRule identityInternalsArePrivate = internalsOf("identity");
+
+    @ArchTest
+    static final ArchRule auditInternalsArePrivate = internalsOf("audit");
+
+    @ArchTest
+    static final ArchRule publicModulesDoNotKnowIdentity = noClasses()
+            .that().resideInAnyPackage("org.apvgakasinay.site..", "org.apvgakasinay.cases..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..")
+            .should().dependOnClassesThat().resideInAnyPackage("org.apvgakasinay.identity..", "org.apvgakasinay.audit..")
+            .because("public read responses never depend on who is asking");
+
+    @ArchTest
+    static final ArchRule auditDoesNotKnowIdentity = noClasses()
+            .that().resideInAPackage("org.apvgakasinay.audit..")
+            .should().dependOnClassesThat().resideInAPackage("org.apvgakasinay.identity..")
+            .because("the audit log records events for any module and depends on none");
+
+    @ArchTest
     static final ArchRule sharedDependsOnNoModule = noClasses()
             .that().resideInAPackage("org.apvgakasinay.shared..")
             .should().dependOnClassesThat().resideInAnyPackage(
-                    "org.apvgakasinay.cases..", "org.apvgakasinay.site..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..", "org.apvgakasinay.fixtures..")
+                    "org.apvgakasinay.cases..", "org.apvgakasinay.site..", "org.apvgakasinay.identity..", "org.apvgakasinay.audit..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..", "org.apvgakasinay.fixtures..")
             .because("shared is plumbing used by every module");
 
     @ArchTest
@@ -62,11 +80,12 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule noMutationEndpoints = noMethods()
             .that().areDeclaredInClassesThat().areAnnotatedWith(RestController.class)
+            .and().areDeclaredInClassesThat().resideOutsideOfPackage("org.apvgakasinay.identity..")
             .should().beAnnotatedWith(PostMapping.class)
             .orShould().beAnnotatedWith(PutMapping.class)
             .orShould().beAnnotatedWith(PatchMapping.class)
             .orShould().beAnnotatedWith(DeleteMapping.class)
-            .because("milestone 0B exposes read endpoints only");
+            .because("only the identity module has operations that change something; every other module is read-only");
 
     @ArchTest
     static final ArchRule readServicesRunInOneSnapshot = classes()

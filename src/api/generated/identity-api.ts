@@ -33,7 +33,7 @@ export type CsrfToken = { "headerName": "X-CSRF-TOKEN"; "token": string; };
 export type MfaEnrollment = { "secret": string; "otpauthUri": string; "expiresAt": Timestamp; };
 export type MfaRecoveryCodes = { "codes": Array<string>; "generatedAt": Timestamp; };
 
-/** Send this header, with the token from getCsrfToken, on every request that is not GET. */
+/** Send this header, with the token from getCsrfToken, on methods other than GET, HEAD and OPTIONS. */
 export const csrfHeaderName = "X-CSRF-TOKEN" as const;
 
 /** The state of this browser's session. Each operation lists the states in which it may be called. */

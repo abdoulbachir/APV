@@ -22,6 +22,9 @@
     <!-- Not managed by Spring Boot; pinned here. Test scope only. -->
     <archunit.version>1.5.1</archunit.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
+    <!-- Required by Spring Security's Argon2PasswordEncoder; not managed by Spring Boot.
+         1.85 is the version Spring Security 7.1.3 is built against (ADR 0002, probe 4). -->
+    <bouncycastle.version>1.85</bouncycastle.version>
     <!-- The PostgreSQL image used by integration tests. Keep equal to compose.yaml. -->
     <apv.postgres.image>postgres:18.7</apv.postgres.image>
   </properties>
@@ -44,6 +47,19 @@
       <artifactId>flyway-database-postgresql</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-session-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
@@ -62,6 +78,16 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-flyway-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-session-jdbc-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

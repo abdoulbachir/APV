@@ -389,7 +389,9 @@ class ExampleFixtureIT extends PostgresIntegration {
         for (HttpMethod method : List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)) {
             for (String path : List.of("/api/cases", "/api/cases/HELP-901", "/api/cases/HELP-901/ledger", "/api/site", "/api/stats")) {
                 Response response = perform(MockMvcRequestBuilders.request(method, path).contentType("application/json").content("{}"));
-                error(response, 404, "not_found");
+                // Since contract 0.3.0 a known path with an unsupported method is 405, replacing the 404 of milestone 0B.
+                error(response, 405, "method_not_allowed");
+                assertThat(response.raw().getHeader("Allow")).isEqualTo("GET, HEAD");
             }
         }
         assertThat(jdbc.sql("select count(*) from ledger_entry").query(Long.class).single()).isEqualTo(14);

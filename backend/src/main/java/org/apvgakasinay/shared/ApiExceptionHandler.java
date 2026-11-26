@@ -29,7 +29,9 @@ public class ApiExceptionHandler {
             // "fields" is listed before "requestId" in the contract examples.
             body.put("requestId", body.remove("requestId"));
         }
-        return respond(error.status(), body);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(error.status()).contentType(MediaType.APPLICATION_JSON);
+        error.headers().forEach(response::header);
+        return response.body(Map.of("error", body));
     }
 
     /**

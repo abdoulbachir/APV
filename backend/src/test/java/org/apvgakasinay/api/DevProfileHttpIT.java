@@ -91,8 +91,10 @@ class DevProfileHttpIT {
 
         for (String method : new String[] {"POST", "PUT", "PATCH", "DELETE"}) {
             HttpResponse<String> refused = call(method, "/api/cases/HELP-901");
-            assertThat(refused.statusCode()).as(method).isEqualTo(404);
-            assertThat(Json.parse(refused.body()).at("/error/code").asText()).isEqualTo("not_found");
+            // A known path with an unsupported method: 405 since contract 0.3.0.
+            assertThat(refused.statusCode()).as(method).isEqualTo(405);
+            assertThat(Json.parse(refused.body()).at("/error/code").asText()).isEqualTo("method_not_allowed");
+            assertThat(refused.headers().firstValue("Allow")).contains("GET, HEAD");
         }
         assertThat(call("GET", "/").statusCode()).isEqualTo(404);
         assertThat(call("GET", "/actuator").statusCode()).isEqualTo(404);
@@ -103,5 +105,33 @@ class DevProfileHttpIT {
     void conditionalRequestsAnswerNotModified() throws Exception {
         String etag = call("GET", "/api/site").headers().firstValue("ETag").orElseThrow();
         assertThat(call("GET", "/api/site", "If-None-Match", etag).statusCode()).isEqualTo(304);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.simple.JdbcClient jdbc;
+
+    /** Scenario 13.7: what the development seed creates on a disposable database, and what it never does. */
+    @Test
+    void a13_7_theDevelopmentSeedCreatesThreeFictionalAccountsWithGeneratedPasswords() throws Exception {
+        java.util.List<String> emails = jdbc.sql("select email from account where email like '%@example.test' order by email").query(String.class).list();
+        assertThat(emails).containsExactly("dev.admin@example.test", "dev.donor@example.test", "dev.owner@example.test");
+        // Each has an Argon2id hash of a password generated at this start; staff have an active authenticator.
+        assertThat(jdbc.sql("select count(*) from account_password p join account a on a.id = p.account_id where a.email like '%@example.test' and p.password_hash like '{argon2id}$argon2id$%'")
+                .query(Long.class).single()).isEqualTo(3);
+        assertThat(jdbc.sql("select count(*) from account_totp t join account a on a.id = t.account_id where a.email like '%@example.test' and t.state = 'active'")
+                .query(Long.class).single()).isEqualTo(2);
+        // The seed is development data: it never marks the site bootstrapped and never makes the database real.
+        assertThat(jdbc.sql("select bootstrapped or database_real from identity_guard").query(Boolean.class).single()).isFalse();
+        // No password is committed anywhere: a guessable one does not work.
+        HttpResponse<String> csrf = call("GET", "/api/auth/csrf");
+        String cookie = csrf.headers().firstValue("Set-Cookie").orElseThrow().split(";")[0];
+        String token = Json.parse(csrf.body()).get("token").asText();
+        for (String guess : new String[] {"password", "dev", "dev.donor@example.test", "changeme-changeme"}) {
+            HttpResponse<String> login = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/auth/login"))
+                    .header("Content-Type", "application/json").header("Cookie", cookie).header("X-CSRF-TOKEN", token)
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"email\":\"dev.donor@example.test\",\"password\":\"" + guess + "\"}")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(login.statusCode()).isEqualTo(401);
+        }
     }
 }

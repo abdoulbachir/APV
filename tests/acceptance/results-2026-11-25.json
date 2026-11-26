@@ -1,0 +1,786 @@
+{
+ "1.10": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Sign-up closed in production: real GET /auth/options answers registrationOpen=false, the page shows the closed message and offers no form — forced POST from the page: 403 registration_closed, no account row",
+   "at": "2026-11-25T17:03:14.816Z"
+  }
+ ],
+ "7.2": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Operator command creates the first super administrator on the unmarked database and prints a one-time activation credential (browser redemption follows) — exit 0; database marked real; the command line carries only the command name",
+   "at": "2026-11-25T17:03:16.839Z"
+  }
+ ],
+ "10.2": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A fragment on /auth/set-password is removed from the address and the history entry before the application starts, and is never sent — address has no fragment after load and after back/forward; credential field empty",
+   "at": "2026-11-25T17:03:16.943Z"
+  }
+ ],
+ "7.x-wrong": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A wrong one-time credential is refused on the credential field; nothing else changes",
+   "at": "2026-11-25T17:03:17.353Z"
+  }
+ ],
+ "7.3": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "The activation credential is redeemed in the real frontend: one POST /auth/set-password (204), then the sign-in screen — notice shown, credential spent",
+   "at": "2026-11-25T17:03:17.720Z"
+  }
+ ],
+ "6.1": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Activated staff signs in: mfa_enrollment_required with pendingExpiresAt and no account; the enrollment screen is shown and private screens are unreachable",
+   "at": "2026-11-25T17:03:18.430Z"
+  }
+ ],
+ "10.6e": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Reloading while pending enrollment shows the enrollment screen, never the generic sign-in screen",
+   "at": "2026-11-25T17:03:18.466Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Reloading while pending a second factor shows the challenge, never the generic sign-in screen",
+   "at": "2026-11-25T17:03:21.915Z"
+  }
+ ],
+ "6.23": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "The enrollment QR is drawn in the page; decoded offline it is exactly the otpauth URI the server issued; no request carries the secret or the URI — label APV-GAKASINAY:<email>, SHA1, 6 digits, 30 s; manual secret equals the QR secret; zero external requests",
+   "at": "2026-11-25T17:03:18.713Z"
+  }
+ ],
+ "6.x-wrong-confirm": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A wrong code at enrollment confirmation: error on the code field, field cleared, enrollment screen and QR kept",
+   "at": "2026-11-25T17:03:19.903Z"
+  }
+ ],
+ "6.2": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Enrollment confirmed with a correct code: ten recovery codes shown once, session authenticated, identifier rotated — role super_admin, mfa.enrolled true, 10 codes remaining, session cookie value changed",
+   "at": "2026-11-25T17:03:19.985Z"
+  }
+ ],
+ "3.9": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Production session cookie over HTTPS as the browser stored it: __Host- prefix, Secure, HttpOnly, SameSite=Lax, host-only, path /, session lifetime — exactly one cookie in the jar",
+   "at": "2026-11-25T17:03:19.986Z"
+  }
+ ],
+ "3.11": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Page scripts cannot read the session cookie",
+   "at": "2026-11-25T17:03:19.988Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Dev cookie: HttpOnly, SameSite=Lax, host-only, not readable by page scripts (not Secure on plain HTTP, by design of the dev profile)",
+   "at": "2026-11-25T17:22:22.924Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Dev cookie: HttpOnly, SameSite=Lax, host-only, not readable by page scripts (not Secure on plain HTTP, by design of the dev profile)",
+   "at": "2026-11-25T17:24:01.938Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Dev cookie: HttpOnly, SameSite=Lax, host-only, not readable by page scripts (not Secure on plain HTTP, by design of the dev profile)",
+   "at": "2026-11-25T17:24:57.052Z"
+  }
+ ],
+ "codes-lifetime": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Recovery codes are page-local: a reload shows the account without them, and they are in no storage",
+   "at": "2026-11-25T17:03:20.293Z"
+  }
+ ],
+ "3.6": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Sign out in the browser; the old cookie then answers 401 unauthenticated on GET /me and 403 csrf_invalid on a POST with the old token; the session row is gone",
+   "at": "2026-11-25T17:03:20.815Z"
+  }
+ ],
+ "10.5": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "After sign-out the account screens are left and no account data remains in the page",
+   "at": "2026-11-25T17:03:21.133Z"
+  }
+ ],
+ "10.8": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Back button after signing out: no private screen; GET /me is re-read first — history navigation re-read /me (401) and showed the sign-in screen",
+   "at": "2026-11-25T17:03:21.443Z"
+  }
+ ],
+ "10.6b": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Wrong authenticator code at sign-in, attempts one to four: the challenge stays, the error is on the code field, the field is cleared and focused",
+   "at": "2026-11-25T17:03:23.185Z"
+  }
+ ],
+ "6.6": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff with a second factor: sign-in answers mfa_required; a correct code after four wrong ones gives authenticated with an account",
+   "at": "2026-11-25T17:03:30.517Z"
+  }
+ ],
+ "6.8": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "An accepted authenticator code cannot be used again (replayed within the same 30-second window from the real UI) — same code, still inside its time step: 401 mfa_code_invalid",
+   "at": "2026-11-25T17:03:31.465Z"
+  }
+ ],
+ "6.11": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A recovery code completes the challenge; the account then shows nine remaining",
+   "at": "2026-11-25T17:03:31.818Z"
+  }
+ ],
+ "6.12": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A used recovery code is refused when replayed; a different unused code then works",
+   "at": "2026-11-25T17:03:33.117Z"
+  }
+ ],
+ "3.2": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff session lifetimes as the real /me reports them: 30 minutes idle, 12 hours absolute — idle 30.0 min, absolute 12.00 h",
+   "at": "2026-11-25T17:06:00.497Z"
+  }
+ ],
+ "10.6d": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Wrong code on recovery-code regeneration: error on the code field, still signed in on the same screen",
+   "at": "2026-11-25T17:06:00.891Z"
+  }
+ ],
+ "6.17": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Regeneration with password and a fresh code shows ten new codes once; the session continues; the account shows ten remaining — codes are not shown again after leaving the page (back button included)",
+   "at": "2026-11-25T17:06:30.886Z"
+  }
+ ],
+ "10.6a": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Wrong current password on the password-change screen: error on that field, still signed in on the same screen, GET /me 200",
+   "at": "2026-11-25T17:06:31.302Z"
+  }
+ ],
+ "8.x-policy": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "New-password rules through the real UI: too short, on the breached list and equal to the current one are each refused on the new-password field; still signed in — the list consulted is the synthetic production-size file, not real breach data",
+   "at": "2026-11-25T17:06:32.293Z"
+  }
+ ],
+ "3.8": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Password changed in browser A: A continues signed in on a rotated identifier; the other browsers are ended — exactly one signed-in session row remains",
+   "at": "2026-11-25T17:07:30.915Z"
+  }
+ ],
+ "10.6": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Session lost while a private form is shown, then a POST (browser B): 403 csrf_invalid, one token fetch, GET /me 401, sign-in screen, the POST is not sent again — Expected values to be strictly deep-equal:",
+   "at": "2026-11-25T17:07:31.241Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Session lost while a private screen is shown, then a GET (browser C): 401 unauthenticated, private state cleared, sign-in screen",
+   "at": "2026-11-25T17:07:31.542Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Session lost while a private form is shown, then a POST (browser B, ended by a password change in browser A): 403 csrf_invalid, one token fetch, GET /me 401, sign-in screen, the POST is not sent again — B's typed passwords were sent once and never again; A's new password stands",
+   "at": "2026-11-25T17:12:02.633Z"
+  }
+ ],
+ "14.11": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Follow-up after a POST on a session that no longer exists: exactly one GET /auth/csrf and one GET /me (401 unauthenticated), private state cleared, sign-in screen, nothing resent — session ended by a password change elsewhere rather than by sign-out; same server state (no session row)",
+   "at": "2026-11-25T17:07:31.241Z"
+  }
+ ],
+ "1.6": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Sign-in with the old password after the change, and with an unknown address: the same refusal on the password field (two of the four cases; see env A for the UI comparison)",
+   "at": "2026-11-25T17:07:32.207Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Wrong password, unknown address, not-activated staff account and disabled account with its correct password, each typed into the real sign-in screen: the same 401 invalid_credentials body and the same message — answer times 29 ms, 35 ms, 28 ms, 28 ms (single samples; the timing comparison is the backend suite's)",
+   "at": "2026-11-25T17:25:44.932Z"
+  }
+ ],
+ "3.14": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Fully signed in: /sign-in, /sign-up and /auth/set-password in the UI lead to the account; forced POSTs with a valid token answer 409 already_signed_in; the session is unchanged — register answers 409 before its closed-sign-up check, as the order of checks requires",
+   "at": "2026-11-25T17:07:32.370Z"
+  }
+ ],
+ "4.4": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A token fetched before sign-in is refused after sign-in (403 csrf_invalid); a fresh token is accepted — the fresh token passes the token check and reaches the session-state answer",
+   "at": "2026-11-25T17:08:00.183Z"
+  }
+ ],
+ "4.17": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "The CSRF token is in memory only: not in a cookie, storage, the address, the DOM or a global",
+   "at": "2026-11-25T17:08:00.187Z"
+  }
+ ],
+ "3.3": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff session idle for 31 minutes (stored session aged in the isolated database), then a POST: 403 csrf_invalid, GET /me 401, sign-in screen, nothing resent — Expected values to be strictly deep-equal:",
+   "at": "2026-11-25T17:08:00.611Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff session idle for 29 minutes: still signed in",
+   "at": "2026-11-25T17:08:30.921Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff session idle for 31 minutes, then a GET: 401 unauthenticated and the sign-in screen",
+   "at": "2026-11-25T17:08:31.286Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Staff session idle for 31 minutes (stored session aged in the isolated database), then a POST: 403 csrf_invalid, token fetch, GET /me 401, sign-in screen, nothing resent — time simulated by moving the stored last-access time back",
+   "at": "2026-11-25T17:12:04.233Z"
+  }
+ ],
+ "3.4": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Session past its absolute deadline while in active use (stored deadline moved into the past): GET /me 401, sign-in screen — activity does not extend it: the session had been used seconds earlier",
+   "at": "2026-11-25T17:09:00.636Z"
+  }
+ ],
+ "10.6f": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Pending sign-in expired under the challenge, then a correct code is submitted: 403 csrf_invalid, token fetch, GET /me 401 unauthenticated, back at the password step, the code is not sent again — Expected values to be strictly deep-equal:",
+   "at": "2026-11-25T17:09:30.552Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Pending sign-in expired under the challenge, then a correct code is submitted: 403 csrf_invalid, token fetch, GET /me 401 unauthenticated, back at the password step, the code is not sent again — expiry simulated by moving the stored deadlines into the past",
+   "at": "2026-11-25T17:12:31.844Z"
+  }
+ ],
+ "10.6c": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Fifth wrong code: back at the password step with a message, nothing of the pending sign-in remains; a forced further code is refused and not resent — a correct code forced with the pending session's token: 403 csrf_invalid; the account is not locked",
+   "at": "2026-11-25T17:10:01.086Z"
+  }
+ ],
+ "6.19": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "After five wrong codes the account can still sign in normally; an old (regenerated-away) recovery code is refused",
+   "at": "2026-11-25T17:10:30.449Z"
+  }
+ ],
+ "4.14": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Stale token on each POST in turn (set-password, sign-in, enrollment start, enrollment confirmation, sign-out, second-factor verification, password change, recovery-code regeneration): one request reaches the real server and is answered 403 csrf_invalid, then one GET /auth/csrf and one GET /me, the out-of-date message, fields cleared, no resend — FAILED for: sign-in (POST /auth/login 500 , GET /me 401 , GET /auth/csrf 200 , GET /me 401); enrollment start (POST /auth/mfa/enroll 500 , GET /me 401 , GET /auth/csrf 200 , GET /me 401); enrollment confirmation (POST /auth/mfa/confirm 500 , GET /me 401 , GET /auth/csrf 200 , GET /me 401); second-factor verification (POST /auth/mfa/verify 500 , GET /me 401 , GET /auth/csrf 200 , GET /me 401); password change (POST /auth/change-password 500 , GET /me 200 , GET /auth/csrf 200 , GET /me 200)",
+   "at": "2026-11-25T17:16:30.402Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Stale token (a genuine token of another session) on each POST in turn (set-password, sign-in, enrollment start, enrollment confirmation, sign-out, second-factor verification, password change, recovery-code regeneration): one request reaches the real server and is answered 403 csrf_invalid, then one GET /auth/csrf and one GET /me, the out-of-date message, fields cleared, no resend — sign-up is covered in env A",
+   "at": "2026-11-25T17:22:00.456Z"
+  },
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Stale token on sign-up: one POST reaches the server (403 csrf_invalid), then one GET /auth/csrf and one GET /me, the out-of-date message, fields cleared, no resend, no account created — Expected values to be strictly deep-equal:",
+   "at": "2026-11-25T17:22:20.722Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Stale token on sign-up: one POST reaches the server (403 csrf_invalid), then one GET /auth/csrf and one GET /me, the out-of-date message, fields cleared, no resend, no account created",
+   "at": "2026-11-25T17:23:59.253Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Stale token on sign-up: one POST reaches the server (403 csrf_invalid), then one GET /auth/csrf and one GET /me, the out-of-date message, fields cleared, no resend, no account created",
+   "at": "2026-11-25T17:24:54.365Z"
+  }
+ ],
+ "4.15": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "After each stale refusal the person submits again and the request succeeds with the new token (set-password, sign-in, enrollment start, enrollment confirmation, sign-out, second-factor verification, password change, recovery-code regeneration)",
+   "at": "2026-11-25T17:16:30.403Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "After each stale refusal the person submits again and the request succeeds with the new token (set-password, sign-in, enrollment start, enrollment confirmation, sign-out, second-factor verification, password change, recovery-code regeneration)",
+   "at": "2026-11-25T17:22:00.456Z"
+  },
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "After the stale refusal the sign-up was submitted again and accepted with the new token (202) — Expected values to be strictly equal:",
+   "at": "2026-11-25T17:22:22.539Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "After the stale refusal the sign-up was submitted again and accepted with the new token (202)",
+   "at": "2026-11-25T17:24:01.164Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "After the stale refusal the sign-up was submitted again and accepted with the new token (202)",
+   "at": "2026-11-25T17:24:56.282Z"
+  }
+ ],
+ "3.17": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Answer dropped after real server processing, for each of: recovery-code regeneration; password change; sign-in (nothing of the answer arrived); sign-in (cookie arrived, body lost); second-factor verification; sign-out; set password; enrollment start; enrollment confirmation. The frontend reached the right state through GET /me and never resent a password, code or credential — sign-up is covered in env A",
+   "at": "2026-11-25T17:18:00.400Z"
+  },
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Answer of sign-up dropped after the server created the account: the page says the result could not be confirmed and to try signing in; the sign-up is not sent again — Expected values to be strictly equal:",
+   "at": "2026-11-25T17:22:22.539Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Answer of sign-up dropped after the server created the account: the page says the result could not be confirmed and to try signing in; the sign-up is not sent again — after: GET /me 401 , GET /auth/csrf 200 , GET /me 401",
+   "at": "2026-11-25T17:24:01.163Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Answer of sign-up dropped after the server created the account: the page says the result could not be confirmed and to try signing in; the sign-up is not sent again — after: GET /me 401 , GET /auth/csrf 200 , GET /me 401",
+   "at": "2026-11-25T17:24:56.281Z"
+  }
+ ],
+ "4.13": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Tab A shows account X; the same browser signs out and signs in as Y without telling tab A; tab A submits a password change: refused csrf_invalid, token fetched, GET /me shows another identity, X's screen cleared, nothing resent, Y's password unchanged — tab A ended on /account/password as Y with an empty form",
+   "at": "2026-11-25T17:18:02.634Z"
+  }
+ ],
+ "4.16a": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Tab A on X's challenge; the same browser becomes pending as Y; tab A submits its code: one POST, refused csrf_invalid, GET /me answers mfa_required (indistinguishable), the challenge is shown again empty, nothing is resent — X's code was never checked against Y's pending sign-in (its failure count is still 0)",
+   "at": "2026-11-25T17:18:31.998Z"
+  }
+ ],
+ "10.7": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Another tab signs out: this tab leaves the private screen for the sign-in screen without being used, and what was typed is gone",
+   "at": "2026-11-25T17:19:00.921Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Another tab signs in as another account: this tab shows that account's state without being used",
+   "at": "2026-11-25T17:19:01.391Z"
+  }
+ ],
+ "4.16b": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Identical pending state announced between tabs: tab A on a challenge, tab B starts another pending sign-in; tab A's form is rebuilt empty with the current token — locator.click: Timeout 30000ms exceeded.",
+   "at": "2026-11-25T17:19:31.393Z"
+  }
+ ],
+ "10.9-headers": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Every application page, including deep links, is served with the enforced policy and framing headers — served by the project's preview server; a production host must send the same headers (not yet configured anywhere)",
+   "at": "2026-11-25T17:22:14.314Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Every application page, including deep links, is served with the enforced policy and framing headers — served by the project's preview server; a production host must send the same headers (not yet configured anywhere)",
+   "at": "2026-11-25T17:23:52.768Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Every application page, including deep links, is served with the enforced policy and framing headers — served by the project's preview server; a production host must send the same headers (not yet configured anywhere)",
+   "at": "2026-11-25T17:24:47.870Z"
+  }
+ ],
+ "10.9a": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The colour theme is applied by the self-hosted initializer before the application script runs, in both themes, with no inline script — with the application bundle blocked, html[data-theme] is already set from theme-init.js",
+   "at": "2026-11-25T17:22:14.424Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The colour theme is applied by the self-hosted initializer before the application script runs, in both themes, with no inline script — with the application bundle blocked, html[data-theme] is already set from theme-init.js",
+   "at": "2026-11-25T17:23:52.884Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The colour theme is applied by the self-hosted initializer before the application script runs, in both themes, with no inline script — with the application bundle blocked, html[data-theme] is already set from theme-init.js",
+   "at": "2026-11-25T17:24:47.993Z"
+  }
+ ],
+ "9.x-framing": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The application cannot be framed by another origin — an iframe on http://localhost:4173 (another origin) pointing at the sign-in page shows nothing",
+   "at": "2026-11-25T17:22:15.958Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The application cannot be framed by another origin — an iframe on http://localhost:4173 (another origin) pointing at the sign-in page shows nothing",
+   "at": "2026-11-25T17:23:54.422Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "The application cannot be framed by another origin — an iframe on http://localhost:4173 (another origin) pointing at the sign-in page shows nothing",
+   "at": "2026-11-25T17:24:49.530Z"
+  }
+ ],
+ "1.1": [
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Sign up with a new address in the real UI, then sign in: 202 accepted and not signed in by sign-up; sign-in 200 authenticated; the account is a donor with an unverified address — Expected values to be strictly equal:",
+   "at": "2026-11-25T17:22:22.921Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Sign up with a new address in the real UI, then sign in: 202 accepted and not signed in by sign-up; sign-in 200 authenticated; the account is a donor with an unverified address — donor lifetimes reported as 2 h idle and 24 h absolute (measured from the dev profile's pinned clock)",
+   "at": "2026-11-25T17:24:01.936Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Sign up with a new address in the real UI, then sign in: 202 accepted and not signed in by sign-up; sign-in 200 authenticated; the account is a donor with an unverified address — donor lifetimes reported as 2 h idle and 24 h absolute (measured from the dev profile's pinned clock)",
+   "at": "2026-11-25T17:24:57.050Z"
+  }
+ ],
+ "6.16": [
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "A donor opening the recovery-codes screen is told the request is refused and offered no form — locator.innerText: Timeout 30000ms exceeded.",
+   "at": "2026-11-25T17:22:55.991Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "A donor opening the recovery-codes screen is told the request is refused and offered no form",
+   "at": "2026-11-25T17:24:04.989Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "A donor opening the recovery-codes screen is told the request is refused and offered no form",
+   "at": "2026-11-25T17:25:00.134Z"
+  }
+ ],
+ "10.14-enter": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Sign-in works with the keyboard alone: type, Tab, Enter",
+   "at": "2026-11-25T17:24:11.983Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Sign-in works with the keyboard alone: type, Tab, Enter",
+   "at": "2026-11-25T17:25:07.147Z"
+  }
+ ],
+ "dev-clock": [
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Dev profile: a staff member can complete the challenge with a code from a real authenticator (the current time) — the code for the real current time was answered 401 mfa_code_invalid; only a code computed for the pinned instant 2026-11-24T12:00Z is accepted",
+   "at": "2026-11-25T17:24:19.299Z"
+  },
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Dev profile: a staff member can complete the challenge with a code from a real authenticator (the current time) — the code for the real current time was answered 401 mfa_code_invalid; only a code computed for the pinned instant 2026-11-24T12:00Z is accepted",
+   "at": "2026-11-25T17:25:14.397Z"
+  }
+ ],
+ "public": [
+  {
+   "status": "FAIL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Public pages still work under the enforced policy while a session cookie is present: home, case directory, one case; pictures load from the same origin; no policy violation — location is not defined",
+   "at": "2026-11-25T17:25:21.644Z"
+  },
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Public pages under the enforced policy while a signed-in session cookie is present: home, case directory, one case; pictures load from the same origin; public reads set no cookie; no policy violation — 7 public API reads all 200, 1 pictures on the case page, 0 identity calls made by public pages",
+   "at": "2026-11-25T17:25:39.159Z"
+  }
+ ],
+ "10.3": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Browser storage after the donor and staff journeys: only the language and theme preferences; no IndexedDB, no cache storage, no script-readable cookie",
+   "at": "2026-11-25T17:25:21.688Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Browser storage after the whole staff journey: only the language and theme preferences; nothing about the account, session or permissions",
+   "at": "2026-11-25T17:26:31.079Z"
+  }
+ ],
+ "10.1": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "No password, code, secret or token in any request URL, navigation URL or Referer header of this journey — 827 requests inspected",
+   "at": "2026-11-25T17:25:21.689Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Whole staff journey (reset credential, sign-in, second factor, regeneration, password change): no password, code, recovery code, secret, credential, token or session identifier in any request URL, navigation URL or Referer header — 101 requests and 17 navigations inspected against 51 secret values",
+   "at": "2026-11-25T17:26:31.078Z"
+  }
+ ],
+ "10.4": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Console output during the journey, failures included, holds no secret; no error or analytics reporting request exists — 97 console lines (expected failed-request notices only)",
+   "at": "2026-11-25T17:25:21.689Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Console output during the whole staff journey, refusals included: no secret; no reporting request to any other origin — 18 console lines",
+   "at": "2026-11-25T17:26:31.079Z"
+  }
+ ],
+ "10.9": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Identity screens (sign-up, account (donor), change password, sign-in, set password, second-factor challenge, account (staff), recovery-code regeneration) loaded from the production build with the policy enforced over HTTP, 64 loads: 0 policy violations, 0 requests to another origin",
+   "at": "2026-11-25T17:25:21.690Z"
+  }
+ ],
+ "10.12": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Each of those screens in English and French: html lang follows, and no visible text is identical in both",
+   "at": "2026-11-25T17:25:21.690Z"
+  }
+ ],
+ "10.13": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Each screen in light and dark at 360 and 1440 px: no horizontal overflow, nothing clipped, text contrast at least 4.5:1 (3:1 large); lowest measured 5:1",
+   "at": "2026-11-25T17:25:21.690Z"
+  }
+ ],
+ "10.14": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Keyboard only on sign-up, account (donor), change password, sign-in, set password, second-factor challenge, recovery-code regeneration: Tab reaches every control in document order with a visible focus indicator; Enter submits; focus moves to the field in error",
+   "at": "2026-11-25T17:25:21.691Z"
+  }
+ ],
+ "10.15": [
+  {
+   "status": "PARTIAL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Error semantics for change password, wrong current password; change password, new password too short; sign-in, wrong password; set password, wrong credential; second-factor challenge, wrong code: aria-invalid, aria-describedby to the message, text not colour, focus on the field — attributes verified; no screen reader was run",
+   "at": "2026-11-25T17:25:21.691Z"
+  }
+ ],
+ "10.16": [
+  {
+   "status": "PARTIAL",
+   "env": "A: dev profile, HTTP preview with enforced policy",
+   "note": "Autofill hints on sign-up, change password, sign-in, set password, second-factor challenge, recovery-code regeneration: username, current-password, new-password, one-time-code as appropriate; labels present; paste not blocked — attributes verified; no password manager was run",
+   "at": "2026-11-25T17:25:21.692Z"
+  }
+ ],
+ "7.19": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Process list captured while an operator command was waiting for its answers: the command line holds the command name only; the email, the name and the credential never appear in it — shell history was not inspected: the harness starts the command without a shell, so a human operator's history remains a manual check",
+   "at": "2026-11-25T17:25:41.484Z"
+  }
+ ],
+ "7.7": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "A password reset credential keeps the second factor: after redemption the account signs in with the new password and its existing authenticator",
+   "at": "2026-11-25T17:26:00.379Z"
+  }
+ ],
+ "9.8": [
+  {
+   "status": "FAIL",
+   "env": "B: production rules, HTTPS",
+   "note": "Server logs of the whole acceptance run (production-rule backend at INFO, the HTTPS front): no session identifier in either form, no CSRF token, no password, code, credential or authenticator secret — identifier-shaped text in the log",
+   "at": "2026-11-25T17:26:31.083Z"
+  }
+ ],
+ "dev-log": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile",
+   "note": "The dev profile prints development passwords and authenticator secrets to its console by design; apart from that block its log holds no session identifier or token",
+   "at": "2026-11-25T17:26:31.085Z"
+  }
+ ],
+ "10.x-audit": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Audit rows written during the run hold no password, code, credential, token, secret or session identifier — 200 audit rows inspected",
+   "at": "2026-11-25T17:26:31.177Z"
+  }
+ ],
+ "10.10": [
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Real-API mode with the backend stopped: a private screen and the sign-in screen both show an error and a retry control; no account data, no mock account, no mock sign-in — the front answered 200/502 for the API while the backend process was stopped",
+   "at": "2026-11-25T17:26:34.030Z"
+  },
+  {
+   "status": "PASS",
+   "env": "B: production rules, HTTPS",
+   "note": "Backend back: Try again re-reads the session; the same person is still signed in (sessions and keys survive a restart) and nothing was resent meanwhile — restart included the full digest check of the 2 GB list",
+   "at": "2026-11-25T17:26:38.712Z"
+  }
+ ]
+}

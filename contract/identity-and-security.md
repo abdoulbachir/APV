@@ -2,6 +2,8 @@
 
 Rules behind the identity endpoints of `openapi.yaml` (version 0.3.0), revised after the independent review of commit `bd162cd` (pull request 8). The frontend and the backend each implement against this document in milestone 1B. Nothing here is implemented yet.
 
+Two sentences of 4.3 were reworded on 2026-11-25 with the owner's approval, to say what milestone 1B implements and tests: where the rate limits keyed on an email, an account or a pending sign-in sit in the order of checks, and when a pending sign-in is discarded. No schema, error code or refusal changed, so the version stays 0.3.0.
+
 Status: technically accepted at `b5ea149fb3e33380dd622ad734117a15051b4bfd`; owner policy decisions approved on 2026-11-25 (see `../docs/decisions.md`). This is an accepted design, not runtime evidence.
 
 Rule labels:
@@ -143,14 +145,14 @@ Frontend experience: after 202, show "Your account is ready. Sign in." and the s
 
 **Blocked passwords.** Checked locally on the NFC form; no password and no part of a hash leaves the server. Refused with field code `compromised` when either holds:
 
-1. It is, exactly, on the list of known breached passwords shipped with the application.
+1. It is, exactly, on the local list of known breached passwords. **[Approved, M1B corrective follow-up]** A comprehensive local breached-password list is mandatory outside dev/test. Startup is refused if the configured list is missing, unreadable or unsuitable; the small bundled starter list alone is insufficient. The deployment supplies and maintains the comprehensive list locally; document its provenance, integrity, format, sizing and update procedure. Dev/test may use the bundled starter list.
 2. It is built from the context. Take the password, lower-case it and drop everything that is not a letter or digit. It is refused when what is left contains one of these context words and fewer than 8 other characters remain after removing every occurrence of them: the site names `apvgakasinay`, `apv` and `gakasinay`; the part of the email before `@`; the display name. Context words shorter than 4 characters are ignored, except the site names.
 
 The same error code is used for both, so the answer does not say which. A sign-in is never refused for these reasons; they apply only when a password is chosen.
 
 **Protecting the server.** Hashing costs memory. At most 4 hashes run at once. A request that cannot start hashing within 2 seconds gets 503 with `Retry-After: 5`. Rate limits (section 7) are applied before any hashing, so one client cannot hold the four slots.
 
-Passwords, hashes, one-time credentials, authenticator secrets, recovery codes, CSRF tokens and session identifiers never appear in a response (except the two one-time displays in section 5 and the CSRF token itself), a log line, an error message or an audit record. Request bodies of identity endpoints are never logged.
+Passwords, hashes, one-time credentials, authenticator secrets, recovery codes, CSRF tokens and session identifiers never appear in a response (except the two one-time displays in section 5 and the CSRF token itself), a log line, an error message or an audit record. Request bodies of identity endpoints are never logged. This includes retired or expired session identifiers and verbose logging levels; there is no exception for a previously valid identifier.
 
 ## 4. Sessions
 
@@ -206,7 +208,7 @@ The answer in a wrong state is always the same:
 - **409 `already_signed_in`** when the session is fully signed in and the operation is for one that is not. Nothing is changed, and the existing session is left alone. The frontend reads `GET /me` and offers to sign out. Signing in "over" a signed-in session is never done silently.
 - **403 `forbidden`** when a pending session calls the other pending state's operation, or a signed-in account lacks the permission.
 
-A pending session that calls `/auth/login`, `/auth/register` or `/auth/set-password` is discarded first: the pending sign-in is over, and the call proceeds as from `anonymous`.
+A pending session that calls `/auth/login`, `/auth/register` or `/auth/set-password` is discarded once the request has passed step 7 of the order below, immediately before the operation's own checks: the pending sign-in is over, and the call proceeds as from `anonymous`. A request refused at steps 1 to 7 leaves the pending sign-in as it was, so a malformed or refused request cannot end it.
 
 **Order of checks**, so that every wrong request has exactly one answer. A request is refused at the first step it fails, and the later steps are not evaluated at all:
 
@@ -216,12 +218,12 @@ A pending session that calls `/auth/login`, `/auth/register` or `/auth/set-passw
 | 2 | Origin and fetch metadata, on methods other than `GET`, `HEAD` and `OPTIONS` (9.2) | 403 `forbidden` |
 | 3 | Body size and declared type, before anything is parsed | 413; 415 |
 | 4 | CSRF token, on methods other than `GET`, `HEAD` and `OPTIONS` (9.1) | 403 `csrf_invalid` |
-| 5 | Rate limits | 429 |
+| 5 | Rate limits keyed on the client address | 429 |
 | 6 | Session state: is there a live session, is its identity still valid, is it in a state this operation accepts | 401; 409 `already_signed_in`; 403 `forbidden` |
 | 7 | Body validation | 400 |
-| 8 | The operation's own checks: password, code, credential | 401 `invalid_credentials`, `mfa_code_invalid`; 400 `credential_invalid` |
+| 8 | The operation's own checks: password, code, credential. Counters keyed on what is being guessed (email, account, pending sign-in) are advanced first, before the secret is checked (7.3); when one is exceeded the answer is 429. | 429; 401 `invalid_credentials`, `mfa_code_invalid`; 400 `credential_invalid` |
 
-The first failing check determines the refusal. A request refused before step 8 does not execute the operation, and its password, code or credential is neither checked nor counted as a failed attempt. That is not the same as having no effect at all: session cleanup, rate-limit bookkeeping and audit records follow the step that refused the request. Step 5 advances the rate-limit counters it documents (section 7), step 6 deletes a session it finds revoked or expired, and refusals are audited as section 10.1 lists. `GET`, `HEAD` and `OPTIONS` skip steps 2 and 4. No supported method changes: the contract's operations use `GET` and `POST` only, and any other method on a known path is refused at step 1.
+The first failing check determines the refusal. A request refused before step 8 does not execute the operation, and its password, code or credential is neither checked nor counted as a failed attempt. That is not the same as having no effect at all: session cleanup, rate-limit bookkeeping and audit records follow the step that refused the request. Step 5 advances the counters keyed on the client address (section 7). The counters keyed on an email, an account or a pending sign-in belong to step 8, because the email is not known until the body has been validated: a request refused at step 6 or 7 does not touch them, and a 429 from one of them is a step-8 answer, given after any 400, 401 or 409 of steps 6 and 7, not before. Step 6 deletes a session it finds revoked or expired, and refusals are audited as section 10.1 lists. `GET`, `HEAD` and `OPTIONS` skip steps 2 and 4. No supported method changes: the contract's operations use `GET` and `POST` only, and any other method on a known path is refused at step 1.
 
 **Which session exists at steps 4 and 6.** This is what makes the answers for lost sessions deterministic.
 
@@ -411,6 +413,7 @@ Not only sign-in. Each place a password, code or credential is checked draws on 
 | Password, per email and client address together | 5 failures in 15 minutes | 429 until the window ends |
 | Password, per email or account | 20 failures in 1 hour | 429 for 15 minutes |
 | Sign-in attempts, per client address | 30 in 15 minutes | 429 until the window ends |
+| Protected password operations (change-password and recovery-codes), shared per client address and separate from sign-in | 30 requests in 15 minutes | 429 until the window ends |
 | Second factor, per pending sign-in | 5 failures | Pending session ended, 401 `unauthenticated` |
 | Second factor, per account | 10 failures in 1 hour | 429 for 15 minutes |
 | One-time credential, per client address | 10 in 1 hour | 429 for 15 minutes |
