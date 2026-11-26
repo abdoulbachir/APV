@@ -102,6 +102,9 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
                 forwarded = new CachedBodyRequest(request, body);
             }
 
+            // Which session this request belongs to is settled here, once, before anything can change it.
+            Sessions.rememberArrival(request);
+
             // A session past its absolute deadline no longer exists, from this point on.
             HttpSession session = request.getSession(false);
             if (session != null && session.getAttribute(Sessions.ABSOLUTE_DEADLINE) instanceof Long deadline

@@ -46,6 +46,8 @@ public class Sessions {
     public static final String ABSOLUTE_DEADLINE = "apv.absoluteDeadline";
     static final String PENDING_ID = "apv.pendingSignIn";
     static final String BOUND_ID = "apv.boundSessionId";
+    /** Request attribute: the identifier of the session this request resolved when it arrived. */
+    static final String ARRIVED_WITH = "apv.identity.arrivedWith";
 
     static final Duration ANONYMOUS_IDLE = Duration.ofMinutes(30);
     static final Duration ANONYMOUS_ABSOLUTE = Duration.ofHours(2);
@@ -176,8 +178,8 @@ public class Sessions {
      * @return false when the session no longer exists
      */
     public boolean storeNow(HttpServletRequest request, HttpServletResponse response) {
-        // The identifier the request arrived with: the one the stored row has until this write.
-        String arrivedWith = request.getRequestedSessionId();
+        // The identifier of the session the request resolved: the one the stored row has until this write.
+        String arrivedWith = arrivedWith(request);
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json");
         try {
@@ -194,6 +196,30 @@ public class Sessions {
         } catch (IOException clientGone) {
             throw new UncheckedIOException(clientGone);
         }
+    }
+
+    /**
+     * Notes which stored session this request resolved, before any step can end or replace it.
+     * Called once per request, by the first filter that looks at the session, so it is the
+     * session whose CSRF token step 4 then checks.
+     */
+    public static void rememberArrival(HttpServletRequest request) {
+        if (request.getAttribute(ARRIVED_WITH) == null) {
+            HttpSession session = request.getSession(false);
+            if (session != null) {
+                request.setAttribute(ARRIVED_WITH, session.getId());
+            }
+        }
+    }
+
+    /**
+     * The identifier of the stored session this request resolved when it arrived, or null when
+     * it resolved none. Never the text of a cookie: a Cookie header can hold several values of
+     * the session cookie, and a value that named no session, or was never looked at, says
+     * nothing about which session the request belongs to and whose token it has shown.
+     */
+    public static String arrivedWith(HttpServletRequest request) {
+        return request.getAttribute(ARRIVED_WITH) instanceof String identifier ? identifier : null;
     }
 
     /** Ends the session of this request, if there is one. */

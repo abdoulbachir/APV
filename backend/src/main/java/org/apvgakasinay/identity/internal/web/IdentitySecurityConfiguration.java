@@ -34,6 +34,7 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
+import org.springframework.session.web.http.HttpSessionIdResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
@@ -74,6 +75,12 @@ class IdentitySecurityConfiguration {
         cookie.setCookiePath("/");
         // No Domain, and no Max-Age: a session cookie whose lifetime the server decides.
         return cookie;
+    }
+
+    /** The session cookie is read through a resolver that ignores values that are not identifiers. */
+    @Bean
+    HttpSessionIdResolver sessionIdResolver(CookieSerializer sessionCookie) {
+        return new SessionCookieResolver(sessionCookie);
     }
 
     /**
