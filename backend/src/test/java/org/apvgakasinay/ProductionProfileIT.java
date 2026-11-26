@@ -116,10 +116,15 @@ class ProductionProfileIT {
 
     @Test
     void aFreshDatabaseHoldsNoFictionalDataOnlyTheSeededSettings() {
-        assertThat(jdbc.sql("select count(*) from aid_case").query(Long.class).single()).isZero();
+        // A real database holds the general fund (donation contract 10, migration V6), empty, and
+        // nothing else: no individual case, no money.
+        assertThat(jdbc.sql("select count(*) from aid_case where kind <> 'fund'").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select code, kind, status from aid_case where kind = 'fund'")
+                .query((rs, n) -> rs.getString("code") + "/" + rs.getString("kind") + "/" + rs.getString("status")).list())
+                .containsExactly("FUND/fund/active");
         assertThat(jdbc.sql("select count(*) from ledger_entry").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select version from flyway_schema_history order by installed_rank desc limit 1").query(String.class).single())
-                .isEqualTo("5");
+                .isEqualTo("6");
         assertThat(jdbc.sql("select data_origin from organization_settings").query(String.class).single()).isEqualTo("real");
         assertThat(jdbc.sql("select version()").query(String.class).single()).startsWith("PostgreSQL 18.");
         // The six approved categories and the default timezone come from the migration.

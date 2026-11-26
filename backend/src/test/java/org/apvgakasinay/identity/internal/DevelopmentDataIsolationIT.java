@@ -71,10 +71,11 @@ class DevelopmentDataIsolationIT {
     @Test
     void a13_3_theFixtureLoaderRefusesAnEmptyDatabaseThatWasNotMarkedDisposable() {
         assertThat(purpose.disposable()).isFalse();
-        assertThat(count("select count(*) from aid_case")).isZero();
+        // The only case on a fresh real database is the seeded general fund (migration V6).
+        assertThat(count("select count(*) from aid_case where kind <> 'fund'")).isZero();
         assertThatThrownBy(() -> importer.replaceAllData(Json.readMap(Repo.contract("fixtures/example.json"))))
                 .isInstanceOf(FixtureException.class).hasMessageContaining("disposable");
-        assertThat(count("select count(*) from aid_case")).isZero();
+        assertThat(count("select count(*) from aid_case where kind <> 'fund'")).isZero();
         assertThat(count("select count(*) from ledger_entry")).isZero();
     }
 

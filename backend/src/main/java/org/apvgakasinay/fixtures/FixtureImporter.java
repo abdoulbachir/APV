@@ -75,7 +75,9 @@ public class FixtureImporter {
      * 1. The database must be on this machine (or on a host explicitly listed in
      *    apv.fixtures.allowed-hosts, for a container network).
      * 2. The database must be empty, or its content must itself have come from a fixture. A
-     *    database that ever held real cases is marked "real" and is never replaced.
+     *    database that ever held real cases is marked "real" and is never replaced. The lone
+     *    general fund that migration V6 seeds on every database is not real content: it holds
+     *    no money and the loader replaces it with the fixture's own fund (donation contract 10).
      */
     private void refuseUnlessDisposable() {
         if (!DatabaseTarget.isAllowed(databaseUrl, allowedHosts)) {
@@ -87,10 +89,12 @@ public class FixtureImporter {
                     + "or the operator command has been used on it. An unmarked database is refused even when it is empty.");
         }
         String origin = jdbc.sql("select data_origin from organization_settings").query(String.class).single();
-        long cases = jdbc.sql("select count(*) from aid_case").query(Long.class).single();
-        if (cases > 0 && !"fixture".equals(origin)) {
+        // Empty of real content means: no case other than a seeded general fund, and no money.
+        long cases = jdbc.sql("select count(*) from aid_case where kind <> 'fund'").query(Long.class).single();
+        long entries = jdbc.sql("select count(*) from ledger_entry").query(Long.class).single();
+        if ((cases > 0 || entries > 0) && !"fixture".equals(origin)) {
             throw new FixtureException("refusing to load a fixture: this database holds " + cases
-                    + " cases that did not come from a fixture, and loading would delete them");
+                    + " cases and " + entries + " ledger entries that did not come from a fixture, and loading would delete them");
         }
     }
 
