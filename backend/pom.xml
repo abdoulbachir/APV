@@ -17,6 +17,9 @@
   <description>Public read API of the APV-GAKASINAY donation platform (milestone 0B).</description>
 
   <properties>
+    <!-- TEMPORARY: stability check of the test suite under another class order. Removed in the next commits. -->
+    <surefire.runOrder>reversealphabetical</surefire.runOrder>
+    <failsafe.runOrder>reversealphabetical</failsafe.runOrder>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Not managed by Spring Boot; pinned here. Test scope only. -->
