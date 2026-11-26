@@ -1,6 +1,6 @@
 # APV-GAKASINAY — Project context and handoff
 
-**Checkpoint:** 2026-11-25, M0B, M1A, generated fixture cleanup and M1B (identity runtime) accepted and merged. M2 not started.
+**Checkpoint:** 2026-11-26, M0B, M1A, generated fixture cleanup and M1B (identity runtime) accepted and merged, followed by the corrections from the owner's first manual test. M2 not started.
 **Purpose:** Start a fresh conversation or onboard an agent without replaying the development history.
 **Repository:** https://github.com/abdoulbachir/APV
 
@@ -77,6 +77,10 @@ Full fictional dataset: 205 records (200 current, 2 completed, 2 drafts, FUND), 
 - Generated fixture cleanup: [PR #9](https://github.com/abdoulbachir/APV/pull/9), accepted head `46273e9037828b4b6c6e5ffae3f2db63d8ba2482`, independent PASS and all four CI workflows passed; owner authorized merge, main advanced to `a6c39b217ca3f8d77befcbb32cc3664cc8dafcaa`. See [independent acceptance](https://github.com/abdoulbachir/APV/pull/9#issuecomment-7152910529). All three generated files absent from tracked tree; exact fixture blob digests unchanged on generation. Independent evidence: 8 frontend tests, 38 backend unit + 76 real PostgreSQL integration tests, 1,806 schema-valid responses, 1,838 parity matches, 114 live comparisons, 10 errors, 4 media assets; clean real builds with/without fixtures and explicit mock build, real dist/JAR marker inspection, Chromium at 1440x900 and 390x844; backend outage has no fallback. Linux filesystem only; no production deployment or real data. Post-merge CI was queued at that checkpoint.
 - M1B: [PR #12](https://github.com/abdoulbachir/APV/pull/12) (`integration/m1b-identity`, containing the frontend and backend branches of PRs #10 and #11 with both histories). Accepted head `96d78a16bffee96f6f0b059c3e39aec44b908828`, all four CI workflows passed there; owner authorized the merge; main advanced to `d296ac6cd3ec4ae5e33afb0735a8b12221cfbc0b` by a merge commit, tree identical to the accepted head. The three workflows that run on main passed after the merge. PRs #10 and #11 show as merged because their commits arrived through #12; they were not merged separately.
 
+- After M1B, the owner's manual test (2026-11-25 and 26, as a super administrator on a private site under production rules; Firefox on Linux and Safari on an iPhone): [PR #13](https://github.com/abdoulbachir/APV/pull/13), accepted head `8adcea9ac7a36b71961e202e4385f88041769a55`, owner authorized the merge; main advanced to `32f5228f3323f99e359b2d8c77430c29336b1cbf`. CI: the two workflows that apply to the pull request passed, and the frontend workflow passed on main after the merge (the change touches neither the backend nor the contract). It corrects: the home page failing on a real database that has no general fund; a wrong password, code or credential reported twice; and adds a mark on new passwords under 15 characters, a "Sign in" / "My account" link in the header, and a header that stays at the top (at phone width it leaves on scrolling down and returns on scrolling up). Harness on that head: 79 PASS, 2 PARTIAL, plus 9 new checks (`tests/acceptance/a3.mjs`). Public pages now read `GET /me` once for the header; no page reads it twice. Detail: last section of `docs/m1b-acceptance-evidence.md`.
+- Kept as they are when the owner asked during that test: the 15-character minimum, the mandatory authenticator for staff, the session cookie that ends when the browser is quit. A "stay signed in" choice for donors may be considered with donor accounts in M3.
+- Test site: `integration/test-site` (not merged) holds a Docker setup that runs the whole application under production rules for testing by hand, `deploy/test/README.md`, with the backend image in `backend/Dockerfile`. It also contains PR #13's changes. The site used for the first round was wiped.
+
 ### Approved identity policy
 
 See current main `docs/decisions.md` and contract v0.3.0. Registration closed in production until verified email, open only for intentional dev/test coverage. Guest giving/reporting remains account optional. Donor session 2h idle/24h absolute; staff 30min/12h. Mandatory staff TOTP with ten single-use recovery codes. Operator staff provisioning and recovery until M5; independently established contact channel required, refuse if identity cannot be verified. Minimum 15 NFC-normalized Unicode code points, local blocklist, no composition rules. ASCII-only email initially. Adopted operational advice: two trusted usable super administrators when practical plus secure offline recovery codes, not an enforced two-admin invariant.
@@ -95,7 +99,7 @@ The twelve identity operations run on Spring Boot with PostgreSQL sessions, with
 Known limits, none of them hidden by the acceptance:
 
 - D3: a password change can sign out its own author when another request of that session is in flight (ADR 0002).
-- Scenarios 10.15 and 10.16 are PARTIAL: no real screen reader and no real password manager were used. Chromium only.
+- Scenarios 10.15 and 10.16 are PARTIAL in the automated runs: no real screen reader was used by anyone yet; the owner used Safari on an iPhone and Firefox by hand, without a full password-manager or VoiceOver pass. A wider manual round (several testers, Windows, macOS, Android) is planned after M2, with the checklist the owner keeps outside the repository.
 - Not all 220 scenarios ran in a browser; most are asserted by the backend suite only. Real-time expiry was simulated by ageing stored sessions.
 - The breached-password list used in tests is synthetic, of production size. A real corpus must be supplied for production; the optional SHA-256 pin exists for it.
 - The database role that owns the tables can remove the TRUNCATE protection; a separate non-owning application role is a deployment decision. Tables without a row-level rule can be truncated. Before the first operator command a real database is not yet marked real.
@@ -114,7 +118,7 @@ Open later decisions: email infrastructure and automated verification/recovery, 
 | M1A | Accepted and merged: identity/security contract and owner policy decisions |
 | Cleanup | Accepted and merged: generated fixture lifecycle and artifact isolation |
 | M1B | Accepted and merged: identity runtime, backend security and audit, frontend sign-in and account flows, joint browser acceptance, four independent review rounds |
-| M2 | Next, not started; needs the owner's go-ahead. Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
+| M2 | Next, not started; needs the owner's go-ahead. First backend item: a real database has no general fund although `/api/site` announces `fundCode` (the frontend tolerates it since PR #13). Donation reporting/confirmation/manual/refund lifecycle, private evidence and required storage |
 | M3 | Remaining public pages, donor account/profile/history |
 | M4 | Case administration, updates, media/consent |
 | M5 | Financial administration, disbursements/transfers, payment config, users/contact/audit |
