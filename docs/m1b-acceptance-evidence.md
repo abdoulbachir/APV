@@ -131,6 +131,10 @@ Report kept outside the repository: "M1B Independent R2-R3 Report (bf8c33d)". `b
 
 No new defect. Reviewer's verdict: acceptable from its side at this commit; not a statement of production readiness. Not tested there: the framework's cookie and CSRF internals in source, other browsers, the backend test suite, CI. The races are statistical.
 
+### Unstable backend tests corrected at `3a3d494` (tests only)
+
+CI on `fe0080a`, a commit that changed only this document, failed in one of its two backend jobs while the other passed the same code. Two tests depended on the order of test classes: a log assertion matched the word "Exception" in TRACE lines left on by an earlier class, and the D1 race test counted an audit record for a sign-in refused at the token check, which correctly writes none. The backend corrected them and a third found by running other orders, in `3a3d494`: 332 tests, six full CI runs in default, reverse and random order after the last correction. `backend/src/main` and `backend/pom.xml` are identical to `0ac6bff`, the code of the fourth round, so neither the harness nor the reviewer was run again. The coordinator read the reworked race test: it now checks more than before, not less.
+
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
