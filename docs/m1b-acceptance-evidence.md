@@ -135,6 +135,27 @@ No new defect. Reviewer's verdict: acceptable from its side at this commit; not 
 
 CI on `fe0080a`, a commit that changed only this document, failed in one of its two backend jobs while the other passed the same code. Two tests depended on the order of test classes: a log assertion matched the word "Exception" in TRACE lines left on by an earlier class, and the D1 race test counted an audit record for a sign-in refused at the token check, which correctly writes none. The backend corrected them and a third found by running other orders, in `3a3d494`: 332 tests, six full CI runs in default, reverse and random order after the last correction. `backend/src/main` and `backend/pom.xml` are identical to `0ac6bff`, the code of the fourth round, so neither the harness nor the reviewer was run again. The coordinator read the reworked race test: it now checks more than before, not less.
 
+## After the merge: the owner's manual test (2026-11-25 and 26)
+
+Milestone 1B was merged to `main` at `d296ac6`. The owner then tested by hand, as a super administrator created with the operator command, on a private site under production rules (`deploy/test/`, branch `integration/test-site`): Firefox on a Linux desktop and Safari on an iPhone. Not done: VoiceOver, other testers, Windows, macOS, Android. The site and its data were wiped afterwards.
+
+Found and corrected on `feature/m1b-manual-test-fixes`:
+
+| Found | Correction |
+|---|---|
+| The home page failed as a whole on a real, empty database: `/api/site` announces `fundCode`, and `GET /api/cases/FUND` answers 404 there. The acceptance run had never opened the home page under production rules. | The home page shows the fund panel as unavailable. Open for the backend at the start of milestone 2: a real database has no general fund. |
+| A wrong password was reported twice, under the field and under the form (present since M1B). | Reported once, on the field, as an alert. Same for a wrong code or credential. |
+| No sign that a new password is too short before submitting. | Red edge and a count on new-password fields under 15 characters; submitting is unchanged and the server still decides. |
+| No way to an account in the header. | "Sign in", or "My account" for a signed-in visitor. A public page reads `GET /me` once for it; on identity screens the header takes the fact from the session store, so no page reads twice. Nothing is stored. |
+| The header scrolled away. | It stays at the top; at phone width it leaves while scrolling down and returns on scrolling up. |
+| The test site's proxy presented no certificate when addressed by a network address. | `default_sni` in `deploy/test/Caddyfile`. |
+
+Asked and kept as they are, by the owner: the 15-character minimum, the mandatory authenticator for staff, and the session cookie that ends when the browser is quit.
+
+Verification at `8347376` plus the harness files of this section: the whole harness, 79 PASS, 2 PARTIAL (10.15, 10.16), 0 FAIL; `a3.mjs`, 9 PASS; R1 150 rounds and R2 clean; both backend logs without identifier, hex literal or ERROR line (`tests/acceptance/results-2026-11-26-manual-test-fixes.json`). A first rerun failed 10.6, 14.11, 3.3 and 10.6f: the header then read `GET /me` beside the session store, where scenario 14.11 requires exactly one. The header was changed, not the harness. Public pages now make one identity request each, where they made none.
+
+Not covered by an automated check: the home page on a database without a fund (checked by the coordinator in a browser on the test site), and the phone header's hiding (measured by the coordinator in a local preview at phone width; the owner tested on an iPhone afterwards and reported no problem with it, without confirming it specifically).
+
 ### Still open
 
 - **Decided by the owner on 2026-11-25:** D3 is accepted as a known limitation (ADR 0002). Both contract wording proposals are approved, with the reviewer's sentence that a 429 from an email or account counter is a step-8 answer; `contract/identity-and-security.md` 4.3 now carries them, version unchanged at 0.3.0. The set-password `credential_invalid` message gains, in both languages, the hint to try signing in with the new password (`src/identity/copy.ts`). These three changes are not in the commit the reviewer is re-checking (`1d5a766`); the only application change among them is that message text.
