@@ -18,7 +18,7 @@ for name in apv-m1b-accept-dev apv-m1b-accept-prod; do
     echo "Refused: a container or volume named $name already exists. Run teardown.sh first if it is from an earlier run." >&2; exit 1
   fi
 done
-mkdir -p "$HERE/env/blocklist" "$HERE/evidence"; ( umask 077; cat > "$HERE/env/secrets.env" <<SECRETS
+mkdir -p "$HERE/env/blocklist" "$HERE/env/evidence-prod" "$HERE/env/evidence-dev" "$HERE/evidence"; ( umask 077; cat > "$HERE/env/secrets.env" <<SECRETS
 DEV_DB_PASSWORD=$(openssl rand -hex 16)
 PROD_DB_PASSWORD=$(openssl rand -hex 16)
 APV_MFA_ENCRYPTION_KEY=$(openssl rand -base64 32)
