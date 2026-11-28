@@ -91,7 +91,7 @@ Test classes are in `backend/src/test/java/org/apvgakasinay/donations/` unless a
 
 | # | Status | Executable tests and notes |
 |---|---|---|
-| 5.1 | Covered | `ManualEntryIT.d5_1_aCashGift...`, `d5_1_theSameEntrySentTwice...` |
+| 5.1 | Covered | `ManualEntryIT.d5_1_aCashGift...`, `d5_1_theSameEntrySentTwice...`. The optional provider reference (contract 0.4.2): `d5_1_aManualEntryTakesAProviderReference...` (stored; duplicate against a confirmed report; duplicate in the other order), `d5_1_theReferenceOfAnEntryWithAFreeTextMethod...`, `d5_4_aReentryIsLinked...` |
 | 5.2, 5.3 | Covered | `ManualEntryIT.d5_2_d5_3_...` |
 | 5.4 | Covered | `ManualEntryIT.d5_4_d6_10_...` |
 | 5.5 | Covered | `ManualEntryIT.d5_5_...` |

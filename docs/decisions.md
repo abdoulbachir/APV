@@ -107,6 +107,7 @@ Keep the contract additive: no change to accepted M0/M1 behaviour, schemas or th
 | Topic | Approved decision |
 |---|---|
 | Private note on a correction | Required on both a reversal and a refund, as `contract/donation-lifecycle.md` 8.1 says. The request schemas say so since contract version 0.4.1; a request without it answers 400, field `note`, `required`. |
+| Provider reference on a manual entry | A manual entry takes an optional `providerReference`, as `contract/donation-lifecycle.md` section 7 says; the request schema has it since contract version 0.4.2. It takes part in the rule of 6.3: one reference is recorded once per payment method among confirmed gifts, whether a gift was reported or entered. |
 | Payment card numbers | The refusal (`card_number`) stays on every text field, reference fields included, although an all-numeric reference of 13 to 19 digits is refused about one time in ten. |
 
 Accepted as implemented, with no change: the contract defines fifteen donation operations (four for giving, eleven for review); a re-entry is listed as the less visible of the original's listing and the one requested, under the name the donor agreed to show; a malformed tracking code answers 404 like a wrong one; migration V7; and the points the contract left open (`refundedOn` has the range of `receivedOn`, a staff entry is listed with the instant it was entered, a repeated staff request is answered with the gift as it is now, a brake writes one audit record an hour while it holds).
