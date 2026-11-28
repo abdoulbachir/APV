@@ -16,7 +16,7 @@ const sent = (P, t, p = '/api/donations') => P.log.requests.filter(r => r.at >= 
 psql(DB, 'delete from donation_throttle'); psql(DB, 'delete from auth_throttle');
 
 const D = await profile(origin); const page = await D.context.newPage();
-const open = async () => { await page.goto(origin + '/give'); await page.locator('.donation-recipient').waitFor({ timeout: 15000 }); };
+const open = async () => { psql(DB, 'delete from donation_throttle'); await page.goto(origin + '/give'); await page.locator('.donation-recipient').waitFor({ timeout: 15000 }); };
 const fillIn = async (amount, name) => { await page.locator('#amount').fill(String(amount)); await page.locator('#payerName').fill(name); };
 const submit = () => page.locator('.identity-panel form button[type=submit]').click();
 

@@ -26,7 +26,7 @@ export function record(id, status, env, note) {
 /** Runs one scenario assertion block; a thrown assertion is a FAIL, never an abort of the run. */
 export async function check(id, env, note, fn) {
   try { const extra = await fn(); record(id, 'PASS', env, note + (extra ? ' — ' + extra : '')); return true; }
-  catch (e) { record(id, 'FAIL', env, note + ' — ' + String(e.message).split('\n')[0].slice(0, 400)); return false; }
+  catch (e) { record(id, 'FAIL', env, note + ' — ' + String(e.message).replace(/\u001b\[[0-9;]*m/g, '').split('\n').map(x => x.trim()).filter(Boolean).join(' | ').slice(0, 600)); return false; }
 }
 
 // ---------------------------------------------------------------- environment

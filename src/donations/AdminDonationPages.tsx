@@ -37,18 +37,19 @@ const TokenContext = createContext<{ current: Promise<string> | null }>({ curren
 /** Runs one request at a time; an error that says the session changed makes the session re-read itself. */
 function useAction() {
   const { refresh } = useIdentitySession(); const lease = useContext(TokenContext);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); const working = useRef(false);
   const [error, setError] = useState<DonationAdminError | null>(null);
   async function run<T>(work: (token: string) => Promise<T>): Promise<T | undefined> {
-    if (busy) return undefined;
-    setBusy(true); setError(null);
+    // The ref stops a second press that arrives before the disabled state is drawn.
+    if (busy || working.current) return undefined;
+    working.current = true; setBusy(true); setError(null);
     try { if (!lease.current) throw new DonationAdminError('csrf_invalid', '', 403); return await work(await lease.current); }
     catch (caught) {
       const problem = caught instanceof DonationAdminError ? caught : new DonationAdminError('network_error', '', 0);
       setError(problem);
       if (problem.status === 401 || problem.code === 'csrf_invalid') void refresh();
       return undefined;
-    } finally { setBusy(false); }
+    } finally { working.current = false; setBusy(false); }
   }
   return { busy, error, run };
 }
