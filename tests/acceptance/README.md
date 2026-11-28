@@ -10,7 +10,8 @@ It needs the backend, so it runs on the integration branch, not on the frontend 
 tests/acceptance/setup.sh            # about three minutes; creates everything, all of it new
 cd tests/acceptance
 node b1.mjs && node b2.mjs && node b3.mjs && node b4.mjs    # production rules, HTTPS; about 20 minutes
-node a1.mjs && node a2.mjs && node a3.mjs                    # dev profile, HTTP preview; about 3 minutes
+node m2p.mjs                                                 # donations under production rules
+node a1.mjs && node a2.mjs && node a3.mjs && node m2.mjs && node m2b.mjs   # dev profile, HTTP preview; about 3 minutes
 ./teardown.sh
 ```
 
@@ -37,6 +38,8 @@ Run the scripts in that order and one at a time: `b2` to `b4` continue with the 
 | `a1.mjs`, `a2.mjs` | Sign-up, policy headers, framing, theme before paint, eight screens in two languages, two themes and two widths, contrast, keyboard, field semantics, public pages with a session cookie |
 | `csrf500.mjs`, `csrfrace.mjs`, `devclock.mjs`, `oldid.mjs` | Plain HTTP reproductions of findings 2, 3 and 5, and the check that an old identifier is dead after a password change. They talk to the `dev` backend on 8080. After `a1` and `a2` the address is throttled: clear `auth_throttle` in the harness's `dev` database before `devclock` and `oldid`. |
 | `a3.mjs` | After the owner's manual test: the header's "Sign in" or "My account", no page reading `GET /me` twice, one message for a wrong password, the short-password mark, the header that stays at the top, sign-out seen from another tab |
+| `m2.mjs`, `m2b.mjs` | Milestone 2B in the dev profile: report, receipt, screenshot, status, review, confirm, refund, reject and reopen, manual entry; then presentation, keyboard, lost answer, stale token, double press, card-shaped value, access, a staff session lost mid-review. Results and limits: `docs/m2b-acceptance-evidence.md` |
+| `m2p.mjs` | Milestone 2B under production rules: the fund on a real database, giving closed until the operator activates a method, report over HTTPS, review, an administrator without the permission, leak search. Run after `b1`. |
 | `r2.mjs` | R2 and R3: a sign-out carrying two session cookies ends only the caller's session; a malformed session cookie is an unknown cookie. Deterministic. Exit 1 on a defect. |
 | `r1.mjs` | R1: sign-out racing a password change, 150 rounds; clears the counters itself. Exit 1 if a 204 sign-out leaves the new cookie signed in. |
 | `lib.mjs`, `ui-checks.mjs` | Browser profiles with full observation, fault injection on real requests, TOTP, QR decoding, presentation checks |
