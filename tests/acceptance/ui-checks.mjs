@@ -71,6 +71,7 @@ export async function keyboard(page, label) {
     // A date field has several Tab stops inside one control (its parts, then its picker button, which
     // draws its own indicator): it counts once, and its focus is visible if it was on any of them.
     if (order.at(-1) === f.kb) { if (f.visible) seenVisible.add(f.kb); continue; }
+    if (order.includes(f.kb)) break; // Tab went round to the start: every control has been visited.
     order.push(f.kb); names.set(f.kb, f.name); if (f.visible) seenVisible.add(f.kb);
   }
   for (const kb of order) if (!seenVisible.has(kb)) unfocused.push(names.get(kb));
