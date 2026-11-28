@@ -1,4 +1,4 @@
-// Generated from contract/openapi.yaml (v0.4.0). Do not edit.
+// Generated from contract/openapi.yaml (v0.4.1). Do not edit.
 // Run: cd contract && npm run generate:types
 // Runtime constraints (patterns, numeric bounds, etc.) are enforced by contract tests.
 

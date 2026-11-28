@@ -101,3 +101,12 @@ The owner approved all fifteen decisions of `contract/M2A-review.md`, each as th
 | 15 | Retention | Screenshots: 30 days after a decision. Payer name, contact, payment reference, notes: 90 days after a rejection, 24 months after a confirmation. Amounts, cases, dates, ledger and audit: for ever. |
 
 Keep the contract additive: no change to accepted M0/M1 behaviour, schemas or the identity order of checks. The site never processes payments. Four implementation notes for 2B are recorded in `contract/donation-lifecycle.md` (a lost evidence 204 spends the token; duplicate hints cannot match an erased payer name; a `reentryOf` staff entry carries the original's tracking code; the per-reference status limit keys on the reference, backstopped by the per-address limit).
+
+## Approved on 2026-11-28 — milestone 2B (questions raised by the backend implementation)
+
+| Topic | Approved decision |
+|---|---|
+| Private note on a correction | Required on both a reversal and a refund, as `contract/donation-lifecycle.md` 8.1 says. The request schemas say so since contract version 0.4.1; a request without it answers 400, field `note`, `required`. |
+| Payment card numbers | The refusal (`card_number`) stays on every text field, reference fields included, although an all-numeric reference of 13 to 19 digits is refused about one time in ten. |
+
+Accepted as implemented, with no change: the contract defines fifteen donation operations (four for giving, eleven for review); a re-entry is listed as the less visible of the original's listing and the one requested, under the name the donor agreed to show; a malformed tracking code answers 404 like a wrong one; migration V7; and the points the contract left open (`refundedOn` has the range of `receivedOn`, a staff entry is listed with the instant it was entered, a repeated staff request is answered with the gift as it is now, a brake writes one audit record an hour while it holds).

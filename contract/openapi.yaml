@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: APV-GAKASINAY API
-  version: 0.4.0
+  version: 0.4.1
   summary: Public read endpoints (milestone 0), identity (milestone 1) and the donation lifecycle (milestone 2).
   description: |
     Single source of truth for the API between the APV-GAKASINAY frontend and backend.
@@ -2702,17 +2702,21 @@ components:
       description: Repairs a record. No money moved. Not for money that went back (that is a refund).
       type: object
       additionalProperties: false
-      required: [amount, reason]
+      required: [amount, reason, note]
       properties:
         amount: { $ref: '#/components/schemas/DonationAmount' }
         reason: { type: string, enum: [duplicate_confirmation, wrong_amount, wrong_case, not_received, other] }
-        note: { type: string, maxLength: 500 }
+        note:
+          description: Private. Required, whatever the reason; why the record is being repaired.
+          type: string
+          minLength: 1
+          maxLength: 500
     DonationRefundRequest:
       x-audience: request
       description: Records money that really went back to the donor, outside the site. Not for a record that was merely wrong (that is a reversal).
       type: object
       additionalProperties: false
-      required: [amount, refundedOn]
+      required: [amount, refundedOn, note]
       properties:
         amount: { $ref: '#/components/schemas/DonationAmount' }
         refundedOn: { $ref: '#/components/schemas/PaidDate' }
@@ -2721,7 +2725,11 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-        note: { type: string, maxLength: 500 }
+        note:
+          description: Private. Required; why the money went back.
+          type: string
+          minLength: 1
+          maxLength: 500
     DonationListingRequest:
       x-audience: request
       description: Shows less of a confirmed gift's donor. Can only reduce what is shown.
