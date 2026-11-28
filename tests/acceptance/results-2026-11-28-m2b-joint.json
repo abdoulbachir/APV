@@ -4,7 +4,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The giving page reads the active payment methods from the real backend and shows the recipient details — 2 methods offered",
-   "at": "2026-11-28T14:34:03.739Z"
+   "at": "2026-11-28T15:05:07.926Z"
   }
  ],
  "m2-report": [
@@ -12,7 +12,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "A guest reports a gift to the general fund: 201, a reference and a tracking code shown once; nothing public changes — public received total unchanged; the code is in no address or storage",
-   "at": "2026-11-28T14:34:04.251Z"
+   "at": "2026-11-28T15:05:08.482Z"
   }
  ],
  "m2-evidence": [
@@ -20,7 +20,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The receipt accepts one screenshot: 204, and the page says it is attached",
-   "at": "2026-11-28T14:34:04.369Z"
+   "at": "2026-11-28T15:05:08.595Z"
   }
  ],
  "m2-status-reported": [
@@ -28,7 +28,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The tracking code shows the gift waiting, with no personal detail; a wrong code is refused alike",
-   "at": "2026-11-28T14:34:04.619Z"
+   "at": "2026-11-28T15:05:08.846Z"
   }
  ],
  "m2-queue": [
@@ -36,7 +36,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The super administrator reaches the queue from the account page and sees the reported gift with its screenshot flag",
-   "at": "2026-11-28T14:34:30.467Z"
+   "at": "2026-11-28T15:05:30.659Z"
   }
  ],
  "m2-detail": [
@@ -44,7 +44,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The gift page shows what was reported, the private payer name, and the screenshot from the authenticated route — picture decoded in the page; served no-store",
-   "at": "2026-11-28T14:34:30.470Z"
+   "at": "2026-11-28T15:05:30.662Z"
   }
  ],
  "m2-confirm": [
@@ -52,7 +52,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "Confirming with a typed case and amount: one POST, the gift is confirmed, and the public total rises by exactly that amount at that moment — received +$40; the fund shows it",
-   "at": "2026-11-28T14:34:31.470Z"
+   "at": "2026-11-28T15:05:31.677Z"
   }
  ],
  "m2-status-confirmed": [
@@ -60,7 +60,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "The donor's status page now says verified, with the amount",
-   "at": "2026-11-28T14:34:31.601Z"
+   "at": "2026-11-28T15:05:31.813Z"
   }
  ],
  "m2-refund": [
@@ -68,7 +68,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "A partial refund with its required note: the net amount and the public total fall by it; an amount above what stands is refused and changes nothing — net $25 after a $15 refund; a $30 reversal refused (409)",
-   "at": "2026-11-28T14:34:32.708Z"
+   "at": "2026-11-28T15:05:32.865Z"
   }
  ],
  "m2-reject-reopen": [
@@ -76,7 +76,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "A second report is rejected (the donor sees the reason), then reopened; neither touches a public total",
-   "at": "2026-11-28T14:34:34.440Z"
+   "at": "2026-11-28T15:05:34.465Z"
   }
  ],
  "m2-manual-entry": [
@@ -84,7 +84,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "Manual entry records a gift confirmed at once and the public total rises by it",
-   "at": "2026-11-28T14:34:34.928Z"
+   "at": "2026-11-28T15:05:35.972Z"
   }
  ],
  "m2-donor-cannot-review": [
@@ -92,7 +92,7 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "An anonymous browser is sent to sign-in from the review pages, and the API answers 401 without saying whether a gift exists",
-   "at": "2026-11-28T14:34:34.972Z"
+   "at": "2026-11-28T15:05:36.013Z"
   }
  ],
  "m2-clean": [
@@ -100,7 +100,111 @@
    "status": "PASS",
    "env": "A: dev profile, HTTP preview",
    "note": "No content-policy violation or page error in either browser during the run",
-   "at": "2026-11-28T14:34:34.972Z"
+   "at": "2026-11-28T15:05:36.014Z"
+  }
+ ],
+ "m2-present-give": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Report form in English and French, light and dark, 360 and 1440 px: language, theme, no overflow, no clipped control, contrast, no untranslated text, no policy violation — 8 combinations, lowest contrast 5",
+   "at": "2026-11-28T15:05:39.524Z"
+  }
+ ],
+ "m2-keyboard-give": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Report form with the keyboard alone: Tab reaches every control in order with a visible focus — 11 controls",
+   "at": "2026-11-28T15:05:39.559Z"
+  }
+ ],
+ "m2-present-track": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Status page in the eight combinations — lowest contrast 5",
+   "at": "2026-11-28T15:05:42.175Z"
+  }
+ ],
+ "m2-lost-answer": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The answer to a report is lost: the page says so and resends nothing; the person submits again and gets the receipt of the one gift that exists — first POST processed (201) and lost; the same key and body returned the receipt; one row",
+   "at": "2026-11-28T15:05:44.524Z"
+  }
+ ],
+ "m2-stale-token": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A report sent with another session's token: 403 csrf_invalid, a message, one request, nothing recorded; the entries are kept and a second submit succeeds",
+   "at": "2026-11-28T15:05:46.799Z"
+  }
+ ],
+ "m2-double-submit": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Pressing the button twice sends one report",
+   "at": "2026-11-28T15:05:47.043Z"
+  }
+ ],
+ "m2-card-number": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A card-shaped value in a text field: refused, the field is named with the reason, nothing stored",
+   "at": "2026-11-28T15:05:47.667Z"
+  }
+ ],
+ "m2-french-phone": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "In French at 390 px: the form, the receipt and the status are in French with no sideways scroll",
+   "at": "2026-11-28T15:05:49.401Z"
+  }
+ ],
+ "m2-donor-account": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A signed-in donor account at the review pages: told it cannot review; the API answers 403 forbidden",
+   "at": "2026-11-28T15:05:49.942Z"
+  }
+ ],
+ "m2-admin-french-phone": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Review queue and a gift page in French at 390 px: translated, no sideways scroll",
+   "at": "2026-11-28T15:06:00.700Z"
+  }
+ ],
+ "m2-provider-reference": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "One payment is counted once: a report confirmed with a provider reference, then a manual entry with the same reference and method is refused and nothing is added — method zelle; 409 duplicate_payment_reference",
+   "at": "2026-11-28T15:06:02.918Z"
+  }
+ ],
+ "m2-admin-session-lost": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The staff session ends while a confirmation is being typed: the POST is refused 403, is not sent again, the sign-in screen follows, and the gift is still waiting",
+   "at": "2026-11-28T15:06:05.686Z"
+  }
+ ],
+ "m2-clean-2": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "No content-policy violation or page error in any browser during this part",
+   "at": "2026-11-28T15:06:05.686Z"
   }
  ]
 }
