@@ -204,10 +204,13 @@ class IdentitySecurityUnitTest {
         assertThat(Permissions.planned("admin", true)).containsExactlyInAnyOrderElementsOf(admin);
         admin.addAll(owner);
         assertThat(Permissions.planned("super_admin", false)).containsExactlyInAnyOrderElementsOf(admin);
-        // What is returned today is the same two for every role, and nothing for a visitor.
-        for (String role : List.of("donor", "admin", "super_admin")) {
+        // What is returned today: the same two for a donor and an administrator, and nothing for a visitor.
+        for (String role : List.of("donor", "admin")) {
             assertThat(Permissions.operational(role, true)).containsExactly("account.read_own", "account.change_password");
         }
+        // donations.confirm became operational with the donation review endpoints (donation-lifecycle.md, 6.1).
+        assertThat(Permissions.operational("super_admin", true))
+                .containsExactly("account.read_own", "account.change_password", "donations.confirm");
         assertThat(Permissions.operational(null, false)).isEmpty();
     }
 

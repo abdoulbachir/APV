@@ -40,6 +40,16 @@ class ArchitectureTest {
     static final ArchRule auditInternalsArePrivate = internalsOf("audit");
 
     @ArchTest
+    static final ArchRule donationsInternalsArePrivate = internalsOf("donations");
+
+    @ArchTest
+    static final ArchRule publicModulesDoNotKnowDonations = noClasses()
+            .that().resideInAnyPackage("org.apvgakasinay.site..", "org.apvgakasinay.cases..", "org.apvgakasinay.ledger..",
+                    "org.apvgakasinay.media..", "org.apvgakasinay.identity..", "org.apvgakasinay.audit..")
+            .should().dependOnClassesThat().resideInAPackage("org.apvgakasinay.donations..")
+            .because("the donations module builds on the others; none of them knows it exists");
+
+    @ArchTest
     static final ArchRule publicModulesDoNotKnowIdentity = noClasses()
             .that().resideInAnyPackage("org.apvgakasinay.site..", "org.apvgakasinay.cases..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..")
             .should().dependOnClassesThat().resideInAnyPackage("org.apvgakasinay.identity..", "org.apvgakasinay.audit..")
@@ -55,7 +65,8 @@ class ArchitectureTest {
     static final ArchRule sharedDependsOnNoModule = noClasses()
             .that().resideInAPackage("org.apvgakasinay.shared..")
             .should().dependOnClassesThat().resideInAnyPackage(
-                    "org.apvgakasinay.cases..", "org.apvgakasinay.site..", "org.apvgakasinay.identity..", "org.apvgakasinay.audit..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..", "org.apvgakasinay.fixtures..")
+                    "org.apvgakasinay.cases..", "org.apvgakasinay.site..", "org.apvgakasinay.identity..", "org.apvgakasinay.audit..", "org.apvgakasinay.ledger..", "org.apvgakasinay.media..", "org.apvgakasinay.fixtures..",
+                    "org.apvgakasinay.donations..")
             .because("shared is plumbing used by every module");
 
     @ArchTest
@@ -80,12 +91,22 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule noMutationEndpoints = noMethods()
             .that().areDeclaredInClassesThat().areAnnotatedWith(RestController.class)
-            .and().areDeclaredInClassesThat().resideOutsideOfPackage("org.apvgakasinay.identity..")
+            .and().areDeclaredInClassesThat().resideOutsideOfPackages("org.apvgakasinay.identity..", "org.apvgakasinay.donations..")
             .should().beAnnotatedWith(PostMapping.class)
             .orShould().beAnnotatedWith(PutMapping.class)
             .orShould().beAnnotatedWith(PatchMapping.class)
             .orShould().beAnnotatedWith(DeleteMapping.class)
-            .because("only the identity module has operations that change something; every other module is read-only");
+            .because("only the identity and donations modules have operations that change something; every other module is read-only");
+
+    @ArchTest
+    static final ArchRule everyDonationOperationRunsThroughTheOrderOfChecks = com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods()
+            .that().areDeclaredInClassesThat().resideInAPackage("org.apvgakasinay.donations..")
+            .and().areDeclaredInClassesThat().areAnnotatedWith(RestController.class)
+            .and().areAnnotatedWith(org.springframework.web.bind.annotation.GetMapping.class)
+            .or().areAnnotatedWith(PostMapping.class)
+            .and().areDeclaredInClassesThat().resideInAPackage("org.apvgakasinay.donations..")
+            .should().beAnnotatedWith(org.apvgakasinay.shared.ApiOperation.class)
+            .because("an operation outside the pipeline of identity-and-security.md 4.3 would skip its checks");
 
     @ArchTest
     static final ArchRule readServicesRunInOneSnapshot = classes()

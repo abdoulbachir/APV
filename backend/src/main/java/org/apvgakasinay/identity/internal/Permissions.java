@@ -13,8 +13,11 @@ import java.util.Set;
  */
 public final class Permissions {
 
-    /** Permissions that work with the endpoints that exist today. */
-    public static final List<String> OPERATIONAL = List.of("account.read_own", "account.change_password");
+    /**
+     * Permissions that work with the endpoints that exist today. {@code donations.confirm} became
+     * operational with the donation review endpoints (contract/donation-lifecycle.md, 6.1).
+     */
+    public static final List<String> OPERATIONAL = List.of("account.read_own", "account.change_password", "donations.confirm");
 
     private static final List<String> EVERY_ACCOUNT = List.of("account.read_own", "account.change_password", "donations.read_own");
     private static final List<String> STAFF = List.of("cases.manage", "case_updates.post", "donation_reports.read");

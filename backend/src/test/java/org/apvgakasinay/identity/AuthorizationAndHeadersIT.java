@@ -33,15 +33,21 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
         assertThat(me.headers().allValues("Set-Cookie")).isEmpty();
     }
 
-    /** Every route the application serves is either a declared public read endpoint or a declared identity operation. */
+    /**
+     * Every route the application serves is a declared public read endpoint, a declared identity
+     * operation, or an operation another module declared for the same order of checks (giving
+     * and donation review, contract/donation-lifecycle.md 11).
+     */
     @Test
     void a5_2_noRouteExistsWithoutADeclaredAccessRule() {
         List<String> publicRead = List.of("/api/site", "/api/stats", "/api/cases", "/api/cases/{code}", "/api/cases/{code}/updates",
                 "/api/cases/{code}/donors", "/api/cases/{code}/ledger");
         int identity = 0;
+        int donations = 0;
         for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : mappings.getHandlerMethods().entrySet()) {
             boolean declaredIdentity = Arrays.stream(entry.getValue().getMethod().getAnnotations())
                     .map(Annotation::annotationType).anyMatch(type -> type.getSimpleName().equals("IdentityOperation"));
+            org.apvgakasinay.shared.ApiOperation declared = entry.getValue().getMethodAnnotation(org.apvgakasinay.shared.ApiOperation.class);
             if (!entry.getValue().getBeanType().getPackageName().startsWith("org.apvgakasinay")) {
                 // The framework's error page: not a route of this API. Asked for directly it does not exist.
                 assertThat(entry.getKey().getPatternValues()).containsExactly("/error");
@@ -54,6 +60,15 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
                 if (declaredIdentity) {
                     identity++;
                     assertThat(pattern.equals("/api/me") || pattern.startsWith("/api/auth/")).as(pattern).isTrue();
+                } else if (declared != null) {
+                    donations++;
+                    boolean review = pattern.equals("/api/admin/donations") || pattern.startsWith("/api/admin/donations/");
+                    boolean giving = List.of("/api/giving/methods", "/api/donations", "/api/donations/evidence", "/api/donations/status").contains(pattern);
+                    assertThat(review || giving).as("operation outside the donation paths: " + pattern).isTrue();
+                    // Review is for a fully signed-in session holding the permission; giving is open to everyone.
+                    assertThat(declared.access()).as(pattern).isEqualTo(review
+                            ? org.apvgakasinay.shared.ApiOperation.Access.SIGNED_IN : org.apvgakasinay.shared.ApiOperation.Access.ANY);
+                    assertThat(declared.permission()).as(pattern).isEqualTo(review ? "donations.confirm" : "");
                 } else {
                     boolean developmentPictures = pattern.startsWith("/media/public/");
                     assertThat(publicRead.contains(pattern) || developmentPictures).as("route with no declared rule: " + pattern).isTrue();
@@ -62,6 +77,7 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
             }
         }
         assertThat(identity).as("the twelve identity operations").isEqualTo(12);
+        assertThat(donations).as("the fifteen giving and donation review operations: four and eleven").isEqualTo(15);
     }
 
     @Test
@@ -70,11 +86,16 @@ class AuthorizationAndHeadersIT extends IdentityIntegration {
         Browser donor = donor("sample.donor@example.org");
         Staff admin = staff("sample.admin@example.org", "admin");
         Staff owner = staff("sample.owner@example.org", "super_admin");
-        for (Browser browser : List.of(donor, admin.browser(), owner.browser())) {
+        for (Browser browser : List.of(donor, admin.browser())) {
             Browser.Answer me = browser.get("/api/me");
             assertValid("Account", me);
             assertThat(me.json().get("permissions").toString()).isEqualTo(expected);
         }
+        // Operational since the donation review endpoints exist, for a super administrator only (donation-lifecycle.md, 6.1).
+        Browser.Answer ownerAccount = owner.browser().get("/api/me");
+        assertValid("Account", ownerAccount);
+        assertThat(ownerAccount.json().get("permissions").toString())
+                .isEqualTo("[\"account.read_own\",\"account.change_password\",\"donations.confirm\"]");
         assertThat(admin.browser().get("/api/me").json().at("/mfa/required").asBoolean()).isTrue();
         assertThat(admin.browser().get("/api/me").json().at("/mfa/recoveryCodesRemaining").asInt()).isEqualTo(10);
         assertThat(owner.browser().get("/api/me").json().get("role").asText()).isEqualTo("super_admin");

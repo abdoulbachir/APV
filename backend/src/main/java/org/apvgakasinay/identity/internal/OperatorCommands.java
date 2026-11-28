@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import org.apvgakasinay.identity.DatabasePurpose;
+import org.apvgakasinay.identity.OperatorCommandSet;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,11 +25,14 @@ public class OperatorCommands {
     private final StaffAdministration staff;
     private final AccountRepository accounts;
     private final DatabasePurpose purpose;
+    private final java.util.List<OperatorCommandSet> extensions;
 
-    public OperatorCommands(StaffAdministration staff, AccountRepository accounts, DatabasePurpose purpose) {
+    public OperatorCommands(StaffAdministration staff, AccountRepository accounts, DatabasePurpose purpose,
+                            org.springframework.beans.factory.ObjectProvider<OperatorCommandSet> extensions) {
         this.staff = staff;
         this.accounts = accounts;
         this.purpose = purpose;
+        this.extensions = extensions.orderedStream().toList();
     }
 
     private static final java.util.Set<String> COMMANDS = java.util.Set.of("create-super-admin", "create-admin", "issue-password-reset",
@@ -43,14 +47,21 @@ public class OperatorCommands {
             out.println("Refused: this database is marked disposable (development or test). The operator command is for real databases only.");
             return 2;
         }
-        if (!COMMANDS.contains(command)) {
-            out.println("Unknown command. Commands: create-super-admin, create-admin, issue-password-reset, recover-staff-access, "
-                    + "disable-account, enable-account, set-can-disburse, list-staff");
+        // Commands another module contributes (payment methods) run under the same rules as the staff commands.
+        OperatorCommandSet extension = extensions.stream().filter(set -> set.commands().contains(command)).findFirst().orElse(null);
+        if (!COMMANDS.contains(command) && extension == null) {
+            StringBuilder known = new StringBuilder("Unknown command. Commands: create-super-admin, create-admin, issue-password-reset, "
+                    + "recover-staff-access, disable-account, enable-account, set-can-disburse, list-staff");
+            extensions.forEach(set -> new java.util.TreeSet<>(set.commands()).forEach(name -> known.append(", ").append(name)));
+            out.println(known);
             return 2;
         }
         // From now on this database can never receive fictional data.
         accounts.markDatabaseReal();
         String operator = System.getProperty("user.name", "unknown");
+        if (extension != null) {
+            return extension.run(command, operator, in, out);
+        }
         try {
             switch (command) {
                 case "create-super-admin" -> credential(out, "Activation", staff.createStaff(ask(in, out, "Email"), ask(in, out, "Display name"), "super_admin", operator), 60);

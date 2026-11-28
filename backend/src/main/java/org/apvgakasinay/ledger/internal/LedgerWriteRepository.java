@@ -4,7 +4,6 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Base64;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -31,11 +30,37 @@ public class LedgerWriteRepository {
         this.jdbc = jdbc;
     }
 
-    /** A new opaque public identifier: a short prefix and 22 URL-safe random characters (about 131 bits). */
+    /** Digits and upper-case letters in their byte order, so identifiers sort the way they were made. */
+    private static final char[] SYMBOLS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
+    private static long lastMillis;
+
+    /**
+     * A new public identifier: a short prefix, ten symbols for the millisecond it was made in and
+     * twelve random symbols (sixty bits).
+     *
+     * <p>Entries are dated to the second, and the public record breaks ties by identifier. An
+     * identifier that follows the clock keeps entries of one second in the order they were
+     * written, so a correction is never listed before the entry it corrects and a page already
+     * read never gains an entry in its past (contract/donation-lifecycle.md, 9.1). It says
+     * nothing the entry's public date does not, and nothing about the gift behind it.
+     */
     public static String publicId(String prefix) {
-        byte[] bytes = new byte[16];
-        RANDOM.nextBytes(bytes);
-        return prefix + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).substring(0, 22);
+        long millis = nextMillis();
+        StringBuilder id = new StringBuilder(prefix);
+        for (int shift = 45; shift >= 0; shift -= 5) {
+            id.append(SYMBOLS[(int) ((millis >> shift) & 0x1f)]);
+        }
+        for (int i = 0; i < 12; i++) {
+            id.append(SYMBOLS[RANDOM.nextInt(SYMBOLS.length)]);
+        }
+        return id.toString();
+    }
+
+    /** The current millisecond, never the same twice and never going back within this process. */
+    private static synchronized long nextMillis() {
+        long now = System.currentTimeMillis();
+        lastMillis = now > lastMillis ? now : lastMillis + 1;
+        return lastMillis;
     }
 
     /** The current platform-wide gross total, read without a lock for a pre-insert check. */

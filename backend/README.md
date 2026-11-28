@@ -99,7 +99,7 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_FIXTURES_PATH` | `../contract/fixtures/dataset.json` | `dev` profile only: the dataset that replaces the database content at every start |
 | `APV_FIXTURES_MEDIA_ROOT` | `../contract/fixtures` | `dev` profile only: folder sample pictures are served from |
 | `APV_MFA_ENCRYPTION_KEY` | none | 32 random bytes, Base64. Encrypts authenticator secrets. **Required outside `dev` and `test`**; there it is generated at each start when unset. |
-| `APV_HASH_KEY` | none | 32 random bytes, Base64. Keys the hashes of recovery codes and rate-limit counters. **Required outside `dev` and `test`.** |
+| `APV_HASH_KEY` | none | 32 random bytes, Base64. Keys the hashes of recovery codes and rate-limit counters, and since milestone 2B the tracking codes and upload tokens of gifts, which are computed from it and never stored. **Required outside `dev` and `test`.** Changing or losing it makes every tracking code already given to a donor stop working. |
 | `APV_SESSION_COOKIE_NAME` | `__Host-apv_session` | Session cookie name. Outside `dev` and `test` it must start with `__Host-`. |
 | `APV_SESSION_COOKIE_SECURE` | `true` | Outside `dev` and `test` the backend refuses to start with `false`. |
 | `APV_REGISTRATION_OPEN` | `false` | Public sign-up. The backend refuses to start with `true` outside `dev` and `test`, because it cannot verify an email address yet. |
@@ -110,7 +110,11 @@ All settings come from environment variables. `.env.example` lists them with saf
 | `APV_PASSWORD_BLOCKLIST_PATH` | empty | The comprehensive local breached-password list: a file of sorted SHA-1 hashes with its manifest. **Required outside `dev` and `test`**: the server and the operator command refuse to start when it is missing, unreadable or unsuitable. Source, format, verification, size and updates: [`docs/backend-password-blocklist.md`](../docs/backend-password-blocklist.md). In `dev` and `test` the small bundled list is enough. Never looked up over the network. |
 | `APV_PASSWORD_BLOCKLIST_SHA256` | empty | Optional, recommended in production: the SHA-256 printed when the list was built. When set, the server and the operator command refuse a list whose manifest states another digest, so replacing the list together with its manifest is noticed. Update it with the list. |
 
-Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`.
+| `APV_EVIDENCE_ROOT` | empty | The private directory payment screenshots are stored in. Put it on the persistent files volume, outside anything the web server serves, readable and writable by the backend's user only. **Until it is set, gifts can be reported but no screenshot can be attached** (the receipt carries no upload token and an upload answers 503). In `dev` it defaults to a folder in the temporary directory. Its backups hold screenshots: keep them no longer than the retention period. |
+| `APV_BRAKE_REPORTS_PER_HOUR` / `APV_BRAKE_REPORT_QUEUE` | `60` / `300` | The site-wide brakes on reporting: reports accepted in one hour, and gifts waiting to be reviewed. Beyond either, new reports answer 503 `reporting_paused`. Never below 1. |
+| `APV_BRAKE_EVIDENCE_BYTES` / `APV_BRAKE_DECODES` | `2147483648` / `2` | The total size of stored screenshots, and how many pictures are decoded at once. Beyond either, uploads answer 503; reports continue. Never below 1. |
+
+Generate a key with `openssl rand -base64 32`. Keep both keys outside source control and back them up with the database: without `APV_MFA_ENCRYPTION_KEY` no enrolled authenticator can be verified, and staff would need `recover-staff-access`; without `APV_HASH_KEY` no donor can follow a gift with the tracking code they were given (the gifts themselves are unaffected).
 
 ## Accounts and sign-in
 
@@ -165,7 +169,35 @@ Rules the command and the database enforce:
 - Once a super administrator has been usable (activated, enabled, authenticator enrolled), no command and no SQL statement can leave the site with none: the change is refused, also when two are attempted at the same time. To replace the only one, create and enroll a second one first.
 - Recovery requires confirming the person through a channel you already had before the request. Facts supplied by the requester do not count. What you answer is written to the audit log.
 
-First start of a real site: set the database variables and the two keys, build the breached-password list and set `APV_PASSWORD_BLOCKLIST_PATH` (`docs/backend-password-blocklist.md`), start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend.
+#### Payment methods
+
+Payment methods and their recipient details are managed with the same command until the management screens exist (milestone 5). Whoever can change a recipient detail can redirect every future gift, so in milestone 2 no network operation can: it takes access to the server.
+
+| Command | What it does |
+|---|---|
+| `payment-method-create` | Creates a method, inactive: its identifier (for example `zelle`; never changed, never reused), its English and French name, and its position in the list. |
+| `payment-method-publish-details` | Reads a details definition from a file you name, shows it next to the current version, and publishes it as a new version after you type the method identifier again. The previous version is superseded at that instant; a gift keeps the version its donor saw. |
+| `payment-method-activate` | Activates a method that has details. Outside `dev` and `test` it first asks who checked the provider's eligibility rules, on which date, and what was checked, and refuses without all three. The answers are stored and audited. |
+| `payment-method-deactivate` | Deactivates. Gifts already reported keep their reference; a report naming its details is still accepted for 24 hours. |
+| `payment-method-list` | Methods, versions and attestations. |
+
+The details file is JSON, kept **outside the repository**: recipient handles are server configuration and are never committed.
+
+```json
+{
+  "instructions": { "en": "Send your gift, then come back to this page to report it.", "fr": "Envoyez votre don, puis revenez sur cette page pour le déclarer." },
+  "recipient": [
+    { "labels": { "en": "Send to", "fr": "Envoyer à" }, "value": "<the handle>", "format": "text" },
+    { "labels": { "en": "Payment page", "fr": "Page de paiement" }, "value": "https://<the page>", "format": "link" }
+  ]
+}
+```
+
+One to six fields. A `link` value is an `https` address without a user name or a password, at most 200 characters. Every command writes an audit record naming the operating-system user who ran it. Until one method is active, `GET /api/giving/methods` returns an empty list and no gift can be reported.
+
+In the `dev` profile two fictional methods (`zelle`, `paypal`, with `example.test` details) are created at start-up on a disposable database that has none, so the giving flow can be tried locally.
+
+First start of a real site: set the database variables and the two keys, build the breached-password list and set `APV_PASSWORD_BLOCKLIST_PATH` (`docs/backend-password-blocklist.md`), start the backend once (it migrates the database), run `operator create-super-admin`, hand the credential over, and let the person choose a password and enroll at the frontend. To open giving: set `APV_EVIDENCE_ROOT`, then create a payment method, publish its details and activate it.
 
 ### Container image
 
@@ -181,6 +213,7 @@ First start of a real site: set the database variables and the two keys, build t
   docker compose run --rm backend blocklist verify /var/lib/apv/blocklist/breached-sha1.bin
   ```
 
+- **Screenshots:** mount a private, persistent volume and name it with `APV_EVIDENCE_ROOT`. It must be writable by user `10001`. Nothing else may serve that volume.
 - **Port:** 8080 (`APV_PORT`), on all addresses of the container (`APV_BIND_ADDRESS=0.0.0.0`). Publish it to nothing but the reverse proxy.
 - **Health:** the container is healthy when `GET /api/site` on its own port answers 200. That needs the web server up, the database reachable and migrated, and the list accepted, since the application does not start without it. Failures do not count during the first five minutes, because the whole list is verified at every start; during that time the check runs every two seconds.
 
@@ -191,6 +224,8 @@ Logs never contain a session identifier (live, replaced or expired, in the store
 ### What the server keeps
 
 Sessions are rows in PostgreSQL (`spring_session`), so they survive a backend restart and can be ended from any instance. Passwords are Argon2id hashes; authenticator secrets are encrypted with a key that is not in the database; recovery codes, one-time credentials and rate-limit keys are stored as hashes. `audit_event` is append-only and never holds a password, code, secret, token or credential.
+
+Gifts (milestone 2B): a gift is one row that is never deleted. A donor's tracking code and upload token are computed from a random value stored with the gift and `APV_HASH_KEY`; neither is stored, so a copy of the database alone yields neither, and the organisers cannot read a tracking code either. Idempotency keys are stored as keyed hashes with the identifier of the gift they produced, never with an answer. A screenshot is stored only as the file the server wrote again from its pixels, under a random name in `APV_EVIDENCE_ROOT`; the bytes that were sent are never written. A daily task deletes a screenshot 30 days after the gift is confirmed or rejected, and erases the payer name, payment reference, contact detail and private notes 90 days after a rejection and 24 months after a confirmation; amounts, cases, dates, decisions, ledger entries and audit records are the financial record and are kept. Nothing a donor or a reviewer typed as free text, and no tracking code, upload token or idempotency key, is ever written to the log or the audit log.
 
 ## For the frontend
 
@@ -228,9 +263,13 @@ One Spring Boot application, split into modules by package. A module's `internal
 | `cases` | Cases, the general fund, categories, updates, gallery; the five `/api/cases` endpoints |
 | `ledger` | Totals, ledger entries, corrections, donor listings |
 | `media` | Public picture addresses; development-only serving of sample pictures |
+| `identity`, `audit` | Accounts, sessions, second factor, the request pipeline with the order of checks, the operator command; the append-only audit log |
+| `donations` | Payment methods, reporting a gift, private screenshots, tracking, review, manual entry, corrections, retention: the fifteen operations of `contract/donation-lifecycle.md` |
 | `fixtures` | Development and test only: loads a shared fixture file |
 
 Modules do not read each other's tables. The ledger publishes two database views, `case_balance` and `ledger_entry_detail`, and media publishes `public_media`; other modules read only those.
+
+The donations module builds on the others and none of them knows it exists. It resolves a case code through the cases module (`CaseResolver`), asks the ledger module to write every entry (`LedgerWriteService`: only the ledger writes the ledger), asks the cases module to apply the status a money movement causes (`CaseStatusService`), and asks the identity module to re-read the acting account under a lock (`StaffAccess`). Its operations run through the same order of checks as the identity operations, with nothing inserted before or between the steps: a controller method declares itself with the shared `@ApiOperation` annotation (who may call it, which per-address limit, which kind of body, which permission), the identity module's pipeline applies steps 1 to 6 from that, and the controller does steps 7 and 8. An architecture test fails the build if a donation operation is not declared that way.
 
 Key rules and where they live:
 
@@ -246,7 +285,7 @@ Key rules and where they live:
 
 ### What the database enforces by itself
 
-`src/main/resources/db/migration/`: `V1` creates the schema, `V2` adds the corrections from the milestone 0B review, `V3` and `V4` the identity and audit tables, `V5` the TRUNCATE rule. These hold whatever the application does:
+`src/main/resources/db/migration/`: `V1` creates the schema, `V2` adds the corrections from the milestone 0B review, `V3` and `V4` the identity and audit tables, `V5` the TRUNCATE rule, `V6` and `V7` the donation tables and the general fund. These hold whatever the application does:
 
 - The ledger is append-only: no update, no delete.
 - A correction points at one original of the right kind, on the same case, not earlier, and the corrections of one entry never total more than it.
@@ -258,18 +297,22 @@ Key rules and where they live:
 - Both languages are required for the title and story of a published case.
 - Category identifiers never change. Adding a category is inserting a row.
 - The audit log is append-only, accounts and the identity guard are never deleted, and a bootstrapped site always keeps a usable super administrator.
-- `TRUNCATE` is refused on the ledger, the audit log, accounts, second factors and the guard, directly or through `CASCADE`, unless the database is disposable (marked when created, operator command never used). That is how the fixture loader and the tests reset; on a real database nothing is truncated. The application's role owns these tables, so this stops a statement, not an owner who drops the trigger first.
+- A gift is never deleted, its reported values never change, and a confirmed gift is never unconfirmed. Each state requires and forbids its own columns: a confirmed gift has exactly one ledger entry, a case, an amount, a day received and who decided; a reported one has none of them.
+- A provider reference is recorded once per payment method among confirmed gifts, and once per gift among refunds. A gift is re-entered at most once.
+- A details version of a payment method is never edited or deleted; only its superseded instant is set, once. A method has at most one current version, and its identifier never changes.
+- A correction's record is never changed or deleted (its private note can be erased by retention). A gift's history is append-only. A gift has at most one screenshot row, which is kept after the file is deleted.
+- The general fund exists on every database (inserted once by `V6`, with the approved text), is never deleted, and never changes code or kind.
+- `TRUNCATE` is refused on the ledger, the audit log, accounts, second factors and the guard, and on gifts, their corrections, screenshots, history and payment methods, directly or through `CASCADE`, unless the database is disposable (marked when created, operator command never used). That is how the fixture loader and the tests reset; on a real database nothing is truncated. The application's role owns these tables, so this stops a statement, not an owner who drops the trigger first.
 
 ### What is deliberately not here yet
 
 These need a signed-in person and arrive with the write endpoints:
 
-- Who may confirm a donation, record a disbursement or make a transfer.
-- Idempotency keys and provider references that stop the same correction being recorded twice from two requests. The cumulative limit above already stops over-correction.
-- The audit log of financial actions. (The security audit log exists since milestone 1B.)
-- A correction write API that tells "this record was wrong" (`donation_reversal`, no money moved) apart from "money really went back" (`refund`), and that never records a real new payment as a correction.
-- Upload, storage, consent records and private file access. Only picture metadata exists now.
-- Maintenance mode (503). Rate limits (429) exist on the identity operations since milestone 1B; the public read endpoints have none yet.
+- Who may record a disbursement or make a transfer. (Confirming and correcting gifts exists since milestone 2B, for a super administrator.)
+- The audit log of disbursements and transfers. (Gifts, corrections and payment methods are audited since milestone 2B.)
+- Upload, storage and consent records of public pictures. Only picture metadata exists for those; the one private upload is a gift's screenshot.
+- Maintenance mode (503). Rate limits (429) exist on the identity operations since milestone 1B and on giving and review since 2B; the public read endpoints have none yet.
+- Browser operations that manage payment methods, and a donor's own gift history: milestones 5 and 3.
 - Email: no message is ever sent. Addresses are unverified, which is why public sign-up is closed outside development, and why password resets go through the operator.
 - Housekeeping runs every ten minutes in the web application: rate-limit windows and cooldown markers older than two hours (longer than any window or cooldown lasts) and pending sign-ins that ended over an hour ago are removed, a bounded number of rows per run. Expired sessions are removed by Spring Session's own task. One-time credentials are kept: a used or expired credential is only a hash with its dates, and how long to keep that record is the owner's decision.
 
@@ -278,7 +321,8 @@ Since milestone 1B a known path called with a method it does not support answers
 Concurrency, stated exactly:
 
 - Tested: two simultaneous inserts on two different cases cannot together pass the platform bound (`LedgerRulesIT`).
-- By construction, not by a concurrency test: two simultaneous corrections of one entry, and two simultaneous withdrawals from one case, wait for each other on a row lock. The single-connection tests cover the rules; a test with two competing connections for each belongs to the financial write milestone.
+- Tested since milestone 2B: two simultaneous confirmations of one gift (exactly one succeeds), two simultaneous corrections of one gift that together exceed what stands (exactly one passes), two simultaneous uploads with one token, and a confirmation racing the disablement of its account.
+- By construction, not by a concurrency test: two simultaneous withdrawals from one case wait for each other on a row lock. A test with two competing connections belongs to the milestone that adds disbursements and transfers.
 - Two transfers between the same two cases in opposite directions can deadlock. PostgreSQL detects it and aborts one; the write API will have to retry. Not tested yet.
 - Under repeatable-read or serializable writers, a concurrent ledger insert fails with a serialization error instead of waiting. The write API will have to retry. Not tested yet.
 
@@ -312,7 +356,9 @@ Two rules for tests, after an unstable run:
 - A test that asserts on captured output reads it by record (`support/Logs`): an error is a record at `ERROR` or a printed stack frame of the application, never a word such as `Exception`, which verbose levels print in class names on every request.
 - `identity.*IT`: the identity operations over real HTTP with one cookie jar per simulated browser, against PostgreSQL. Each test method is named after the scenario of `contract/tests/security-acceptance.md` it covers (`a6_7_...` is scenario 6.7). After every test, every identity response it received is validated against the contract's closed schemas and checked for `no-store`. `RealDatabaseIT` and `OperatorModeIT` run without a development profile on a database that was never marked disposable.
 
-`docs/m1b-backend-acceptance-coverage.md` maps all 220 scenarios to these tests, and says which ones need a browser or are not automated.
+- `donations.*IT` and `donations/internal/*`: the fifteen giving and donation review operations over real HTTP against PostgreSQL, on the same harness as the identity tests. Each test method is named after the scenario of `contract/tests/donation-acceptance.md` it covers (`d4_7_...` is scenario 4.7). After every test, every giving and review answer it received is checked for `no-store`, no `ETag`, `Allow` on a 405, `Retry-After` on a 429 or 503, and validated against the contract's closed schemas. `EvidenceImagesTest` needs no database: it covers what the server writes from the pixels of a screenshot. `PaymentMethodOperatorIT` starts the operator command itself, under production rules, on a database that was never marked disposable; `ProductionProfileIT` covers the general fund on such a database.
+
+`docs/m1b-backend-acceptance-coverage.md` maps all 220 security scenarios to these tests, and `docs/m2b-backend-acceptance-coverage.md` the donation scenarios; both say which ones need a browser or are not automated.
 
 The application never reads `example.expected.json`. It computes every total from ledger rows.
 

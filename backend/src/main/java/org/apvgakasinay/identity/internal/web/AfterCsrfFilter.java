@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.OptionalLong;
 import org.apvgakasinay.audit.AuditService;
 import org.apvgakasinay.audit.AuditService.AuditEvent;
 import org.apvgakasinay.audit.AuditService.Outcome;
@@ -15,16 +16,22 @@ import org.apvgakasinay.identity.internal.Account;
 import org.apvgakasinay.identity.internal.AccountRepository;
 import org.apvgakasinay.identity.internal.Caller;
 import org.apvgakasinay.identity.internal.IdentityProperties;
+import org.apvgakasinay.identity.internal.Permissions;
 import org.apvgakasinay.identity.internal.SessionState;
 import org.apvgakasinay.identity.internal.Sessions;
 import org.apvgakasinay.identity.internal.Throttle;
 import org.apvgakasinay.identity.internal.IdentityClock;
+import org.apvgakasinay.shared.AddressLimiter;
+import org.apvgakasinay.shared.ApiCaller;
+import org.apvgakasinay.shared.ApiOperation;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.apvgakasinay.shared.RequestIdFilter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Steps 5 and 6 of the request order, for identity operations, after the CSRF check (step 4):
+ * Steps 5 and 6 of the request order, after the CSRF check (step 4), for identity operations
+ * and for the operations other modules declare with {@link ApiOperation}:
  *
  *   5. rate limits by client address: 429
  *   6. session state: is there a live session, is its identity still valid, is it in a state
@@ -48,20 +55,23 @@ class AfterCsrfFilter extends OncePerRequestFilter {
     private final IdentityProperties properties;
     private final AuditService audit;
     private final IdentityClock clock;
+    private final ObjectProvider<AddressLimiter> limiters;
 
-    AfterCsrfFilter(Throttle throttle, AccountRepository accounts, IdentityProperties properties, AuditService audit, IdentityClock clock) {
+    AfterCsrfFilter(Throttle throttle, AccountRepository accounts, IdentityProperties properties, AuditService audit, IdentityClock clock,
+                    ObjectProvider<AddressLimiter> limiters) {
         this.throttle = throttle;
         this.accounts = accounts;
         this.properties = properties;
         this.audit = audit;
         this.clock = clock;
+        this.limiters = limiters;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Routes.Route route = (Routes.Route) request.getAttribute(BeforeCsrfFilter.ROUTE);
-        if (route == null || route.operation() == null) {
+        if (route == null || !route.checked()) {
             // Public read endpoints do not depend on the session and never look at it.
             chain.doFilter(request, response);
             return;
@@ -71,14 +81,11 @@ class AfterCsrfFilter extends OncePerRequestFilter {
                 String.valueOf(request.getAttribute(RequestIdFilter.ATTRIBUTE)));
 
         // Step 5.
-        Throttle.Limit limit = LIMITS.get(operation.limit());
-        if (limit != null) {
-            long wait = throttle.count(limit, caller.address());
-            if (wait > 0) {
-                response.setHeader("Retry-After", String.valueOf(wait));
-                ErrorWriter.write(request, response, 429, "rate_limited", "Too many requests");
-                return;
-            }
+        long wait = operation != null ? identityLimit(operation.limit(), caller) : moduleLimit(route.api().limit(), caller);
+        if (wait > 0) {
+            response.setHeader("Retry-After", String.valueOf(wait));
+            ErrorWriter.write(request, response, 429, "rate_limited", "Too many requests");
+            return;
         }
 
         // Step 6.
@@ -112,6 +119,11 @@ class AfterCsrfFilter extends OncePerRequestFilter {
         }
         SessionState state = identity == null ? SessionState.ANONYMOUS : identity.state();
 
+        if (operation == null) {
+            moduleOperation(request, response, chain, route, caller, identity, account, state);
+            return;
+        }
+
         boolean accepted = Arrays.asList(operation.states()).contains(state);
         if (accepted && state == SessionState.AUTHENTICATED && operation.staffOnly() && !account.isStaff()) {
             ErrorWriter.write(request, response, 403, "forbidden", "Not allowed for this account");
@@ -132,6 +144,64 @@ class AfterCsrfFilter extends OncePerRequestFilter {
             return;
         }
         request.setAttribute(Current.ATTRIBUTE, new Current(account, state, caller));
+        chain.doFilter(request, response);
+    }
+
+    private long identityLimit(String name, Caller caller) {
+        Throttle.Limit limit = LIMITS.get(name);
+        return limit == null ? 0 : throttle.count(limit, caller.address());
+    }
+
+    /** The per-address limit of another module's operation, counted by the limiter that module provides. */
+    private long moduleLimit(String name, Caller caller) {
+        if (name.isEmpty()) {
+            return 0;
+        }
+        for (AddressLimiter limiter : limiters) {
+            OptionalLong wait = limiter.count(name, caller.address());
+            if (wait.isPresent()) {
+                return wait.getAsLong();
+            }
+        }
+        // A limit nobody provides would be a limit silently not applied.
+        throw new IllegalStateException("no rate limiter provides the limit an operation names");
+    }
+
+    /**
+     * Step 6 for an operation another module declared. The session was judged above exactly as
+     * for an identity operation; what remains is whether its state and its account's
+     * permissions allow this operation. A session that is not fully signed in is a guest to an
+     * operation open to everyone, and is answered 401 with its state's code by one that is not.
+     * The permission is checked here, before any parameter of the request is looked at.
+     */
+    private void moduleOperation(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Routes.Route route,
+                                 Caller caller, Sessions.Identity identity, Account account, SessionState state)
+            throws ServletException, IOException {
+        ApiOperation api = route.api();
+        boolean signedIn = state == SessionState.AUTHENTICATED;
+        if (api.access() == ApiOperation.Access.SIGNED_IN) {
+            if (!signedIn) {
+                if (identity != null) {
+                    audit.record(AuditEvent.of("session.state_conflict", Outcome.REFUSED).account(identity.accountId())
+                            .request(caller.address(), caller.requestId())
+                            .details(Map.of("operation", route.pattern().getPatternString(), "state", state.code())));
+                    ErrorWriter.write(request, response, 401, state.code(), "Second factor required");
+                } else {
+                    ErrorWriter.write(request, response, 401, "unauthenticated", "Sign-in required");
+                }
+                return;
+            }
+            if (!api.permission().isEmpty()
+                    && !Permissions.operational(account.role(), account.canDisburse()).contains(api.permission())) {
+                audit.record(AuditEvent.of("staff.permission_refused", Outcome.REFUSED).account(account.id())
+                        .request(caller.address(), caller.requestId())
+                        .details(Map.of("operation", route.method() + " " + route.pattern().getPatternString(), "permission", api.permission())));
+                ErrorWriter.write(request, response, 403, "forbidden", "Not allowed for this account");
+                return;
+            }
+        }
+        request.setAttribute(ApiCaller.ATTRIBUTE, new ApiCaller(signedIn ? account.id() : null,
+                signedIn ? identity.securityVersion() : 0, caller.address(), caller.requestId()));
         chain.doFilter(request, response);
     }
 

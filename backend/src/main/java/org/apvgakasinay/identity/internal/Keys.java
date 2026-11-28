@@ -31,11 +31,13 @@ public class Keys {
     private static final int TAG_BITS = 128;
 
     private final SecretKeySpec encryptionKey;
+    private final byte[] hashKey;
     private final byte[] recoveryCodeKey;
     private final byte[] throttleKey;
 
     public Keys(IdentityProperties properties) {
         this.encryptionKey = new SecretKeySpec(properties.encryptionKey(), "AES");
+        this.hashKey = properties.hashKey();
         // Two independent keys derived from the one hashing key, so a hash of one kind is useless as the other.
         this.recoveryCodeKey = hmac(properties.hashKey(), "apv/recovery-code/v1".getBytes(StandardCharsets.UTF_8));
         this.throttleKey = hmac(properties.hashKey(), "apv/throttle/v1".getBytes(StandardCharsets.UTF_8));
@@ -107,6 +109,18 @@ public class Keys {
     /** Keyed hash of a rate-limit key, so counters hold neither emails nor addresses. */
     public byte[] throttleKeyHash(String key) {
         return hmac(throttleKey, key.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * A key for another purpose, derived from the hashing key the way this class derives its
+     * own: one key per label, so a value keyed for one purpose is useless for any other. The
+     * hashing key itself never leaves this class.
+     */
+    public byte[] derive(String label) {
+        if (!label.startsWith("apv/") || label.startsWith("apv/recovery-code/") || label.startsWith("apv/throttle/")) {
+            throw new IllegalArgumentException("not a label another module may derive a key for");
+        }
+        return hmac(hashKey, label.getBytes(StandardCharsets.UTF_8));
     }
 
     /** AES-256-GCM. The result is the random nonce followed by the ciphertext and its tag. */

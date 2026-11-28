@@ -17,7 +17,18 @@ public final class OperatorMode {
     }
 
     public static int run(String command) throws Exception {
-        SpringApplication operator = new SpringApplication(OperatorConfiguration.class);
+        return run(command, new Class<?>[0]);
+    }
+
+    /**
+     * @param extensions configuration classes of other modules that contribute commands
+     *                   ({@link OperatorCommandSet}); they are started in the same context, still without a web server
+     */
+    public static int run(String command, Class<?>... extensions) throws Exception {
+        Class<?>[] sources = new Class<?>[extensions.length + 1];
+        sources[0] = OperatorConfiguration.class;
+        System.arraycopy(extensions, 0, sources, 1, extensions.length);
+        SpringApplication operator = new SpringApplication(sources);
         operator.setWebApplicationType(WebApplicationType.NONE);
         operator.setBannerMode(Banner.Mode.OFF);
         // Start-up problems are reported by the message below, not by a framework stack trace.
