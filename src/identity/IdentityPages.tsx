@@ -28,7 +28,7 @@ function GateFallback({snapshot}:{snapshot:SessionSnapshot}){
  if(snapshot.reading.status==='unavailable')return <Panel title={t.login}><p role="alert">{t.tryAgain}</p><button className="identity-primary" type="button" onClick={()=>void refresh()}>{t.retry}</button></Panel>;
  return <Navigate replace to={destinations[snapshot.reading.status]}/>;
 }
-function Guard({allowed,children}:{allowed:readonly SessionState[];children:(account:Account|null)=>ReactNode}){
+export function Guard({allowed,children}:{allowed:readonly SessionState[];children:(account:Account|null)=>ReactNode}){
  return <SessionBoundary allowed={allowed} fallback={snapshot=><GateFallback snapshot={snapshot}/>}>
   {session=>children(session.status==='authenticated'?session.account:null)}
  </SessionBoundary>;
@@ -301,5 +301,5 @@ export function RecoveryCodesPage(){
 }
 export function AccountPage(){
  const t=useCopy();
- return <Guard allowed={['authenticated']}>{account=>account&&<Panel title={t.account}><Notice/><p>{t.accountIntro}</p><dl className="identity-account"><dt>{t.name}</dt><dd>{account.displayName}</dd><dt>{t.email}</dt><dd>{account.email}</dd><dt>{t.role}</dt><dd>{t[account.role]}</dd><dt>{t.verification}</dt><dd>{account.emailVerified?t.verified:t.unverified}</dd>{account.mfa.required&&<><dt>{t.recoveryRemaining}</dt><dd>{account.mfa.recoveryCodesRemaining??'—'}</dd></>}</dl><Link to="/account/password">{t.changePassword}</Link>{account.role!=='donor'&&account.mfa.enrolled&&<Link to="/account/recovery-codes">{t.regenerate}</Link>}<Prepared>{lease=><LogoutForm lease={lease}/>}</Prepared></Panel>}</Guard>;
+ return <Guard allowed={['authenticated']}>{account=>account&&<Panel title={t.account}><Notice/><p>{t.accountIntro}</p><dl className="identity-account"><dt>{t.name}</dt><dd>{account.displayName}</dd><dt>{t.email}</dt><dd>{account.email}</dd><dt>{t.role}</dt><dd>{t[account.role]}</dd><dt>{t.verification}</dt><dd>{account.emailVerified?t.verified:t.unverified}</dd>{account.mfa.required&&<><dt>{t.recoveryRemaining}</dt><dd>{account.mfa.recoveryCodesRemaining??'—'}</dd></>}</dl>{account.permissions.includes('donations.confirm')&&<Link to="/admin/donations">{t.reviewGifts}</Link>}<Link to="/account/password">{t.changePassword}</Link>{account.role!=='donor'&&account.mfa.enrolled&&<Link to="/account/recovery-codes">{t.regenerate}</Link>}<Prepared>{lease=><LogoutForm lease={lease}/>}</Prepared></Panel>}</Guard>;
 }
