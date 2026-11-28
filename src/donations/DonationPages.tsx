@@ -61,6 +61,8 @@ export function GivingPage() {
   const [mode, setMode] = useState<'named' | 'anonymous' | 'hidden'>('anonymous');
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
+  // A second press in the same instant arrives before the disabled state is drawn; this stops it.
+  const sending = useRef(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   useEffect(() => { document.title = c.give.title; }, [c]);
@@ -84,7 +86,7 @@ export function GivingPage() {
   </section></div>;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !chosen) return;
+    event.preventDefault(); if (busy || sending.current || !chosen) return;
     const form = event.currentTarget; const data = new FormData(form);
     const dollars = Number(String(data.get('amount')).replace(',', '.'));
     const amount = Math.round(dollars * 100);
@@ -96,14 +98,14 @@ export function GivingPage() {
       ...(String(data.get('contact')).trim() ? { contact: String(data.get('contact')).trim() } : {}),
       display: mode === 'named' ? { mode, publicName: String(data.get('publicName')).trim() } : { mode },
     };
-    setBusy(true); setError(null);
+    sending.current = true; setBusy(true); setError(null);
     try { setReceipt(await donations.report(body, idempotencyKey.current, await lease(), locale)); }
     catch (e) {
       const problem = e instanceof ApiError ? e : new ApiError('network_error', '', 0); setError(problem);
       // The refused report is not sent again. A new token is read for the next time the person submits.
       if (problem.code === 'csrf_invalid') { token.current = null; void lease().catch(() => undefined); }
     }
-    finally { setBusy(false); }
+    finally { sending.current = false; setBusy(false); }
   }
 
   return <div className="donation-wrap"><section className="identity-panel">
