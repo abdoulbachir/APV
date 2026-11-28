@@ -11,7 +11,7 @@ public class ApiEtagFilter extends ShallowEtagHeaderFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        // Identity responses are no-store and carry no ETag.
-        return !path.startsWith("/api/") || ApiPaths.isIdentity(path);
+        // Identity and donation responses are no-store and carry no ETag.
+        return !path.startsWith("/api/") || ApiPaths.isNeverStored(path);
     }
 }

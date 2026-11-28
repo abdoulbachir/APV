@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import org.apvgakasinay.shared.ApiOperation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.server.PathContainer;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -20,8 +21,27 @@ import org.springframework.web.util.pattern.PathPattern;
  */
 class Routes {
 
-    /** One path and method the application serves. {@code operation} is null for a public read endpoint. */
-    record Route(PathPattern pattern, String method, IdentityOperation operation) {
+    /**
+     * One path and method the application serves. {@code operation} is set for an identity
+     * operation and {@code api} for an operation of another module that runs through the same
+     * order of checks; both are null for a public read endpoint.
+     */
+    record Route(PathPattern pattern, String method, IdentityOperation operation, ApiOperation api) {
+
+        /** True when steps 3 to 6 of the request order apply: everything but a public read endpoint. */
+        boolean checked() {
+            return operation != null || api != null;
+        }
+
+        /** True when the operation defines a JSON request body. */
+        boolean jsonBody() {
+            return operation != null ? operation.body() : api != null && api.body() == ApiOperation.Body.JSON;
+        }
+
+        /** True when the operation's body is a picture. */
+        boolean imageBody() {
+            return api != null && api.body() == ApiOperation.Body.IMAGE;
+        }
     }
 
     /** The result of looking a request up. */
@@ -50,9 +70,10 @@ class Routes {
                         continue;
                     }
                     IdentityOperation operation = entry.getValue().getMethodAnnotation(IdentityOperation.class);
+                    ApiOperation api = entry.getValue().getMethodAnnotation(ApiOperation.class);
                     for (PathPattern pattern : info.getPathPatternsCondition().getPatterns()) {
                         for (RequestMethod method : info.getMethodsCondition().getMethods()) {
-                            current.add(new Route(pattern, method.name(), operation));
+                            current.add(new Route(pattern, method.name(), operation, api));
                         }
                     }
                 }

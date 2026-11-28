@@ -7,6 +7,7 @@ import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.Sessions;
 import org.apvgakasinay.identity.internal.Throttle;
 import org.apvgakasinay.identity.internal.IdentityClock;
+import org.apvgakasinay.shared.AddressLimiter;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -44,6 +45,9 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *   CsrfFilter         step 4, Spring Security's own, with the token stored in the session
  *   AfterCsrfFilter    steps 5 and 6
  *   the controller     steps 7 and 8
+ *
+ * The same four parts serve the operations other modules declare with ApiOperation (giving and
+ * donation review): nothing is inserted before or between the steps for them.
  *
  * Spring Security's authorization rules stay in place behind that as a second barrier: deny
  * by default, and its multi-factor support requires both factors for staff (ADR 0002, probe 1).
@@ -124,7 +128,8 @@ class IdentitySecurityConfiguration {
     @Bean
     SecurityFilterChain apiFilterChain(HttpSecurity http, CsrfTokenRepository csrfTokens, SecurityContextRepository contexts,
                                        ObjectProvider<RequestMappingHandlerMapping> mappings, IdentityProperties properties,
-                                       IdentityClock clock, Throttle throttle, AccountRepository accounts, AuditService audit) throws Exception {
+                                       IdentityClock clock, Throttle throttle, AccountRepository accounts, AuditService audit,
+                                       ObjectProvider<AddressLimiter> limiters) throws Exception {
         AuthorizationManagerFactory<RequestAuthorizationContext> factors = AuthorizationManagerFactories
                 .<RequestAuthorizationContext>multiFactor()
                 .when(IdentitySecurityConfiguration::isStaff)
@@ -140,7 +145,7 @@ class IdentitySecurityConfiguration {
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfTokens).csrfTokenRequestHandler(new CsrfTokenHandler()))
                 .securityContext(context -> context.securityContextRepository(contexts))
                 .addFilterBefore(new BeforeCsrfFilter(new Routes(mappings), properties, clock, csrfTokens), CsrfFilter.class)
-                .addFilterAfter(new AfterCsrfFilter(throttle, accounts, properties, audit, clock), CsrfFilter.class)
+                .addFilterAfter(new AfterCsrfFilter(throttle, accounts, properties, audit, clock, limiters), CsrfFilter.class)
                 .headers(headers -> headers
                         // Caching is set per path by RequestIdFilter: no-cache for public reads, no-store for identity.
                         .cacheControl(cache -> cache.disable())
@@ -155,6 +160,11 @@ class IdentitySecurityConfiguration {
                                 "/api/auth/logout", "/api/auth/set-password").permitAll()
                         .requestMatchers("/api/auth/mfa/verify", "/api/auth/mfa/enroll", "/api/auth/mfa/confirm").access(awaitingSecondFactor)
                         .requestMatchers("/api/me", "/api/auth/change-password", "/api/auth/mfa/recovery-codes").access(fullySignedIn)
+                        // Giving is open to every session state (contract/donation-lifecycle.md, 11.1); review is staff only.
+                        .requestMatchers(HttpMethod.GET, "/api/giving/methods").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/api/giving/methods").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/donations", "/api/donations/evidence", "/api/donations/status").permitAll()
+                        .requestMatchers("/api/admin/donations", "/api/admin/donations/**").access(fullySignedIn)
                         // Deny by default: a path with no rule above is refused.
                         .anyRequest().denyAll())
                 .formLogin(form -> form.disable())

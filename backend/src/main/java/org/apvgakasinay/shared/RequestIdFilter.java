@@ -63,8 +63,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
         request.setAttribute(ATTRIBUTE, requestId);
         response.setHeader("X-Request-Id", requestId);
         String path = request.getRequestURI();
-        if (ApiPaths.isIdentity(path)) {
-            // Every identity answer, errors included: never stored by any cache.
+        if (ApiPaths.isNeverStored(path)) {
+            // Every identity and donation answer, errors included: never stored by any cache.
             response.setHeader("Cache-Control", "no-store");
         } else if (path.startsWith("/api/")) {
             response.setHeader("Cache-Control", "no-cache");

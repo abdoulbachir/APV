@@ -22,26 +22,26 @@ import org.apvgakasinay.support.Json;
  * the way a browser does and holds a CSRF token in memory the way the frontend will. Both can
  * be read and overwritten, so a test can replay stale ones. Every answer is recorded.
  */
-final class Browser {
+public final class Browser {
 
     /** Every answer any browser received in the current test, for checks that apply to all of them. */
-    static final List<Answer> RECORDED = java.util.Collections.synchronizedList(new ArrayList<>());
+    public static final List<Answer> RECORDED = java.util.Collections.synchronizedList(new ArrayList<>());
 
-    record Answer(String method, String path, int status, String body, HttpHeaders headers) {
+    public record Answer(String method, String path, int status, String body, HttpHeaders headers) {
 
-        JsonNode json() {
+        public JsonNode json() {
             return Json.parse(body);
         }
 
-        String code() {
+        public String code() {
             return body.isBlank() ? null : json().at("/error/code").asText(null);
         }
 
-        String fieldCode() {
+        public String fieldCode() {
             return json().at("/error/fields/0/code").asText(null);
         }
 
-        String header(String name) {
+        public String header(String name) {
             return headers.firstValue(name).orElse(null);
         }
     }
@@ -52,46 +52,51 @@ final class Browser {
     private final HttpClient client = HttpClient.newHttpClient();
     private final String base;
     /** The client address this browser appears to come from (the test profile trusts 127.0.0.1 as a proxy). */
-    String address;
-    String sessionId;
+    public String address;
+    public String sessionId;
     /** "apv_session" in development and tests; "__Host-apv_session" as in production. */
-    String cookieName = "apv_session";
-    String token;
-    final Map<String, String> extraHeaders = new LinkedHashMap<>();
+    public String cookieName = "apv_session";
+    public String token;
+    public final Map<String, String> extraHeaders = new LinkedHashMap<>();
 
-    Browser(int port) {
+    public Browser(int port) {
         this.base = "http://127.0.0.1:" + port;
         int n = ADDRESSES.incrementAndGet();
         this.address = "10." + (n / 65536 % 250) + "." + (n / 256 % 256) + "." + (n % 256);
     }
 
     /** The identifier of the stored session, as it is in the database. */
-    String storedSessionId() {
+    public String storedSessionId() {
         return new String(Base64.getDecoder().decode(sessionId), StandardCharsets.UTF_8);
     }
 
-    Answer get(String path) {
+    public Answer get(String path) {
         return send("GET", path, null, null, null);
     }
 
     /** POST of a JSON body with the token this browser holds. */
-    Answer post(String path, String json) {
+    public Answer post(String path, String json) {
         return send("POST", path, json, "application/json", token);
     }
 
     /** POST with an explicit token; null sends no CSRF header at all. */
-    Answer post(String path, String json, String csrfToken) {
+    public Answer post(String path, String json, String csrfToken) {
         return send("POST", path, json, "application/json", csrfToken);
     }
 
     /** POST with no body and no Content-Type, for the operations that define none. */
-    Answer postEmpty(String path) {
+    public Answer postEmpty(String path) {
         return send("POST", path, null, null, token);
     }
 
-    Answer send(String method, String path, String body, String contentType, String csrfToken) {
+    public Answer send(String method, String path, String body, String contentType, String csrfToken) {
+        return sendBytes(method, path, body == null ? null : body.getBytes(StandardCharsets.UTF_8), contentType, csrfToken);
+    }
+
+    /** A request whose body is bytes, as a picture is sent. */
+    public Answer sendBytes(String method, String path, byte[] body, String contentType, String csrfToken) {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(base + path))
-                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofByteArray(body));
         if (contentType != null) {
             request.header("Content-Type", contentType);
         }
@@ -123,7 +128,7 @@ final class Browser {
     }
 
     /** Fetches a token, as the frontend does before any POST and after every session change. */
-    String csrf() {
+    public String csrf() {
         Answer answer = get("/api/auth/csrf");
         if (answer.status() != 200) {
             throw new AssertionError("csrf endpoint answered " + answer.status() + " " + answer.body());
@@ -133,7 +138,7 @@ final class Browser {
     }
 
     /** Signs in the way the frontend does: token, sign-in, new token. */
-    Answer login(String email, String password) {
+    public Answer login(String email, String password) {
         csrf();
         Answer answer = post("/api/auth/login", "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}");
         if (answer.status() == 200) {
@@ -143,7 +148,7 @@ final class Browser {
     }
 
     /** A second browser that presents this one's current cookie: what someone holding a stolen or stale cookie would send. */
-    Browser copyOfCookie() {
+    public Browser copyOfCookie() {
         Browser copy = new Browser(Integer.parseInt(base.substring(base.lastIndexOf(':') + 1)));
         copy.sessionId = sessionId;
         copy.address = address;

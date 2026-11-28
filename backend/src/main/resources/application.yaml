@@ -63,3 +63,13 @@ apv:
     password-blocklist-path: ${APV_PASSWORD_BLOCKLIST_PATH:}
     # Optional: the SHA-256 recorded when that list was built. When set, a list whose manifest states another is refused.
     password-blocklist-sha256: ${APV_PASSWORD_BLOCKLIST_SHA256:}
+  donations:
+    # The private directory screenshots are stored in: on the persistent files volume, outside
+    # anything the web server serves. Until it is set, gifts can be reported without a screenshot.
+    evidence-root: ${APV_EVIDENCE_ROOT:}
+    # The brakes of the whole site (contract/donation-lifecycle.md, 12.3). Never below one.
+    brakes:
+      reports-per-hour: ${APV_BRAKE_REPORTS_PER_HOUR:60}
+      queue: ${APV_BRAKE_REPORT_QUEUE:300}
+      evidence-bytes: ${APV_BRAKE_EVIDENCE_BYTES:2147483648}
+      decodes: ${APV_BRAKE_DECODES:2}

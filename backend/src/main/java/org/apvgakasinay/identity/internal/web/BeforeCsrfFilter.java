@@ -11,6 +11,7 @@ import java.util.Set;
 import org.apvgakasinay.identity.internal.IdentityProperties;
 import org.apvgakasinay.identity.internal.Sessions;
 import org.apvgakasinay.identity.internal.IdentityClock;
+import org.apvgakasinay.shared.ApiOperation;
 import org.apvgakasinay.shared.ErrorWriter;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,7 +38,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 class BeforeCsrfFilter extends OncePerRequestFilter {
 
     static final String ROUTE = "apv.identity.route";
-    static final String BODY = "apv.identity.body";
+    static final String BODY = ApiOperation.BODY_ATTRIBUTE;
     static final int MAX_BODY_BYTES = 16 * 1024;
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
@@ -79,9 +80,24 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
         }
 
         HttpServletRequest forwarded = request;
-        if (route.operation() != null) {
+        if (route.checked()) {
             // Step 3: size and declared type of the body, before anything is parsed.
-            if (route.operation().body()) {
+            if (route.imageBody()) {
+                // A picture is not read here: the operation reads it, up to the same limit, once
+                // its own checks have accepted the request. What is declared is judged now.
+                if (request.getContentLengthLong() > ApiOperation.IMAGE_MAX_BYTES) {
+                    ErrorWriter.write(request, response, 413, "payload_too_large", "Picture too large");
+                    // Sent now. The server gives up on a body this long without reading it, and an
+                    // answer still waiting in its buffer at that moment would never reach the client.
+                    response.flushBuffer();
+                    return;
+                }
+                if (!isPicture(request.getContentType())) {
+                    ErrorWriter.write(request, response, 415, "unsupported_media_type", "Content-Type must be image/jpeg or image/png");
+                    return;
+                }
+            }
+            if (route.jsonBody()) {
                 if (request.getContentLengthLong() > MAX_BODY_BYTES) {
                     ErrorWriter.write(request, response, 413, "payload_too_large", "Request body too large");
                     return;
@@ -148,6 +164,18 @@ class BeforeCsrfFilter extends OncePerRequestFilter {
         int port = request.getServerPort();
         boolean defaultPort = (scheme.equals("http") && port == 80) || (scheme.equals("https") && port == 443);
         return scheme + "://" + request.getServerName() + (defaultPort ? "" : ":" + port);
+    }
+
+    private static boolean isPicture(String contentType) {
+        if (contentType == null) {
+            return false;
+        }
+        try {
+            MediaType type = MediaType.parseMediaType(contentType);
+            return type.getType().equals("image") && (type.getSubtype().equals("jpeg") || type.getSubtype().equals("png"));
+        } catch (RuntimeException unparseable) {
+            return false;
+        }
     }
 
     private static boolean isJson(String contentType) {

@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * All SQL of the cases module. Draft cases are excluded in every statement. Money comes from
+ * All SQL of the cases module. Draft cases are excluded in every public read. Money comes from
  * the ledger module's {@code case_balance} view and pictures from the media module's
  * {@code public_media} view; this module never reads their tables.
  */
@@ -67,6 +67,33 @@ public class CaseRepository {
 
     public Optional<CaseRow> findPublicByCode(String canonicalCode) {
         return jdbc.sql(PUBLIC_CASES + " and c.code = :code").param("code", canonicalCode).query(CaseRepository::caseRow).optional();
+    }
+
+    /** What deciding a status needs. {@code received} is the case's allocated total, as the public response names it. */
+    public record StatusRow(String code, String kind, String status, Long goalCents, long received) {
+    }
+
+    /**
+     * Locks a case row for the rest of the transaction and reads what its status depends on.
+     * The ledger takes the same lock when it writes an entry on the case, so within a
+     * transaction that has just written one this waits for nothing.
+     */
+    public Optional<StatusRow> lockForStatus(long caseId) {
+        return jdbc.sql("""
+                        select c.code, c.kind, c.status, c.goal_cents,
+                               (select b.allocated from case_balance b where b.case_id = c.id) as received
+                          from aid_case c
+                         where c.id = :id
+                           for update of c
+                        """)
+                .param("id", caseId)
+                .query((rs, row) -> new StatusRow(rs.getString("code"), rs.getString("kind"), rs.getString("status"),
+                        rs.getObject("goal_cents", Long.class), rs.getBigDecimal("received").longValueExact()))
+                .optional();
+    }
+
+    public void setStatus(long caseId, String status) {
+        jdbc.sql("update aid_case set status = :status where id = :id").param("status", status).param("id", caseId).update();
     }
 
     public List<CaseRow> directory(CaseQuery query) {

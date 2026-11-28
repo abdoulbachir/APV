@@ -116,10 +116,15 @@ class ProductionProfileIT {
 
     @Test
     void aFreshDatabaseHoldsNoFictionalDataOnlyTheSeededSettings() {
-        assertThat(jdbc.sql("select count(*) from aid_case").query(Long.class).single()).isZero();
+        // A real database holds the general fund (donation contract 10, migration V6), empty, and
+        // nothing else: no individual case, no money.
+        assertThat(jdbc.sql("select count(*) from aid_case where kind <> 'fund'").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select code, kind, status from aid_case where kind = 'fund'")
+                .query((rs, n) -> rs.getString("code") + "/" + rs.getString("kind") + "/" + rs.getString("status")).list())
+                .containsExactly("FUND/fund/active");
         assertThat(jdbc.sql("select count(*) from ledger_entry").query(Long.class).single()).isZero();
         assertThat(jdbc.sql("select version from flyway_schema_history order by installed_rank desc limit 1").query(String.class).single())
-                .isEqualTo("5");
+                .isEqualTo("7");
         assertThat(jdbc.sql("select data_origin from organization_settings").query(String.class).single()).isEqualTo("real");
         assertThat(jdbc.sql("select version()").query(String.class).single()).startsWith("PostgreSQL 18.");
         // The six approved categories and the default timezone come from the migration.
@@ -128,6 +133,72 @@ class ProductionProfileIT {
                 .containsExactly("education", "medical", "housing", "family", "emergency", "other");
         assertThat(site.stats().received()).isZero();
         assertThat(site.stats().peopleHelped()).isZero();
+    }
+
+    /**
+     * Scenarios 10.1, 10.2, 10.3, 10.5 and 10.7 of contract/tests/donation-acceptance.md: a real
+     * database, never marked disposable, holds the general fund after the migrations, with the
+     * text the owner approved, and it is read through the public API like any case.
+     */
+    @Test
+    void d10_theGeneralFundExistsOnARealDatabaseWithTheApprovedTextAndIsNeverRemoved() {
+        org.apvgakasinay.cases.CaseReadService cases = context.getBean(org.apvgakasinay.cases.CaseReadService.class);
+        // Matched case-insensitively, like every case: GET /api/cases/FUND answers 200 where it answered 404 before.
+        var english = cases.detail("fund", org.apvgakasinay.shared.Language.EN);
+        assertThat(english.caseView().code()).isEqualTo("FUND");
+        assertThat(english.caseView().kind()).isEqualTo("fund");
+        assertThat(english.caseView().status()).isEqualTo("active");
+        assertThat(english.caseView().acceptingDonations()).isTrue();
+        assertThat(english.caseView().goal()).isNull();
+        assertThat(english.caseView().deadline()).isNull();
+        assertThat(english.caseView().category()).isNull();
+        assertThat(english.caseView().photoUrl()).isNull();
+        assertThat(english.caseView().createdAt()).isNotBlank();
+        // Zero totals: no ledger entry, nothing received, nothing handed over.
+        assertThat(english.caseView().received()).isZero();
+        assertThat(english.caseView().delivered()).isZero();
+        assertThat(english.financials().externalDonations()).isZero();
+        assertThat(english.financials().available()).isZero();
+        assertThat(english.counts().ledger()).isZero();
+        assertThat(english.counts().donors()).isZero();
+        assertThat(english.ledger()).isEmpty();
+
+        // The approved text, exactly as written (decision 7).
+        assertThat(english.caseView().title()).isEqualTo("General fund");
+        assertThat(english.caseView().story()).isEqualTo("Gifts to the general fund are not tied to one case. They are kept until APV-GAKASINAY "
+                + "allocates them to a case: for an urgent need, or to complete a case that has not reached its goal. Every allocation appears in "
+                + "the record of this fund and in the record of the case that receives it. The fund never pays a beneficiary directly.");
+        var french = cases.detail("FUND", org.apvgakasinay.shared.Language.FR);
+        assertThat(french.caseView().title()).isEqualTo("Fonds général");
+        assertThat(french.caseView().storyLanguage()).isEqualTo("fr");
+        assertThat(french.caseView().story()).isEqualTo("Les dons au fonds général ne sont pas liés à un cas précis. Ils sont conservés jusqu’à ce "
+                + "qu’APV-GAKASINAY les affecte à un cas : pour un besoin urgent, ou pour compléter un cas qui n’a pas atteint son objectif. "
+                + "Chaque affectation apparaît dans l’historique de ce fonds et dans celui du cas qui la reçoit. Le fonds ne verse jamais "
+                + "d’argent directement à un bénéficiaire.");
+        assertThat(site.site().fundCode()).isEqualTo("FUND");
+
+        // The migration's statement run again on a database that has the fund inserts nothing, and there can only be one.
+        int again = jdbc.sql("""
+                insert into aid_case (code, kind, status, accepts_donations, public_name, title_en, title_fr, story_en, story_fr, published_at)
+                select 'FUND', 'fund', 'active', true, '', 'General fund', 'Fonds général', 'x', 'y', date_trunc('second', now())
+                where not exists (select 1 from aid_case where kind = 'fund')
+                """).update();
+        assertThat(again).isZero();
+        assertThat(jdbc.sql("select count(*) from aid_case where kind = 'fund'").query(Long.class).single()).isEqualTo(1);
+
+        // Never deleted, and its code and kind never change.
+        assertThatThrownBy(() -> jdbc.sql("delete from aid_case where kind = 'fund'").update()).hasMessageContaining("never deleted");
+        assertThatThrownBy(() -> jdbc.sql("update aid_case set code = 'FUNDS' where kind = 'fund'").update())
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.sql("update aid_case set kind = 'case', category_id = 'other' where code = 'FUND'").update())
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        // It never pays a beneficiary directly (financial-terms, section 11).
+        assertThatThrownBy(() -> jdbc.sql("""
+                insert into ledger_entry (public_id, case_id, kind, amount_cents, effective_at)
+                values ('X1', (select id from aid_case where code = 'FUND'), 'disbursement', 100, date_trunc('second', now()))
+                """).update()).hasMessageContaining("does not pay beneficiaries directly");
+        // Giving is not open until a payment method is active: none exists on a new database.
+        assertThat(jdbc.sql("select count(*) from payment_method").query(Long.class).single()).isZero();
     }
 
     @Test

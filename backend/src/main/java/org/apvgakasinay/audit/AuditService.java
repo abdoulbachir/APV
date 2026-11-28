@@ -34,6 +34,16 @@ public class AuditService {
         repository.insert(event);
     }
 
+    /**
+     * Records the event of a change inside the transaction that makes the change, so the record
+     * and the change commit together or not at all (contract/donation-lifecycle.md, 13). There
+     * must be a transaction: an event of a refusal, which has none to share, uses {@link #record}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordWithin(AuditEvent event) {
+        repository.insert(event);
+    }
+
     /** One security event. Use {@link #of} and the with-methods. */
     public record AuditEvent(
             String type,

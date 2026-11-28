@@ -15,3 +15,6 @@ apv:
       secure: false
     # Sign-up is open here so it can be built and tested. It is closed in production.
     registration-open: true
+  donations:
+    # Development only: screenshots of fictional gifts, in the temporary directory.
+    evidence-root: ${APV_EVIDENCE_ROOT:${java.io.tmpdir}/apv-dev-evidence}

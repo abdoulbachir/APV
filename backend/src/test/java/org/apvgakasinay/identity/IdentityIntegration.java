@@ -24,8 +24,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Base of the identity tests: the whole application on a real port, a real PostgreSQL started
- * by Testcontainers, and real HTTP with cookies handled the way a browser handles them.
+ * Base of the identity tests, and of the tests of the modules that build on identity (the
+ * donations module): the whole application on a real port, a real PostgreSQL started by
+ * Testcontainers, and real HTTP with cookies handled the way a browser handles them.
  *
  * Test names start with the identifier of the scenario they cover in
  * contract/tests/security-acceptance.md, for example {@code a3_14_...} for scenario 3.14.
@@ -33,11 +34,11 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestTime.class)
-abstract class IdentityIntegration {
+public abstract class IdentityIntegration {
 
-    static final String PASSWORD = "a long harmless passphrase 2026";
-    static final String OTHER_PASSWORD = "another harmless passphrase 2027";
-    static final Instant START = Instant.parse("2026-11-24T12:00:00Z");
+    public static final String PASSWORD = "a long harmless passphrase 2026";
+    public static final String OTHER_PASSWORD = "another harmless passphrase 2027";
+    public static final Instant START = Instant.parse("2026-11-24T12:00:00Z");
     private static final String BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
     @DynamicPropertySource
@@ -46,29 +47,29 @@ abstract class IdentityIntegration {
     }
 
     @Value("${local.server.port}")
-    int port;
+    protected int port;
 
     @Autowired
-    JdbcClient jdbc;
+    protected JdbcClient jdbc;
 
     /** The time identity runs on. The application uses the real time; these tests move it. */
     @Autowired
-    TestTime clock;
+    protected TestTime clock;
 
     /** The clock of the public read responses, which the fixture loader pins. */
     @Autowired
-    AppClock publicClock;
+    protected AppClock publicClock;
 
     @Autowired
-    StaffAdministration staffAdministration;
+    protected StaffAdministration staffAdministration;
 
     @Autowired
-    org.springframework.transaction.PlatformTransactionManager transactions;
+    protected org.springframework.transaction.PlatformTransactionManager transactions;
 
-    final Contract contract = Contract.get();
+    protected final Contract contract = Contract.get();
 
     /** A staff member with an active second factor, and the browser they are signed in with. */
-    record Staff(String email, Browser browser, byte[] secret, List<String> recoveryCodes) {
+    public record Staff(String email, Browser browser, byte[] secret, List<String> recoveryCodes) {
     }
 
     @BeforeEach
@@ -117,12 +118,12 @@ abstract class IdentityIntegration {
         }
     }
 
-    Browser browser() {
+    protected Browser browser() {
         return new Browser(port);
     }
 
     /** Runs the calls at the same moment, each on its own thread, and returns their results in order. */
-    static <T> List<T> together(List<java.util.concurrent.Callable<T>> calls) {
+    protected static <T> List<T> together(List<java.util.concurrent.Callable<T>> calls) {
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(calls.size());
         java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
         try {
@@ -147,7 +148,7 @@ abstract class IdentityIntegration {
     }
 
     /** A second handle on the same browser session: same cookie, same token, as another tab's request would carry. */
-    static Browser sameSession(Browser browser) {
+    protected static Browser sameSession(Browser browser) {
         Browser copy = browser.copyOfCookie();
         copy.token = browser.token;
         copy.address = browser.address;
@@ -192,16 +193,16 @@ abstract class IdentityIntegration {
     }
 
     /** Moves identity's time forward. */
-    void advance(Duration duration) {
+    protected void advance(Duration duration) {
         clock.pin(clock.now().plus(duration));
     }
 
     /** Moves to the next authenticator time step, so a new code can be accepted. */
-    void nextCode() {
+    protected void nextCode() {
         advance(Duration.ofSeconds(Totp.STEP_SECONDS));
     }
 
-    static String json(String... pairs) {
+    protected static String json(String... pairs) {
         StringBuilder out = new StringBuilder("{");
         for (int i = 0; i < pairs.length; i += 2) {
             out.append(i == 0 ? "" : ",").append('"').append(pairs[i]).append("\":\"")
@@ -210,13 +211,13 @@ abstract class IdentityIntegration {
         return out.append('}').toString();
     }
 
-    Browser.Answer register(Browser browser, String email, String password) {
+    protected Browser.Answer register(Browser browser, String email, String password) {
         browser.csrf();
         return browser.post("/api/auth/register", json("email", email, "password", password, "displayName", "Sample Person"));
     }
 
     /** A donor who signed up and is signed in. */
-    Browser donor(String email) {
+    protected Browser donor(String email) {
         Browser browser = browser();
         assertThat(register(browser, email, PASSWORD).status()).isEqualTo(202);
         Browser.Answer login = browser.login(email, PASSWORD);
@@ -224,7 +225,7 @@ abstract class IdentityIntegration {
         return browser;
     }
 
-    String code(byte[] secret) {
+    protected String code(byte[] secret) {
         return Totp.code(secret, Totp.step(clock.now()));
     }
 
@@ -244,12 +245,12 @@ abstract class IdentityIntegration {
     }
 
     /** Creates a staff account the way the operator does, and returns its one-time activation credential. */
-    String createStaff(String email, String role) {
+    protected String createStaff(String email, String role) {
         return staffAdministration.createStaff(email, "Sample Staff", role, "test-operator");
     }
 
     /** A staff account that has chosen its password with its credential, and nothing more. */
-    Browser activatedStaff(String email, String role) {
+    protected Browser activatedStaff(String email, String role) {
         String credential = createStaff(email, role);
         Browser browser = browser();
         browser.csrf();
@@ -259,7 +260,7 @@ abstract class IdentityIntegration {
     }
 
     /** A staff member who is activated, enrolled and fully signed in. */
-    Staff staff(String email, String role) {
+    protected Staff staff(String email, String role) {
         Browser browser = activatedStaff(email, role);
         Browser.Answer login = browser.login(email, PASSWORD);
         assertThat(login.json().get("status").asText()).as(login.body()).isEqualTo("mfa_enrollment_required");
@@ -277,7 +278,7 @@ abstract class IdentityIntegration {
     }
 
     /** A second browser of an enrolled staff member, with the password accepted and the second factor still owed. */
-    Browser pending(Staff staff) {
+    protected Browser pending(Staff staff) {
         Browser browser = browser();
         Browser.Answer login = browser.login(staff.email(), PASSWORD);
         assertThat(login.json().get("status").asText()).as(login.body()).isEqualTo("mfa_required");
@@ -297,17 +298,17 @@ abstract class IdentityIntegration {
         assertThat(updated).isEqualTo(1);
     }
 
-    long count(String sql) {
+    protected long count(String sql) {
         return jdbc.sql(sql).query(Long.class).single();
     }
 
     /** Asserts a response body is valid against a named schema of contract/openapi.yaml. */
-    void assertValid(String schema, Browser.Answer answer) {
+    protected void assertValid(String schema, Browser.Answer answer) {
         assertThat(contract.violations(schema, answer.body())).as("%s %s -> %s", answer.method(), answer.path(), answer.body()).isEmpty();
     }
 
     /** Asserts an error answer: status, code, the contract's envelope, never cached. */
-    void assertError(Browser.Answer answer, int status, String code) {
+    protected void assertError(Browser.Answer answer, int status, String code) {
         assertThat(answer.status()).as("%s %s -> %s", answer.method(), answer.path(), answer.body()).isEqualTo(status);
         assertThat(answer.code()).as(answer.body()).isEqualTo(code);
         assertValid("Error", answer);

@@ -54,6 +54,8 @@ What it checks:
 
 ## Scope of version 0.4.0
 
+Version 0.4.1 changes one thing in it: the private `note` of a reversal and of a refund is required in the request body, as `donation-lifecycle.md` 8.1 always said (owner decision of 2026-11-28). Nothing else differs from 0.4.0.
+
 Public read endpoints, unchanged since 0.2.0:
 
 - `GET /api/site`
