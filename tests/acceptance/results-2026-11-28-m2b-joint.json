@@ -1,0 +1,106 @@
+{
+ "m2-methods": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The giving page reads the active payment methods from the real backend and shows the recipient details — 2 methods offered",
+   "at": "2026-11-28T14:34:03.739Z"
+  }
+ ],
+ "m2-report": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A guest reports a gift to the general fund: 201, a reference and a tracking code shown once; nothing public changes — public received total unchanged; the code is in no address or storage",
+   "at": "2026-11-28T14:34:04.251Z"
+  }
+ ],
+ "m2-evidence": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The receipt accepts one screenshot: 204, and the page says it is attached",
+   "at": "2026-11-28T14:34:04.369Z"
+  }
+ ],
+ "m2-status-reported": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The tracking code shows the gift waiting, with no personal detail; a wrong code is refused alike",
+   "at": "2026-11-28T14:34:04.619Z"
+  }
+ ],
+ "m2-queue": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The super administrator reaches the queue from the account page and sees the reported gift with its screenshot flag",
+   "at": "2026-11-28T14:34:30.467Z"
+  }
+ ],
+ "m2-detail": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The gift page shows what was reported, the private payer name, and the screenshot from the authenticated route — picture decoded in the page; served no-store",
+   "at": "2026-11-28T14:34:30.470Z"
+  }
+ ],
+ "m2-confirm": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Confirming with a typed case and amount: one POST, the gift is confirmed, and the public total rises by exactly that amount at that moment — received +$40; the fund shows it",
+   "at": "2026-11-28T14:34:31.470Z"
+  }
+ ],
+ "m2-status-confirmed": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "The donor's status page now says verified, with the amount",
+   "at": "2026-11-28T14:34:31.601Z"
+  }
+ ],
+ "m2-refund": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A partial refund with its required note: the net amount and the public total fall by it; an amount above what stands is refused and changes nothing — net $25 after a $15 refund; a $30 reversal refused (409)",
+   "at": "2026-11-28T14:34:32.708Z"
+  }
+ ],
+ "m2-reject-reopen": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "A second report is rejected (the donor sees the reason), then reopened; neither touches a public total",
+   "at": "2026-11-28T14:34:34.440Z"
+  }
+ ],
+ "m2-manual-entry": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "Manual entry records a gift confirmed at once and the public total rises by it",
+   "at": "2026-11-28T14:34:34.928Z"
+  }
+ ],
+ "m2-donor-cannot-review": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "An anonymous browser is sent to sign-in from the review pages, and the API answers 401 without saying whether a gift exists",
+   "at": "2026-11-28T14:34:34.972Z"
+  }
+ ],
+ "m2-clean": [
+  {
+   "status": "PASS",
+   "env": "A: dev profile, HTTP preview",
+   "note": "No content-policy violation or page error in either browser during the run",
+   "at": "2026-11-28T14:34:34.972Z"
+  }
+ ]
+}
