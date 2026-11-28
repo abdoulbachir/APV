@@ -56,6 +56,8 @@ What it checks:
 
 Version 0.4.1 changes one thing in it: the private `note` of a reversal and of a refund is required in the request body, as `donation-lifecycle.md` 8.1 always said (owner decision of 2026-11-28). Nothing else differs from 0.4.0.
 
+Version 0.4.2 adds one optional property: `providerReference` on a manual entry (`DonationEntryRequest`), with the type and limits it has on a confirmation, as `donation-lifecycle.md` section 7 always said (owner decision of 2026-11-28).
+
 Public read endpoints, unchanged since 0.2.0:
 
 - `GET /api/site`

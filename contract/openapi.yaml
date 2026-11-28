@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: APV-GAKASINAY API
-  version: 0.4.1
+  version: 0.4.2
   summary: Public read endpoints (milestone 0), identity (milestone 1) and the donation lifecycle (milestone 2).
   description: |
     Single source of truth for the API between the APV-GAKASINAY frontend and backend.
@@ -2684,6 +2684,11 @@ components:
           maxLength: 16
         amount: { $ref: '#/components/schemas/DonationAmount' }
         receivedOn: { $ref: '#/components/schemas/PaidDate' }
+        providerReference:
+          description: Optional. The payment's own identifier in the provider's records. Unique per method, among entered and reported gifts alike.
+          type: string
+          minLength: 1
+          maxLength: 64
         method:
           description: Exactly one of `id` (a method record) or `description` (a way that is not a record, such as cash).
           type: object

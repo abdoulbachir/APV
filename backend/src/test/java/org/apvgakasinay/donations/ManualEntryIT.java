@@ -106,6 +106,122 @@ class ManualEntryIT extends DonationIntegration {
         assertError(enter(owner, byRecord), 409, "duplicate_payment_reference");
     }
 
+    /**
+     * Owner decision of 2026-11-28 (contract 0.4.2): a manual entry takes the optional provider
+     * reference of section 7, and it takes part in the rule of 6.3 in both orders.
+     */
+    @Test
+    void d5_1_aManualEntryTakesAProviderReferenceAndOnePaymentIsCountedOnceWhicheverCameFirst() {
+        String details = zelle();
+        method("paypal", 2);
+        Staff owner = owner();
+
+        Map<String, Object> entry = cash("FUND", 1000);
+        entry.put("method", map("id", "zelle"));
+        entry.put("providerReference", "ZL-ENTRY-1");
+        // The request is one the contract's closed schema describes.
+        assertThat(contract.violations("DonationEntryRequest", body(entry))).isEmpty();
+        JsonNode detail = entered(enter(owner, entry));
+        assertThat(detail.at("/decision/providerReference").asText()).isEqualTo("ZL-ENTRY-1");
+        assertThat(count("select count(*) from donation where origin = 'staff_entry' and payment_method_id = 'zelle'"
+                + " and provider_reference = 'ZL-ENTRY-1'")).isEqualTo(1);
+        // Optional: an entry without one is what it was.
+        assertThat(entered(enter(owner, cash("FUND", 1100))).at("/decision/providerReference").isNull()).isTrue();
+
+        // The entry first, then a confirmation of a report with that reference: refused, nothing written.
+        Reported reported = report("HELP-904", 5000, details);
+        String confirmPath = ENTRIES + "/" + giftId(reported.reference()) + "/confirm";
+        long entries = count("select count(*) from ledger_entry");
+        Map<String, Object> confirmation = confirmationOf("HELP-904", 5000);
+        confirmation.put("providerReference", "ZL-ENTRY-1");
+        Browser.Answer refused = post(owner.browser(), confirmPath, body(confirmation), key());
+        assertError(refused, 409, "duplicate_payment_reference");
+        assertThat(refused.body()).doesNotContain(detail.get("id").asText()).doesNotContain(detail.get("reference").asText());
+        assertThat(count("select count(*) from ledger_entry")).isEqualTo(entries);
+        assertThat(count("select count(*) from donation where state = 'reported'")).isEqualTo(1);
+
+        // A confirmed report first, then an entry with its reference: refused the same way.
+        confirmation.put("providerReference", "ZL-REPORT-2");
+        assertThat(post(owner.browser(), confirmPath, body(confirmation), key()).status()).isEqualTo(200);
+        long gifts = count("select count(*) from donation");
+        entries = count("select count(*) from ledger_entry");
+        entry.put("providerReference", "ZL-REPORT-2");
+        assertError(enter(owner, entry), 409, "duplicate_payment_reference");
+        assertThat(count("select count(*) from donation")).isEqualTo(gifts);
+        assertThat(count("select count(*) from ledger_entry")).isEqualTo(entries);
+        assertThat(count("select count(*) from audit_event where event_type = 'donation.decision_refused'"
+                + " and details ->> 'rule' = 'duplicate_payment_reference'")).isEqualTo(2);
+
+        // The rule is per payment method: the same reference in another method's records is another payment.
+        entry.put("method", map("id", "paypal"));
+        assertThat(entered(enter(owner, entry)).at("/decision/providerReference").asText()).isEqualTo("ZL-REPORT-2");
+
+        // It is text like any other: never a card number, within its length, and the body stays closed around it.
+        entry.put("providerReference", "4111 1111 1111 1111");
+        assertFieldError(enter(owner, entry), "providerReference", "card_number");
+        entry.put("providerReference", "R".repeat(65));
+        assertFieldError(enter(owner, entry), "providerReference", "too_long");
+        entry.put("providerReference", "");
+        assertFieldError(enter(owner, entry), "providerReference", "too_short");
+        entry.put("providerReference", 12345);
+        assertFieldError(enter(owner, entry), "providerReference", "invalid_type");
+        entry.put("providerReference", "ZL-OTHER-3");
+        entry.put("ledgerEntryId", "L1");
+        assertFieldError(enter(owner, entry), "ledgerEntryId", "unknown_field");
+        assertThat(count("select count(*) from donation where provider_reference like '4111%'")).isZero();
+    }
+
+    /**
+     * A free description ("cash, in person") is not a payment method record, and the rule of 6.3
+     * is per payment method: the reference of such an entry is stored and shown to the reviewer,
+     * and is compared with nothing.
+     */
+    @Test
+    void d5_1_theReferenceOfAnEntryWithAFreeTextMethodIsStoredAndNotCompared() {
+        String details = zelle();
+        Staff owner = owner();
+        Map<String, Object> entry = cash("FUND", 1000);
+        entry.put("providerReference", "RECEIPT-12");
+        assertThat(contract.violations("DonationEntryRequest", body(entry))).isEmpty();
+        assertThat(entered(enter(owner, entry)).at("/decision/providerReference").asText()).isEqualTo("RECEIPT-12");
+        // A second entry described the same way, with the same reference, is recorded: there is no method to scope it to.
+        Map<String, Object> other = cash("HELP-904", 2000);
+        other.put("method", map("description", "Cheque"));
+        other.put("providerReference", "RECEIPT-12");
+        assertThat(entered(enter(owner, other)).at("/decision/providerReference").asText()).isEqualTo("RECEIPT-12");
+        // And it is not in the way of a method's own records.
+        Map<String, Object> confirmation = confirmationOf("HELP-904", 5000);
+        confirmation.put("providerReference", "RECEIPT-12");
+        assertThat(post(owner.browser(), ENTRIES + "/" + giftId(report("HELP-904", 5000, details).reference()) + "/confirm",
+                body(confirmation), key()).status()).isEqualTo(200);
+        assertThat(count("select count(*) from donation where provider_reference = 'RECEIPT-12' and state = 'confirmed'")).isEqualTo(3);
+    }
+
+    /**
+     * The gift a re-entry replaces stays confirmed and keeps its reference, so the re-entry, which
+     * is linked to it, does not repeat it: the reference is recorded once for the one payment.
+     */
+    @Test
+    void d5_4_aReentryIsLinkedToTheGiftThatCarriesTheReferenceAndDoesNotRepeatIt() {
+        Reported gift = report("HELP-904", 5000, zelle());
+        Staff owner = owner();
+        Map<String, Object> confirmation = confirmationOf("HELP-904", 5000);
+        confirmation.put("providerReference", "ZL-48213907");
+        String original = post(owner.browser(), ENTRIES + "/" + giftId(gift.reference()) + "/confirm", body(confirmation), key()).json().get("id").asText();
+        assertThat(reverse(owner, original, 5000, "wrong_case").status()).isEqualTo(200);
+
+        Map<String, Object> entry = cash("FUND", 5000);
+        entry.put("method", map("id", "zelle"));
+        entry.put("reentryOf", original);
+        entry.put("providerReference", "ZL-48213907");
+        assertError(enter(owner, entry), 409, "duplicate_payment_reference");
+        entry.remove("providerReference");
+        JsonNode reentry = entered(enter(owner, entry));
+        assertThat(reentry.get("reentryOf").asText()).isEqualTo(original);
+        assertThat(reentry.at("/decision/providerReference").isNull()).isTrue();
+        assertThat(owner.browser().get(ENTRIES + "/" + original).json().at("/decision/providerReference").asText()).isEqualTo("ZL-48213907");
+    }
+
     @Test
     void d5_1_theSameEntrySentTwiceWithOneKeyIsOneGift() {
         Staff owner = owner();

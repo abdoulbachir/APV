@@ -1,4 +1,4 @@
-// Generated from contract/openapi.yaml (v0.4.1). Do not edit.
+// Generated from contract/openapi.yaml (v0.4.2). Do not edit.
 // Run: cd contract && npm run generate:types
 // Private to the signed-in account. Never use these types in a public page's data.
 
@@ -15,7 +15,7 @@ export type DonationStatusRequest = { "trackingCode": string; };
 export type DonationStatus = { "reference": DonationReference; "state": DonationState; "caseCode": string; "reportedAmount": DonationAmount; "reportedAt": Timestamp; "decidedAt": Timestamp | null; "confirmedAmount": DonationAmount | null; "confirmedCaseCode": string | null; "netAmount": Cents | null; "rejectionReason": "not_received" | "duplicate" | "other" | null; "evidenceAttached": boolean; };
 export type DonationConfirmRequest = { "caseCode": string; "confirmedAmount": DonationAmount; "receivedOn": PaidDate; "providerReference"?: string; "listing": "as_requested" | "anonymous" | "hidden"; "note"?: string; };
 export type DonationRejectRequest = { "reason": "not_received" | "duplicate" | "other"; "note"?: string; };
-export type DonationEntryRequest = { "caseCode": string; "amount": DonationAmount; "receivedOn": PaidDate; "method": { "id"?: PaymentMethodId; "description"?: string; }; "payerName": PayerName; "display": DonationDisplay; "note": string; "reentryOf"?: DonationId; };
+export type DonationEntryRequest = { "caseCode": string; "amount": DonationAmount; "receivedOn": PaidDate; "providerReference"?: string; "method": { "id"?: PaymentMethodId; "description"?: string; }; "payerName": PayerName; "display": DonationDisplay; "note": string; "reentryOf"?: DonationId; };
 export type DonationReversalRequest = { "amount": DonationAmount; "reason": "duplicate_confirmation" | "wrong_amount" | "wrong_case" | "not_received" | "other"; "note": string; };
 export type DonationRefundRequest = { "amount": DonationAmount; "refundedOn": PaidDate; "providerReference"?: string; "note": string; };
 export type DonationListingRequest = { "listing": "anonymous" | "hidden"; };
