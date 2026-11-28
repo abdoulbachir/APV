@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { donations, newIdempotencyKey } from '../api/donation-client';
+import { donations, newIdempotencyKey, DonationError } from '../api/donation-client';
 import type { DonationOperations } from '../api/generated/identity-api';
 import { useAsync } from '../hooks/useAsync';
 import { useI18n } from '../i18n/I18nContext';
@@ -105,7 +105,9 @@ export function GivingPage() {
     <p className="donation-switch">{target === FUND
       ? <Link to="/cases">{c.give.switchToCase}</Link>
       : <Link to="/give">{c.give.switchToFund}</Link>}</p>
-    {error && <p className="identity-error" role="alert" tabIndex={-1}>{errorText(c, error.code)}</p>}
+    {error && <div className="identity-error" role="alert" tabIndex={-1}><p>{errorText(c, error.code)}</p>
+      {error instanceof DonationError && error.fields.length > 0 && <ul className="donation-problems">{error.fields.map((f, i) =>
+        <li key={i}>{c.fieldNames[f.name] ?? f.name}: {c.fieldProblems[f.code] ?? c.fieldProblems.invalid_value}</li>)}</ul>}</div>}
     <form onSubmit={onSubmit}><fieldset disabled={busy}>
       <fieldset className="donation-methods"><legend>{c.give.chooseMethod}</legend>
         {list.map(m => <label key={m.id} className="donation-method">

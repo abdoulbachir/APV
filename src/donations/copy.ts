@@ -62,7 +62,10 @@ const en = {
     reporting_paused: 'Reports cannot be taken right now. Please try again later.',
     idempotency_key_reused: 'Something changed since you started. Please start the report again.',
     donation_not_found: 'No gift was found for that code.',
+    csrf_invalid: 'This page was out of date. Check your entries and submit again.',
   } as Record<string, string>,
+  fieldNames: { caseCode: 'Case', amount: 'Amount', paymentDetailsId: 'Payment method', paidOn: 'Date you paid', payerName: 'Name the payment was sent from', paymentReference: 'Payment reference', contact: 'How to reach you', 'display.publicName': 'Name to show publicly', display: 'How to appear' } as Record<string, string>,
+  fieldProblems: { required: 'this is required.', invalid_value: 'enter a valid value.', invalid_format: 'remove spaces at the start or end, and unusual characters.', out_of_range: 'this is out of range.', too_long: 'this is too long.', too_short: 'this is too short.', card_number: 'this looks like a card number. Remove it; the site never needs one.' } as Record<string, string>,
 };
 
 type Copy = typeof en;
@@ -125,7 +128,10 @@ const fr: Copy = {
     reporting_paused: 'Les déclarations ne peuvent pas être prises pour le moment. Réessayez plus tard.',
     idempotency_key_reused: 'Quelque chose a changé depuis le début. Recommencez la déclaration.',
     donation_not_found: 'Aucun don n’a été trouvé pour ce code.',
+    csrf_invalid: 'Cette page n’était plus à jour. Vérifiez vos saisies et renvoyez.',
   },
+  fieldNames: { caseCode: 'Cas', amount: 'Montant', paymentDetailsId: 'Méthode de paiement', paidOn: 'Date du paiement', payerName: 'Nom de l’expéditeur du paiement', paymentReference: 'Référence du paiement', contact: 'Comment vous joindre', 'display.publicName': 'Nom à afficher publiquement', display: 'Affichage' },
+  fieldProblems: { required: 'ce champ est obligatoire.', invalid_value: 'saisissez une valeur valide.', invalid_format: 'retirez les espaces au début ou à la fin et les caractères inhabituels.', out_of_range: 'cette valeur est hors limites.', too_long: 'cette valeur est trop longue.', too_short: 'cette valeur est trop courte.', card_number: 'ceci ressemble à un numéro de carte. Retirez-le ; le site n’en a jamais besoin.' },
 };
 
 export const donationCopy = (locale: Locale): Copy => (locale === 'fr' ? fr : en);

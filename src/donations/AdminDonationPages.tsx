@@ -328,7 +328,7 @@ function ManualEntry() {
       caseCode: text(data, 'caseCode').toUpperCase(), amount: cents(text(data, 'amount')), receivedOn: text(data, 'receivedOn'),
       method: methodId ? { id: methodId } : { description }, payerName: text(data, 'payerName'),
       display: mode === 'named' ? { mode, publicName: text(data, 'publicName') } : { mode },
-      note: text(data, 'note'), ...optional(data, 'reentryOf'),
+      note: text(data, 'note'), ...optional(data, 'providerReference'), ...optional(data, 'reentryOf'),
     }, key.current, locale));
     if (created) navigate(`/admin/donations/${encodeURIComponent(created.id)}`);
   }
@@ -342,6 +342,7 @@ function ManualEntry() {
       <Field name="methodId" label={c.entry.methodId} hint={c.entry.methodHint} />
       <Field name="methodDescription" label={c.entry.methodDescription} />
       <Field name="payerName" label={c.entry.payerName} required />
+      <Field name="providerReference" label={c.entry.providerReference} hint={c.entry.providerReferenceHint} />
       <fieldset className="donation-display"><legend>{c.entry.display}</legend>
         {(['named', 'anonymous', 'hidden'] as const).map(m => <label key={m} className="donation-method"><input type="radio" name="display" checked={mode === m} onChange={() => setMode(m)} /><span>{c.display[m]}</span></label>)}
         {mode === 'named' && <Field name="publicName" label={c.entry.publicName} required />}

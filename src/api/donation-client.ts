@@ -26,9 +26,16 @@ export function newIdempotencyKey(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function fail(response: Response): Promise<ApiError> {
+export type FieldProblem = { name: string; code: string };
+/** A refusal, with the fields the server named when it was a validation error. */
+export class DonationError extends ApiError {
+  constructor(code: string, message: string, status: number, public fields: FieldProblem[] = []) { super(code, message, status); }
+}
+
+async function fail(response: Response): Promise<DonationError> {
   const body = await response.json().catch(() => null);
-  return new ApiError(body?.error?.code ?? 'unknown', body?.error?.message ?? response.statusText, response.status);
+  const fields = Array.isArray(body?.error?.fields) ? body.error.fields.filter((f: unknown): f is FieldProblem => !!f && typeof (f as FieldProblem).name === 'string') : [];
+  return new DonationError(body?.error?.code ?? 'unknown', body?.error?.message ?? response.statusText, response.status, fields);
 }
 
 async function csrfToken(locale: Locale): Promise<string> {
