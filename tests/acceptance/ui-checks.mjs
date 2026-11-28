@@ -62,13 +62,18 @@ export async function keyboard(page, label) {
     .filter(e => e.type !== 'radio' || e.checked || (!document.querySelector(`input[type=radio][name="${e.name}"]:checked`) && document.querySelector(`input[type=radio][name="${e.name}"]`) === e))
     .map((e, i) => { e.dataset.kb = String(i); return i; }));
   await page.evaluate(() => { document.activeElement?.blur(); const p = document.querySelector('.identity-panel'); p.tabIndex = -1; p.focus(); p.removeAttribute('tabindex'); });
-  const order = []; const unfocused = [];
-  for (let i = 0; i < expected.length + 12 && order.length < expected.length; i++) {
+  const order = []; const unfocused = []; const seenVisible = new Set(); const names = new Map();
+  for (let i = 0; i < expected.length + 24 && order.length <= expected.length; i++) {
     await page.keyboard.press('Tab');
     const f = await page.evaluate(() => { const e = document.activeElement; if (!e?.dataset?.kb) return null; const s = getComputedStyle(e);
       return { kb: Number(e.dataset.kb), visible: (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0) || s.boxShadow !== 'none', name: e.tagName.toLowerCase() + '#' + (e.id || e.textContent.trim().slice(0, 20)) }; });
-    if (!f) continue; order.push(f.kb); if (!f.visible) unfocused.push(f.name);
+    if (!f) continue;
+    // A date field has several Tab stops inside one control (its parts, then its picker button, which
+    // draws its own indicator): it counts once, and its focus is visible if it was on any of them.
+    if (order.at(-1) === f.kb) { if (f.visible) seenVisible.add(f.kb); continue; }
+    order.push(f.kb); names.set(f.kb, f.name); if (f.visible) seenVisible.add(f.kb);
   }
+  for (const kb of order) if (!seenVisible.has(kb)) unfocused.push(names.get(kb));
   if (JSON.stringify(order) !== JSON.stringify(expected)) problems.push(`${label}: Tab order ${order.join(',')} instead of ${expected.join(',')}`);
   if (unfocused.length) problems.push(`${label}: no visible focus on ${unfocused.join(', ')}`);
   return { label, controls: expected.length, problems };
