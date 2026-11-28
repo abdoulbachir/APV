@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assert, check, EVIDENCE, psql, profile, closeBrowser, secret, waitHeading, waitForm, signIn, staffSignIn, staleTokenOnce, loseAnswerOnce, sleep } from './lib.mjs';
 import { sweep, keyboard } from './ui-checks.mjs';
-const ENV = 'A: dev profile, HTTP preview', origin = 'http://127.0.0.1:4173', DB = 'apv-m2-accept-dev';
+const ENV = 'A: dev profile, HTTP preview', origin = 'http://127.0.0.1:4173', DB = process.env.M2_DB ?? 'apv-m1b-accept-dev';
 const log = fs.readFileSync(path.join(EVIDENCE, 'backend-dev.log'), 'utf8');
 const o = log.match(/super_admin\s+(\S+)\s+password:\s+(\S+)\s+authenticator secret:\s+(\S+)/), d = log.match(/donor\s+(\S+)\s+password:\s+(\S+)/);
 const staff = { email: o[1], password: secret('password', o[2]), secret: secret('authenticator secret', o[3]) };

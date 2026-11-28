@@ -5,5 +5,5 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"; . "$HE
 cd "$REPO/backend"
 exec env -i PATH="$PATH" HOME="$HOME" APV_DATABASE_URL=jdbc:postgresql://127.0.0.1:55433/apv APV_DATABASE_USER=apv APV_DATABASE_PASSWORD="$PROD_DB_PASSWORD" \
   APV_PORT=8081 APV_MFA_ENCRYPTION_KEY="$APV_MFA_ENCRYPTION_KEY" APV_HASH_KEY="$APV_HASH_KEY" \
-  APV_PASSWORD_BLOCKLIST_PATH="$HERE/env/blocklist/synthetic.bin" APV_ALLOWED_ORIGINS=https://localhost:8443 \
+  APV_PASSWORD_BLOCKLIST_PATH="$HERE/env/blocklist/synthetic.bin" APV_ALLOWED_ORIGINS=https://localhost:8443 APV_EVIDENCE_ROOT="$HERE/env/evidence-prod" \
   java -jar target/apv-backend-0.1.0-SNAPSHOT.jar "$@"

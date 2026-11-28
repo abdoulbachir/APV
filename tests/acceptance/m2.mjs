@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PNG } from 'pngjs';
-import { assert, check, EVIDENCE, profile, closeBrowser, secret, waitHeading, waitForm, staffSignIn, sleep } from './lib.mjs';
+import { assert, check, EVIDENCE, psql, profile, closeBrowser, secret, waitHeading, waitForm, staffSignIn, sleep } from './lib.mjs';
 const ENV = 'A: dev profile, HTTP preview', origin = 'http://127.0.0.1:4173';
 const log = fs.readFileSync(path.join(EVIDENCE, 'backend-dev.log'), 'utf8');
 const owner = log.match(/super_admin\s+(\S+)\s+password:\s+(\S+)\s+authenticator secret:\s+(\S+)/);
@@ -17,6 +17,7 @@ const png = () => { const image = new PNG({ width: 64, height: 64 }); image.data
 
 const D = await profile(origin); const donor = await D.context.newPage();
 const S = await profile(origin); const admin = await S.context.newPage();
+const DB = process.env.M2_DB ?? 'apv-m1b-accept-dev'; psql(DB, 'delete from donation_throttle'); psql(DB, 'delete from auth_throttle');
 const before = await stats(); const fundBefore = await fund();
 let code = '', code2 = '';
 
