@@ -38,6 +38,7 @@ async function delay<T>(value: T): Promise<T> {
 
 export const mockDonationClient: DonationClient = {
   listMethods: () => delay(methods),
+  token: async () => 'mock-token',
   async report(body) {
     const reference = `${group(4)}-${group(4)}`;
     const trackingCode = `${reference}-${group(4)}-${group(4)}-${group(4)}`;

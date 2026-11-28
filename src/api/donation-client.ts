@@ -12,7 +12,9 @@ type Status = DonationOperations['getDonationStatus']['response'];
 
 export interface DonationClient {
   listMethods(locale: Locale): Promise<Methods>;
-  report(body: Report, idempotencyKey: string, locale: Locale): Promise<Receipt>;
+  /** The session's token, read when the report form opens (donation-lifecycle 3.1). */
+  token(locale: Locale): Promise<string>;
+  report(body: Report, idempotencyKey: string, token: string, locale: Locale): Promise<Receipt>;
   attachEvidence(token: string, file: Blob, locale: Locale): Promise<void>;
   status(trackingCode: string, locale: Locale): Promise<Status>;
 }
@@ -49,6 +51,7 @@ async function csrfToken(locale: Locale): Promise<string> {
 }
 
 const realClient: DonationClient = {
+  token: csrfToken,
   async listMethods(locale) {
     const response = await fetch('/api' + donationPaths.listPaymentMethods, {
       credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', 'Accept-Language': locale },
@@ -56,8 +59,7 @@ const realClient: DonationClient = {
     if (!response.ok) throw await fail(response);
     return response.json() as Promise<Methods>;
   },
-  async report(body, idempotencyKey, locale) {
-    const token = await csrfToken(locale);
+  async report(body, idempotencyKey, token, locale) {
     const response = await fetch('/api' + donationPaths.reportDonation, {
       method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
       headers: { Accept: 'application/json', 'Accept-Language': locale, 'Content-Type': 'application/json', [csrfHeader]: token, 'Idempotency-Key': idempotencyKey },
@@ -94,7 +96,8 @@ async function loadMock(): Promise<DonationClient> {
 // Compile-time mode check, so a real build drops the mock import entirely (as api does in client.ts).
 export const donations: DonationClient = import.meta.env.VITE_API_MODE === 'mock' ? {
   listMethods: async l => (await loadMock()).listMethods(l),
-  report: async (b, k, l) => (await loadMock()).report(b, k, l),
+  token: async l => (await loadMock()).token(l),
+  report: async (b, k, t, l) => (await loadMock()).report(b, k, t, l),
   attachEvidence: async (t, f, l) => (await loadMock()).attachEvidence(t, f, l),
   status: async (c, l) => (await loadMock()).status(c, l),
 } : realClient;

@@ -46,8 +46,8 @@ await check('m2-stale-token', ENV, 'A report sent with another session\'s token:
   t = Date.now(); await submit(); await page.locator('.donation-tracking').waitFor({ timeout: 15000 }); assert.deepEqual(posts(D, t), [201]); assert.equal(gifts('Stale Token Donor'), 1);
 });
 await check('m2-double-submit', ENV, 'Pressing the button twice sends one report', async () => {
-  await open(); await fillIn(23, 'Double Press Donor'); const t = Date.now(); const button = page.locator('.identity-panel form button[type=submit]');
-  await Promise.all([button.click(), button.click({ force: true }).catch(() => {})]); await page.locator('.donation-tracking').waitFor({ timeout: 15000 });
+  await open(); await fillIn(23, 'Double Press Donor'); const t = Date.now();
+  await page.evaluate(() => { const b = document.querySelector('.identity-panel form button[type=submit]'); b.click(); b.click(); }); await page.locator('.donation-tracking').waitFor({ timeout: 15000 });
   assert.equal(sent(D, t), 1); assert.equal(gifts('Double Press Donor'), 1);
 });
 await check('m2-card-number', ENV, 'A card-shaped value in a text field: refused, the field is named with the reason, nothing stored', async () => {

@@ -53,6 +53,10 @@ export function GivingPage() {
   const target = caseParam && caseParam !== FUND ? caseParam : FUND;
   const methods = useAsync(() => donations.listMethods(locale), [locale]);
   const idempotencyKey = useRef(newIdempotencyKey());
+  // Read when the form opens, before anything is typed; read again only after the server refused it.
+  const token = useRef<Promise<string> | null>(null);
+  const lease = () => { if (!token.current) { const reading = donations.token(locale); reading.catch(() => { token.current = null; }); token.current = reading; } return token.current; };
+  useEffect(() => { void lease().catch(() => undefined); }, []);
   const [methodId, setMethodId] = useState<string | null>(null);
   const [mode, setMode] = useState<'named' | 'anonymous' | 'hidden'>('anonymous');
   const [error, setError] = useState<ApiError | null>(null);
@@ -93,8 +97,12 @@ export function GivingPage() {
       display: mode === 'named' ? { mode, publicName: String(data.get('publicName')).trim() } : { mode },
     };
     setBusy(true); setError(null);
-    try { setReceipt(await donations.report(body, idempotencyKey.current, locale)); }
-    catch (e) { setError(e instanceof ApiError ? e : new ApiError('network_error', '', 0)); }
+    try { setReceipt(await donations.report(body, idempotencyKey.current, await lease(), locale)); }
+    catch (e) {
+      const problem = e instanceof ApiError ? e : new ApiError('network_error', '', 0); setError(problem);
+      // The refused report is not sent again. A new token is read for the next time the person submits.
+      if (problem.code === 'csrf_invalid') { token.current = null; void lease().catch(() => undefined); }
+    }
     finally { setBusy(false); }
   }
 
