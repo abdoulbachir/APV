@@ -4,9 +4,9 @@
 // for a fully signed-in session, the server checks donations.confirm on every request, and a
 // refused request is never resent by the page. Amounts and cases are typed by the reviewer and
 // never prefilled (6.3).
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { donationAdmin, DonationAdminError, type DonationDetail, type DonationPage } from '../api/donation-admin-client';
+import { donationAdmin, readToken, DonationAdminError, type DonationDetail, type DonationPage } from '../api/donation-admin-client';
 import { newIdempotencyKey } from '../api/donation-client';
 import { Guard } from '../identity/IdentityPages';
 import { useIdentitySession } from '../identity/SessionProvider';
@@ -29,15 +29,20 @@ function errorMessage(c: Copy, error: DonationAdminError): string {
   return c.errors[error.code] ?? c.errors.generic;
 }
 
+// The token of the session a review screen was opened with. It is read once, when the screen
+// opens and before anything is typed, and every POST from that screen carries it: a form is never
+// sent with a token fetched at the last moment for whatever session the browser then has (I&S 9.1).
+const TokenContext = createContext<{ current: Promise<string> | null }>({ current: null });
+
 /** Runs one request at a time; an error that says the session changed makes the session re-read itself. */
 function useAction() {
-  const { refresh } = useIdentitySession();
+  const { refresh } = useIdentitySession(); const lease = useContext(TokenContext);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DonationAdminError | null>(null);
-  async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
+  async function run<T>(work: (token: string) => Promise<T>): Promise<T | undefined> {
     if (busy) return undefined;
     setBusy(true); setError(null);
-    try { return await work(); }
+    try { if (!lease.current) throw new DonationAdminError('csrf_invalid', '', 403); return await work(await lease.current); }
     catch (caught) {
       const problem = caught instanceof DonationAdminError ? caught : new DonationAdminError('network_error', '', 0);
       setError(problem);
@@ -48,10 +53,15 @@ function useAction() {
   return { busy, error, run };
 }
 
+function Lease({ children }: { children: ReactNode }) {
+  const { locale } = useI18n(); const lease = useRef<{ current: Promise<string> | null }>({ current: null });
+  if (!lease.current.current) { const reading = readToken(locale); reading.catch(() => { lease.current.current = null; }); lease.current.current = reading; }
+  return <TokenContext.Provider value={lease.current}>{children}</TokenContext.Provider>;
+}
 function Staff({ children }: { children: () => ReactNode }) {
   const { locale } = useI18n(); const c = adminCopy(locale);
   return <Guard allowed={['authenticated']}>{account => account && (account.permissions.includes(PERMISSION)
-    ? <div className="donation-admin">{children()}</div>
+    ? <Lease><div className="donation-admin">{children()}</div></Lease>
     : <div className="donation-wrap"><section className="identity-panel"><p role="alert">{c.noPermission}</p><Link to="/account">{c.nav.account}</Link></section></div>)}</Guard>;
 }
 
@@ -216,7 +226,7 @@ function Evidence({ c, gift, onDone }: FormProps) {
     {/* Always from the authenticated route, never from a stored copy (donation-lifecycle 16). */}
     <img src={donationAdmin.evidenceUrl(gift.id)} alt={c.detail.evidenceAlt} />
     <Problem c={c} error={error} />
-    <button type="button" className="donation-secondary" disabled={busy} onClick={async () => { const next = await run(() => donationAdmin.deleteEvidence(gift.id, locale)); if (next) onDone(next); }}>{c.detail.deleteEvidence}</button>
+    <button type="button" className="donation-secondary" disabled={busy} onClick={async () => { const next = await run(token => donationAdmin.deleteEvidence(gift.id, token, locale)); if (next) onDone(next); }}>{c.detail.deleteEvidence}</button>
   </div>;
 }
 
@@ -224,10 +234,10 @@ function ConfirmForm({ c, gift, onDone }: FormProps) {
   const { locale } = useI18n(); const { busy, error, run } = useAction(); const key = useRef(newIdempotencyKey());
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const next = await run(() => donationAdmin.confirm(gift.id, {
+    const next = await run(token => donationAdmin.confirm(gift.id, {
       caseCode: text(data, 'caseCode').toUpperCase(), confirmedAmount: cents(text(data, 'confirmedAmount')), receivedOn: text(data, 'receivedOn'),
       listing: text(data, 'listing') as 'as_requested' | 'anonymous' | 'hidden', ...optional(data, 'providerReference'), ...optional(data, 'note'),
-    }, key.current, locale));
+    }, key.current, token, locale));
     if (next) onDone(next);
   }
   return <form className="donation-action" onSubmit={onSubmit}><fieldset disabled={busy}><legend>{c.confirm.title}</legend>
@@ -247,7 +257,7 @@ function RejectForm({ c, gift, onDone }: FormProps) {
   const { locale } = useI18n(); const { busy, error, run } = useAction();
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const next = await run(() => donationAdmin.reject(gift.id, { reason: text(data, 'reason') as 'not_received' | 'duplicate' | 'other', ...(text(data, 'rejectNote') ? { note: text(data, 'rejectNote') } : {}) }, locale));
+    const next = await run(token => donationAdmin.reject(gift.id, { reason: text(data, 'reason') as 'not_received' | 'duplicate' | 'other', ...(text(data, 'rejectNote') ? { note: text(data, 'rejectNote') } : {}) }, token, locale));
     if (next) onDone(next);
   }
   return <form className="donation-action" onSubmit={onSubmit}><fieldset disabled={busy}><legend>{c.reject.title}</legend>
@@ -261,7 +271,7 @@ function RejectForm({ c, gift, onDone }: FormProps) {
 function ReopenForm({ c, gift, onDone }: FormProps) {
   const { locale } = useI18n(); const { busy, error, run } = useAction();
   return <div className="donation-action"><h2>{c.reopen.title}</h2><p>{c.reopen.body}</p><Problem c={c} error={error} />
-    <button className="identity-primary" type="button" disabled={busy} onClick={async () => { const next = await run(() => donationAdmin.reopen(gift.id, locale)); if (next) onDone(next); }}>{busy ? c.busy : c.reopen.submit}</button></div>;
+    <button className="identity-primary" type="button" disabled={busy} onClick={async () => { const next = await run(token => donationAdmin.reopen(gift.id, token, locale)); if (next) onDone(next); }}>{busy ? c.busy : c.reopen.submit}</button></div>;
 }
 
 /** The question comes first: did money go back? Two forms with different required fields (8.1). */
@@ -270,13 +280,13 @@ function CorrectionForms({ c, gift, onDone }: FormProps) {
   const reversal = useAction(); const refund = useAction(); const key = useRef(newIdempotencyKey());
   async function onReversal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    const next = await reversal.run(() => donationAdmin.reverse(gift.id, { amount: cents(text(data, 'reversalAmount')), reason: text(data, 'reversalReason') as 'duplicate_confirmation' | 'wrong_amount' | 'wrong_case' | 'not_received' | 'other', note: text(data, 'reversalNote') }, key.current, locale));
+    const next = await reversal.run(token => donationAdmin.reverse(gift.id, { amount: cents(text(data, 'reversalAmount')), reason: text(data, 'reversalReason') as 'duplicate_confirmation' | 'wrong_amount' | 'wrong_case' | 'not_received' | 'other', note: text(data, 'reversalNote') }, key.current, token, locale));
     if (next) onDone(next);
   }
   async function onRefund(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const reference = text(data, 'refundReference');
-    const next = await refund.run(() => donationAdmin.refund(gift.id, { amount: cents(text(data, 'refundAmount')), refundedOn: text(data, 'refundedOn'), note: text(data, 'refundNote'), ...(reference ? { providerReference: reference } : {}) }, key.current, locale));
+    const next = await refund.run(token => donationAdmin.refund(gift.id, { amount: cents(text(data, 'refundAmount')), refundedOn: text(data, 'refundedOn'), note: text(data, 'refundNote'), ...(reference ? { providerReference: reference } : {}) }, key.current, token, locale));
     if (next) onDone(next);
   }
   return <div className="donation-action"><fieldset className="donation-display"><legend>{c.correct.question}</legend>
@@ -303,7 +313,7 @@ function ListingForm({ c, gift, onDone }: FormProps) {
   const { locale } = useI18n(); const { busy, error, run } = useAction();
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const listing = text(new FormData(event.currentTarget), 'restrict') as 'anonymous' | 'hidden';
-    const next = await run(() => donationAdmin.restrictListing(gift.id, { listing }, locale)); if (next) onDone(next);
+    const next = await run(token => donationAdmin.restrictListing(gift.id, { listing }, token, locale)); if (next) onDone(next);
   }
   const options: Array<[string, string]> = gift.display.mode === 'named' ? [['anonymous', c.listing.anonymous], ['hidden', c.listing.hidden]] : [['hidden', c.listing.hidden]];
   return <form className="donation-action" onSubmit={onSubmit}><fieldset disabled={busy}><legend>{c.listing.title}</legend><p>{c.listing.body}</p>
@@ -324,12 +334,12 @@ function ManualEntry() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget);
     const methodId = text(data, 'methodId'); const description = text(data, 'methodDescription');
-    const created = await run(() => donationAdmin.enter({
+    const created = await run(token => donationAdmin.enter({
       caseCode: text(data, 'caseCode').toUpperCase(), amount: cents(text(data, 'amount')), receivedOn: text(data, 'receivedOn'),
       method: methodId ? { id: methodId } : { description }, payerName: text(data, 'payerName'),
       display: mode === 'named' ? { mode, publicName: text(data, 'publicName') } : { mode },
       note: text(data, 'note'), ...optional(data, 'providerReference'), ...optional(data, 'reentryOf'),
-    }, key.current, locale));
+    }, key.current, token, locale));
     if (created) navigate(`/admin/donations/${encodeURIComponent(created.id)}`);
   }
   return <section className="donation-admin-panel">

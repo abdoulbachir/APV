@@ -34,13 +34,13 @@ async function get<T>(path: string, locale: Locale): Promise<T> {
   if (!response.ok) throw await failure(response);
   return response.json() as Promise<T>;
 }
-async function csrf(locale: Locale): Promise<string> {
+/** The session's token, read when a screen opens and sent with every POST made from it (I&S 9.1). */
+export async function readToken(locale: Locale): Promise<string> {
   const value = await get<{ token?: unknown }>('/auth/csrf', locale);
   if (typeof value.token !== 'string') throw new DonationAdminError('invalid_response', 'Unexpected response', 200);
   return value.token;
 }
-async function post<T>(path: string, body: unknown, locale: Locale, idempotencyKey?: string): Promise<T> {
-  const token = await csrf(locale);
+async function post<T>(path: string, body: unknown, token: string, locale: Locale, idempotencyKey?: string): Promise<T> {
   const response = await send(base + path, {
     method: 'POST',
     headers: { ...common(locale), 'X-CSRF-TOKEN': token, ...(body === null ? {} : { 'Content-Type': 'application/json' }), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
@@ -58,12 +58,12 @@ export const donationAdmin = {
   },
   get: (id: string, locale: Locale) => get<DonationDetail>(withId(donationPaths.getDonation, id), locale),
   evidenceUrl: (id: string) => base + withId(donationPaths.getDonationEvidence, id),
-  enter: (body: Op['enterDonation']['request'], key: string, locale: Locale) => post<DonationDetail>(donationPaths.enterDonation, body, locale, key),
-  confirm: (id: string, body: Op['confirmDonation']['request'], key: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.confirmDonation, id), body, locale, key),
-  reject: (id: string, body: Op['rejectDonation']['request'], locale: Locale) => post<DonationDetail>(withId(donationPaths.rejectDonation, id), body, locale),
-  reopen: (id: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.reopenDonation, id), null, locale),
-  reverse: (id: string, body: Op['reverseDonation']['request'], key: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.reverseDonation, id), body, locale, key),
-  refund: (id: string, body: Op['refundDonation']['request'], key: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.refundDonation, id), body, locale, key),
-  restrictListing: (id: string, body: Op['restrictDonationListing']['request'], locale: Locale) => post<DonationDetail>(withId(donationPaths.restrictDonationListing, id), body, locale),
-  deleteEvidence: (id: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.deleteDonationEvidence, id), null, locale),
+  enter: (body: Op['enterDonation']['request'], key: string, token: string, locale: Locale) => post<DonationDetail>(donationPaths.enterDonation, body, token, locale, key),
+  confirm: (id: string, body: Op['confirmDonation']['request'], key: string, token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.confirmDonation, id), body, token, locale, key),
+  reject: (id: string, body: Op['rejectDonation']['request'], token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.rejectDonation, id), body, token, locale),
+  reopen: (id: string, token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.reopenDonation, id), null, token, locale),
+  reverse: (id: string, body: Op['reverseDonation']['request'], key: string, token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.reverseDonation, id), body, token, locale, key),
+  refund: (id: string, body: Op['refundDonation']['request'], key: string, token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.refundDonation, id), body, token, locale, key),
+  restrictListing: (id: string, body: Op['restrictDonationListing']['request'], token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.restrictDonationListing, id), body, token, locale),
+  deleteEvidence: (id: string, token: string, locale: Locale) => post<DonationDetail>(withId(donationPaths.deleteDonationEvidence, id), null, token, locale),
 };

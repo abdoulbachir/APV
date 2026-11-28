@@ -57,7 +57,10 @@ export async function sweep(p, page, label, { allowSame = [] } = {}) {
 /** Keyboard only: Tab reaches every control of the panel in document order, and each shows a focus indicator. */
 export async function keyboard(page, label) {
   const problems = [];
-  const expected = await page.evaluate(() => [...document.querySelectorAll('.identity-panel input, .identity-panel button, .identity-panel a')].filter(e => !e.disabled && e.getBoundingClientRect().width).map((e, i) => { e.dataset.kb = String(i); return i; }));
+  const expected = await page.evaluate(() => [...document.querySelectorAll('.identity-panel input, .identity-panel button, .identity-panel a')].filter(e => !e.disabled && e.getBoundingClientRect().width)
+    // A group of radio buttons is one Tab stop: the checked one, or the first when none is checked.
+    .filter(e => e.type !== 'radio' || e.checked || (!document.querySelector(`input[type=radio][name="${e.name}"]:checked`) && document.querySelector(`input[type=radio][name="${e.name}"]`) === e))
+    .map((e, i) => { e.dataset.kb = String(i); return i; }));
   await page.evaluate(() => { document.activeElement?.blur(); const p = document.querySelector('.identity-panel'); p.tabIndex = -1; p.focus(); p.removeAttribute('tabindex'); });
   const order = []; const unfocused = [];
   for (let i = 0; i < expected.length + 12 && order.length < expected.length; i++) {
